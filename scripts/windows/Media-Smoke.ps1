@@ -168,10 +168,35 @@ if (!($codeHits | Where-Object { [IO.Path]::GetFileName($_.path) -eq 'не вы�
     throw 'The source index did not preserve searchable code lines.'
 }
 if (Test-Path -LiteralPath "$source/EXECUTED.txt") { throw 'The indexer executed a source fixture.' }
+
+# A code-only GUI selection must hide retained documents, including after helper restart. An omitted CLI filter
+# still searches the whole index; an explicit empty JSON selection never means "all folders".
+$query = @{ id = 1; op = 'search'; q = 'LIGHTHOUSEPDF742'; meaning = $false } | ConvertTo-Json -Compress
+function Read-SearchReply([string]$Text, [int]$Id) {
+    $reply = @($Text -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } |
+        Where-Object { $_.PSObject.Properties['id'] -and $_.id -eq $Id })
+    if ($reply.Count -ne 1 -or !$reply[0].PSObject.Properties['hits']) { throw 'Missing scope regression response.' }
+    return $reply[0]
+}
+$unscoped = Invoke-MediaProcess $cli @('search-service', '--index', $index) 'scope-omitted' $query
+if (@((Read-SearchReply $unscoped 1).hits).Count -ne 1) { throw 'Omitting a CLI root filter stopped searching the index.' }
+$empty = Invoke-MediaProcess $cli @('search-service', '--index', $index, '--restrict-roots', '--code-root', $source) 'scope-empty' $query
+if (@((Read-SearchReply $empty 1).hits).Count -ne 0) { throw 'A code-only selection exposed deselected documents.' }
+$requests = @(
+    $query
+    (@{ id = 2; op = 'folders'; roots = @() } | ConvertTo-Json -Compress)
+    (@{ id = 3; op = 'search'; q = 'LIGHTHOUSEPDF742'; meaning = $false } | ConvertTo-Json -Compress)
+    (@{ id = 4; op = 'folders'; roots = @($fixture) } | ConvertTo-Json -Compress)
+    (@{ id = 5; op = 'search'; q = 'LIGHTHOUSEPDF742'; meaning = $false } | ConvertTo-Json -Compress)
+) -join "`n"
+$selection = Invoke-MediaProcess $cli @('search-service', '--index', $index, $fixture, '--restrict-roots') 'scope-changes' $requests
+if (@((Read-SearchReply $selection 1).hits).Count -ne 1 -or @((Read-SearchReply $selection 3).hits).Count -ne 0 -or
+    @((Read-SearchReply $selection 5).hits).Count -ne 1) { throw 'Changing the selection lost or exposed retained index rows.' }
 $status = Invoke-MediaProcess $cli @('status', '--index', $index) 'status'
 if ($status -notmatch 'vectors: ([1-9][0-9, ]*) in ([1-9][0-9, ]*) segments') { throw 'No actual media vectors were persisted.' }
 @{ result = 'passed'; realModel = $true; cpuOnly = $true; path = 'System32 and Windows only';
    checks = @('PDF text and page', 'DOCX', 'ODT', 'image', 'screenshot', 'audio timestamp', 'video timestamp',
-       'FTS', 'real multimodal embeddings', 'source lines without execution', 'corrupt files do not crash') } |
+       'FTS', 'real multimodal embeddings', 'source lines without execution', 'corrupt files do not crash',
+       'explicit empty folder scope and restart') } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Real packaged multimodal smoke passed. Evidence: $testRoot"

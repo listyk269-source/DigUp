@@ -32,7 +32,9 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private var searcher: Searcher
     private var codeStore: IndexStore?
     private var codeSearcher: Searcher?
-    private var roots: [String], skipped: [String], types: Set<String>, codeRoots: [String], codeSkipped: [String]
+    /// nil is the CLI's omitted filter; an explicitly empty selection searches none of the retained main index.
+    private var roots: [String]?
+    private var skipped: [String], types: Set<String>, codeRoots: [String], codeSkipped: [String]
     private let idleSeconds: Double
     private let log: URL
 
@@ -49,7 +51,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private let renderLock = NSLock()
     private let renderSlots = DispatchSemaphore(value: 2)
 
-    init(index: URL, roots: [String], skipped: [String], types: Set<String>, codeRoots: [String],
+    init(index: URL, roots: [String]?, skipped: [String], types: Set<String>, codeRoots: [String],
          codeSkipped: [String], idleSeconds: Double) throws {
         directory = index
         store = try IndexStore(directory: index, file: IndexStore.mainFile)
@@ -148,10 +150,10 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 }
             } else {
                 hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast)
-                    .filter {
-                        (roots.isEmpty || FolderSelection.isSearched($0.path, folders: roots, skipped: skipped))
-                            && !types.contains(($0.path as NSString).pathExtension.lowercased())
-                            && FileManager.default.fileExists(atPath: FileAccess.path($0.path))
+                    .filter { hit in
+                        (roots.map { FolderSelection.isSearched(hit.path, folders: $0, skipped: skipped) } ?? true)
+                            && !types.contains((hit.path as NSString).pathExtension.lowercased())
+                            && FileManager.default.fileExists(atPath: FileAccess.path(hit.path))
                     }
             }
             var reply: [String: Any] = [
@@ -308,7 +310,8 @@ func hitFields(_ hit: SearchHit) -> [String: Any] {
 func searchService(_ args: Arguments) throws -> Int32 {
     let service = try SearchService(
         index: args.indexFolder,
-        roots: args.positional.map { Arguments.folderURL($0).path },
+        roots: args.positional.isEmpty && !args.flags.contains("--restrict-roots") ? nil
+            : args.positional.map { Arguments.folderURL($0).path },
         skipped: (args.lists["--exclude"] ?? []).map { Arguments.folderURL($0).path },
         types: IndexOptions.extensions((args.lists["--exclude-ext"] ?? []).joined(separator: ",")),
         codeRoots: (args.lists["--code-root"] ?? []).map { Arguments.folderURL($0).path },

@@ -25,9 +25,10 @@ let usage = """
                                               the app's indexing helper (JSON lines; see IndexService); it stops
                                               on a file whose reading passes the limits (see Watchdog)
       digup worker [--text-only]              the model as a process (JSON lines; the app's query encoder)
-      digup search-service <folder>... [--code-root DIR]... [--encoder-idle S]
+      digup search-service <folder>... [--code-root DIR]... [--encoder-idle S] [--restrict-roots]
                                               the searcher as a process, index open and encoder warm (JSON lines;
-                                              see SearchService): for shells that can't link DigUpKit
+                                              see SearchService): for shells that can't link DigUpKit;
+                                              --restrict-roots makes an empty folder selection search nothing
       digup download-model [--to DIR]         the model files, from the Hugging Face cache or downloaded with
                                               resume, checked (JSON lines: see DownloadModel)
 
