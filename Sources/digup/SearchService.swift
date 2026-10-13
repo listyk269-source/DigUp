@@ -144,17 +144,15 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             let hits: [SearchHit]
             if code {
                 guard let codeSearcher else { return ["hits": [], "strong": 0, "meaning": false] }
-                hits = try codeSearcher.search(text, queryVector: vector, limit: limit, prefixLast: prefixLast).filter {
-                    FolderSelection.isSearched($0.path, folders: codeRoots, skipped: codeSkipped)
-                        && FileManager.default.fileExists(atPath: FileAccess.path($0.path))
-                }
+                hits = try codeSearcher.search(text, queryVector: vector, limit: limit, prefixLast: prefixLast,
+                    acceptsPath: { [self] in FolderSelection.isSearched($0, folders: codeRoots, skipped: codeSkipped) })
+                    .filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }
             } else {
-                hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast)
-                    .filter { hit in
-                        (roots.map { FolderSelection.isSearched(hit.path, folders: $0, skipped: skipped) } ?? true)
-                            && !types.contains((hit.path as NSString).pathExtension.lowercased())
-                            && FileManager.default.fileExists(atPath: FileAccess.path(hit.path))
-                    }
+                hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast,
+                    acceptsPath: { [self] path in
+                        (roots.map { FolderSelection.isSearched(path, folders: $0, skipped: skipped) } ?? true)
+                            && !types.contains((path as NSString).pathExtension.lowercased())
+                    }).filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }
             }
             var reply: [String: Any] = [
                 "hits": hits.map(hitFields), "strong": Searcher.strongCount(hits), "meaning": vector != nil,

@@ -201,11 +201,30 @@ $secondCase = Invoke-MediaProcess $cli @('index', $caseRoot.ToUpperInvariant(), 
 if ($firstCase -notmatch 'sync: 1 new' -or $secondCase -notmatch 'sync: 0 new.*1 unchanged') {
     throw 'Different Windows root casing created duplicate index records.'
 }
+$scopeRoot = Join-Path $testRoot 'scope-candidates'
+$unselected = Join-Path $scopeRoot 'old'
+$selected = Join-Path $scopeRoot 'chosen'
+$scopeIndex = Join-Path $testRoot 'scope-index'
+New-Item -ItemType Directory -Force $unselected, $selected | Out-Null
+foreach ($number in 1..1001) { [IO.File]::WriteAllText("$unselected/11112222-$number.txt", '11112222') }
+[IO.File]::WriteAllText("$selected/selected.md", '11112222')
+Invoke-MediaProcess $cli @('index', $unselected, '--index', $scopeIndex) 'scope-old-index' | Out-Null
+Invoke-MediaProcess $cli @('index', $selected, '--index', $scopeIndex) 'scope-selected-index' | Out-Null
+$needle = @{ id = 1; op = 'search'; q = '11112222'; meaning = $false; limit = 1 } | ConvertTo-Json -Compress
+$scoped = Invoke-MediaProcess $cli @('search-service', $selected, '--restrict-roots', '--index', $scopeIndex) 'scope-candidate-limit' $needle
+$typed = Invoke-MediaProcess $cli @('search-service', $scopeRoot, '--restrict-roots', '--exclude-ext', 'txt', '--index', $scopeIndex) 'scope-extension-limit' $needle
+foreach ($response in @($scoped, $typed)) {
+    $reply = Read-SearchReply $response 1
+    if (@($reply.hits).Count -ne 1 -or [IO.Path]::GetFileName($reply.hits[0].path) -ne 'selected.md') {
+        throw 'Unselected candidates crowded out a selected result before the search limit.'
+    }
+}
 $status = Invoke-MediaProcess $cli @('status', '--index', $index) 'status'
 if ($status -notmatch 'vectors: ([1-9][0-9, ]*) in ([1-9][0-9, ]*) segments') { throw 'No actual media vectors were persisted.' }
 @{ result = 'passed'; realModel = $true; cpuOnly = $true; path = 'System32 and Windows only';
    checks = @('PDF text and page', 'DOCX', 'ODT', 'image', 'screenshot', 'audio timestamp', 'video timestamp',
        'FTS', 'real multimodal embeddings', 'source lines without execution', 'corrupt files do not crash',
-       'explicit empty folder scope and restart', 'Windows root casing is idempotent') } |
+       'explicit empty folder scope and restart', 'Windows root casing is idempotent',
+       'folder and extension scopes precede FTS and result limits') } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Real packaged multimodal smoke passed. Evidence: $testRoot"
