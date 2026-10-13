@@ -195,7 +195,9 @@ try {
             throw 'The real setup did not estimate and select the expected synthetic folder.'
         }
     }
-    if (!$ui.indexing.panelReopened) { throw 'The smoke did not recreate its own panel and replay the final progress snapshot.' }
+    if (!$ui.indexing.panelReopened -or $ui.indexing.panelLifecycle -ne 'reloadedWebView') {
+        throw 'The smoke did not reload its own WebView document and replay the final progress snapshot to its new listener.'
+    }
     $history = @($ui.indexing.engineHistory)
     if (@($history | Where-Object stage -eq 'scanning').Count -lt 2 -or
         !@($history | Where-Object { $_.stage -eq 'indexing' -and $_.unit -eq 'files' -and $_.done -gt 0 -and $_.total -ge $_.done }).Count -or
@@ -209,7 +211,7 @@ try {
         throw 'The GUI did not receive an early scan state with an honestly unknown total.'
     }
     if (!$ui.indexing.visible -or !$ui.indexing.title -or !$ui.indexing.detail) {
-        throw 'The recreated panel did not render the current indexing summary.'
+        throw 'The reloaded WebView document did not render the current indexing summary.'
     }
     foreach ($snapshot in $history) {
         if ($null -ne $snapshot.total -and $null -ne $snapshot.done -and $snapshot.done -gt $snapshot.total) {
@@ -232,7 +234,7 @@ try {
     $result.searchable = $ui.indexing.current.searchable
     $result.checks = @('fresh portable extraction', 'GUI-only initial indexing', 'ASCII to Cyrillic live folder reconfiguration',
         '3 GiB unsupported sparse file survives real GUI folder estimate without data allocation',
-        'GUI estimates and checkbox choices', 'real scan/file/completion progress', 'new panel snapshot replay',
+        'GUI estimates and checkbox choices', 'real scan/file/completion progress', 'reloaded WebView document snapshot replay',
         'persisted folder choices', 'actual CPU embeddings', 'Cyrillic FTS')
 } catch {
     $result.result = 'failed'

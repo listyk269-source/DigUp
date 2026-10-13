@@ -421,6 +421,12 @@ fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value)
     report["setupHistory"] = json!(shell.debug_setup_history.lock().unwrap().clone());
     report["indexing"]["engineHistory"] = json!(shell.debug_index_history.lock().unwrap().clone());
     report["indexing"]["panelReopened"] = json!(shell.debug_panel_reopened.load(Ordering::SeqCst));
+    report["indexing"]["panelLifecycle"] =
+        json!(if shell.debug_panel_reopened.load(Ordering::SeqCst) {
+            "reloadedWebView"
+        } else {
+            "originalWebView"
+        });
     println!("{report}");
     if let Some(path) = &shell.options.debug_report {
         if std::fs::write(path, report.to_string()).is_err() {
@@ -431,6 +437,20 @@ fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value)
     if shell.options.debug_quit {
         quit(&app);
     }
+}
+
+/// Guarded smoke diagnostics must survive a failure before the page can submit its report.
+fn debug_failure(app: &AppHandle, step: &str, error: &str) {
+    let shell = app.state::<Arc<Shell>>();
+    if shell.options.debug_isolated {
+        if let Some(path) = &shell.options.debug_report {
+            let _ = std::fs::write(
+                path.with_extension("failure.json"),
+                json!({"result": "failed", "step": step, "error": error}).to_string(),
+            );
+        }
+    }
+    app.exit(2);
 }
 
 fn main() {
@@ -1081,14 +1101,32 @@ fn index_event(app: &AppHandle, event: Value) {
                 if !shell.debug_panel_reopened.swap(true, Ordering::SeqCst) {
                     let app = app.clone();
                     let dispatch = app.clone();
-                    let _ = dispatch.run_on_main_thread(move || {
-                        if let Some(panel) = app.get_webview_window("panel") {
-                            let _ = panel.destroy();
-                        }
-                        if make_panel(&app).is_err() {
-                            app.exit(2);
-                        }
-                    });
+                    if dispatch
+                        .run_on_main_thread(move || {
+                            // Reload creates a fresh JavaScript document and listeners. Destroying
+                            // then immediately recreating a window races Tauri's asynchronous label removal.
+                            match app.get_webview_window("panel") {
+                                Some(panel) if panel.reload().is_ok() => {}
+                                Some(_) => debug_failure(
+                                    &app,
+                                    "reload-panel",
+                                    "The WebView document could not reload.",
+                                ),
+                                None => debug_failure(
+                                    &app,
+                                    "reload-panel",
+                                    "The debug panel was not available.",
+                                ),
+                            }
+                        })
+                        .is_err()
+                    {
+                        debug_failure(
+                            &dispatch,
+                            "dispatch-panel-reload",
+                            "The panel reload could not be scheduled.",
+                        );
+                    }
                     return;
                 }
             }

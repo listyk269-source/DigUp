@@ -221,7 +221,8 @@ and pressing Start, the panel opens with the current progress.
 It leaves any running user installation alone, creates the index only through the
 real setup WebView, then adds a Cyrillic folder through the same running GUI. It checks
 folder estimates, persisted choices, real semantic/FTS search, scan/file progress and
-snapshot replay after recreating the panel. A 3 GiB sparse unsupported file is included:
+snapshot replay to a new JavaScript document and listener after reloading the panel's
+WebView. A 3 GiB sparse unsupported file is included:
 Windows crawling must use 64-bit Win32 metadata before filtering extensions. This
 regresses a Foundation size-conversion crash at 2 GiB, independent of folder language.
 The native folder picker itself is still a manual check.
