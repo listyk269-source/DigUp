@@ -182,8 +182,25 @@ $installer = Get-ChildItem build.noindex/windows/artifacts/*-setup.exe | Select-
 ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Media-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Portable-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models"
+./scripts/windows/Gpu-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models" -NoGpuRequired
 ./scripts/windows/Test-ModelDownload.ps1 -Cli "$PWD/build.noindex/windows/package/helper/digup.exe" -OutputDirectory "$PWD/build.noindex/windows/download-resume-check"
 ```
+
+On a GPU-equipped test machine, run the following additional checks with fresh
+output directories (installer smoke requires a profile without an existing DigUp installation):
+
+```powershell
+./scripts/windows/Gpu-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models"
+./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models "$PWD/build.noindex/windows/models" -Device gpu
+```
+
+`Gpu-Smoke.ps1` compares real CPU and GPU text/image/audio vectors with each other
+and the checked-in references (cosine at least 0.999), checks the actual device and
+layer-offload log, and records driver metadata and input hashes. `-NoGpuRequired`
+runs the CI subset against an isolated copy containing only CPU plugins: Auto
+must work, forced GPU must fail clearly, and `DIGUP_CPU_ONLY=1` must win.
+The installed GPU smoke selects GPU through the real setup WebView, verifies the
+saved setting, index/query offload, restart and file-watcher updates.
 
 For direct `swift test`, DLLs must be available beside the test executable or in the
 **process-local** PATH just as `Build.ps1` arranges (`Vendor/llama/lib`,

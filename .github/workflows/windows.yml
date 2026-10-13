@@ -108,6 +108,10 @@ jobs:
           $env:PATH = "$PWD/Vendor/llama/lib;$PWD/Vendor/pdfium/bin;$PWD/Vendor/ffmpeg/bin;$env:PATH"
           swift test --skip-build --filter ReferenceVectorTests
           if ($LASTEXITCODE) { throw 'Real model reference vector checks failed' }
+      - name: Smoke device selection without requiring a GPU
+        run: |
+          $models = Join-Path (Get-Location) 'build.noindex/windows/models'
+          ./scripts/windows/Gpu-Smoke.ps1 -PackageDirectory 'build.noindex/windows/package' -Models $models -OutputDirectory 'build.noindex/windows/gpu-policy-smoke' -NoGpuRequired
       - name: Upload build and smoke evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -122,6 +126,9 @@ jobs:
             build.noindex/windows/media-smoke/*.txt
             build.noindex/windows/portable-smoke/*.json
             build.noindex/windows/portable-smoke/*.txt
+            build.noindex/windows/gpu-policy-smoke/*.json
+            build.noindex/windows/gpu-policy-smoke/*.jsonl
+            build.noindex/windows/gpu-policy-smoke/*.txt
             build.noindex/windows/package/licenses/**
             build.noindex/windows/package/runtime-inventory.json
             build.noindex/windows/diagnostics/**
