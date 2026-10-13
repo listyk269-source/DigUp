@@ -227,8 +227,22 @@ try {
         if ($uninstaller) {
             Invoke-SmokeProcess $uninstaller.FullName @('/S') 'uninstall' | Out-Null
             $deadline = [DateTime]::UtcNow.AddSeconds(30)
-            while ((Test-Path -LiteralPath $gui) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 250 }
-            if ((Test-Path -LiteralPath $gui) -or (Test-Path -LiteralPath $cli)) { throw 'Uninstall left application binaries behind.' }
+            $stableAbsent = 0
+            do {
+                # NSIS delegates deletion to another process. Its registry cleanup can
+                # finish after the application EXE disappears; await both read-only.
+                $remainingBinaries = @(Get-ChildItem -LiteralPath $install -Filter '*.exe' -Recurse -File -ErrorAction SilentlyContinue)
+                $remainingRegistrations = @(Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/*' -ErrorAction SilentlyContinue |
+                    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'DigUp' })
+                if (!$remainingBinaries.Count -and !$remainingRegistrations.Count) { $stableAbsent++ }
+                else { $stableAbsent = 0 }
+                if ($stableAbsent -ge 2) { break }
+                Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+            @{ registryEntriesRemaining = $remainingRegistrations.Count; binariesRemaining = $remainingBinaries.Count;
+               stableAbsentObservations = $stableAbsent; limitSeconds = 30; manualCleanup = $false } |
+                ConvertTo-Json | Set-Content "$testRoot/uninstall-cleanup.json" -Encoding utf8NoBOM
+            if ($stableAbsent -lt 2) { throw 'Uninstall did not finish removing application binaries and its HKCU registration within 30 seconds.' }
         }
         else { throw "No uninstaller found in $install" }
     }
