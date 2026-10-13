@@ -6,6 +6,36 @@
     "url": "https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz",
     "sha256": "7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3"
   },
+  "dav1d": {
+    "version": "1.5.4",
+    "file": "dav1d-1.5.4.tar.xz",
+    "url": "https://downloads.videolan.org/pub/videolan/dav1d/1.5.4/dav1d-1.5.4.tar.xz",
+    "sha256": "686616b7c69eb88d44459391ab25cac13b6647a3b288835c5784e71c1514a5c5"
+  },
+  "python": {
+    "version": "3.13.12",
+    "file": "python-3.13.12-embed-amd64.zip",
+    "url": "https://www.python.org/ftp/python/3.13.12/python-3.13.12-embed-amd64.zip",
+    "sha256": "76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0"
+  },
+  "meson": {
+    "version": "1.9.1",
+    "file": "meson-1.9.1.tar.gz",
+    "url": "https://files.pythonhosted.org/packages/48/d8/6c1dd1c740b7d5fd73a6ad67900a09e3dd6642013f58fa9e22ae6faaffc7/meson-1.9.1.tar.gz",
+    "sha256": "4e076606f2afff7881d195574bddcd8d89286f35a17b4977a216f535dc0c74ac"
+  },
+  "ninja": {
+    "version": "1.13.1",
+    "file": "ninja-win-1.13.1.zip",
+    "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.1/ninja-win.zip",
+    "sha256": "26a40fa8595694dec2fad4911e62d29e10525d2133c9a4230b66397774ae25bf"
+  },
+  "pkgconf": {
+    "version": "2.5.1-1",
+    "file": "pkgconf-2.5.1-1-x86_64.pkg.tar.zst",
+    "url": "https://repo.msys2.org/msys/x86_64/pkgconf-2.5.1-1-x86_64.pkg.tar.zst",
+    "sha256": "38efd4928ac0cb06e9bd558baa533fc923c0592115bf9bd44970250f3ae2cb7e"
+  },
   "make": {
     "version": "4.4.1-2",
     "file": "make-4.4.1-2-x86_64.pkg.tar.zst",

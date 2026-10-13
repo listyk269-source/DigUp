@@ -24,6 +24,11 @@ if ($Compiler -eq 'clang-cl' -and ($compilerVersion | Out-String) -notmatch ("cl
 $buildRoot = Join-Path $script:Repo 'build.noindex/ffmpeg'
 $toolsRoot = Join-Path $buildRoot 'tools'
 $sourceRoot = Join-Path $buildRoot "ffmpeg-$($ffmpegManifest.source.version)"
+$dav1dSource = Join-Path $buildRoot "dav1d-$($ffmpegManifest.dav1d.version)"
+$dav1dObjects = Join-Path $buildRoot 'dav1d-objects'
+$pythonRoot = Join-Path $toolsRoot "python-$($ffmpegManifest.python.version)"
+$mesonRoot = Join-Path $toolsRoot "meson-$($ffmpegManifest.meson.version)"
+$ninjaRoot = Join-Path $toolsRoot "ninja-$($ffmpegManifest.ninja.version)"
 $objectRoot = Join-Path $buildRoot 'objects'
 if (!$Destination) { $Destination = Join-Path $script:Vendor 'ffmpeg-own' }
 $Destination = [IO.Path]::GetFullPath($Destination)
@@ -41,6 +46,11 @@ if (!(Test-Path -LiteralPath $bash)) { throw 'Install Git for Windows (including
 $sourceArchive = Get-VerifiedDownload $ffmpegManifest.source
 $makeArchive = Get-VerifiedDownload $ffmpegManifest.make
 $nasmArchive = Get-VerifiedDownload $ffmpegManifest.nasm
+$dav1dArchive = Get-VerifiedDownload $ffmpegManifest.dav1d
+$pythonArchive = Get-VerifiedDownload $ffmpegManifest.python
+$mesonArchive = Get-VerifiedDownload $ffmpegManifest.meson
+$ninjaArchive = Get-VerifiedDownload $ffmpegManifest.ninja
+$pkgconfArchive = Get-VerifiedDownload $ffmpegManifest.pkgconf
 New-Item -ItemType Directory -Force -Path $buildRoot, $toolsRoot, $objectRoot | Out-Null
 if (!(Test-Path -LiteralPath "$toolsRoot/usr/bin/make.exe")) {
     Invoke-Checked tar @('-xf', $makeArchive, '-C', $toolsRoot)
@@ -51,7 +61,39 @@ if (!(Test-Path -LiteralPath "$toolsRoot/nasm/nasm-2.16.03/nasm.exe")) {
 if (!(Test-Path -LiteralPath "$sourceRoot/configure")) {
     Invoke-Checked tar @('-xf', $sourceArchive, '-C', $buildRoot)
 }
+if (!(Test-Path -LiteralPath "$dav1dSource/meson.build")) {
+    Invoke-Checked tar @('-xf', $dav1dArchive, '-C', $buildRoot)
+}
+if (!(Test-Path -LiteralPath "$pythonRoot/python.exe")) {
+    Expand-Archive -LiteralPath $pythonArchive -DestinationPath $pythonRoot -Force
+}
+if (!(Test-Path -LiteralPath "$mesonRoot/meson.py")) {
+    Invoke-Checked tar @('-xf', $mesonArchive, '-C', $toolsRoot)
+}
+if (!(Test-Path -LiteralPath "$ninjaRoot/ninja.exe")) {
+    Expand-Archive -LiteralPath $ninjaArchive -DestinationPath $ninjaRoot -Force
+}
+if (!(Test-Path -LiteralPath "$toolsRoot/usr/bin/pkgconf.exe")) {
+    Invoke-Checked tar @('-xf', $pkgconfArchive, '-C', $toolsRoot)
+}
+# Embedded Python ignores PYTHONPATH; explicitly add only the pinned Meson source tree.
+@('python313.zip', '.', $mesonRoot) | Set-Content -LiteralPath "$pythonRoot/python313._pth" -Encoding utf8NoBOM
 Reset-BuildDirectory $Destination
+Reset-BuildDirectory $dav1dObjects
+$nativeFile = Join-Path $buildRoot 'dav1d-native.ini'
+$compilerPath = (Get-Command "$Compiler.exe").Source.Replace('\', '/')
+@("[binaries]", "c = '$compilerPath'", "c_ld = '$(if ($Compiler -eq 'clang-cl') { 'lld-link' } else { 'link' })'") |
+    Set-Content -LiteralPath $nativeFile -Encoding utf8NoBOM
+$savedPath = $env:PATH
+try {
+    $env:PATH = "$pythonRoot;$ninjaRoot;$toolsRoot/nasm/nasm-2.16.03;$savedPath"
+    Invoke-Checked "$pythonRoot/python.exe" @("$mesonRoot/meson.py", 'setup', $dav1dObjects, $dav1dSource,
+        '--native-file', $nativeFile, '--prefix', $Destination, '--libdir', 'lib', '--backend', 'ninja',
+        '--buildtype', 'release', '--default-library', 'shared', '--wrap-mode', 'nodownload', '-Db_vscrt=md',
+        '-Denable_tools=false', '-Denable_tests=false', '-Denable_examples=false', '-Denable_docs=false')
+    Invoke-Checked "$ninjaRoot/ninja.exe" @('-C', $dav1dObjects, '-j', [string]$Jobs)
+    Invoke-Checked "$pythonRoot/python.exe" @("$mesonRoot/meson.py", 'install', '-C', $dav1dObjects, '--no-rebuild')
+} finally { $env:PATH = $savedPath }
 $env:DIGUP_FFMPEG_SOURCE = $sourceRoot
 $env:DIGUP_FFMPEG_BUILD = $objectRoot
 $env:DIGUP_FFMPEG_DESTINATION = $Destination
@@ -67,6 +109,15 @@ New-Item -ItemType Directory -Force -Path "$Destination/doc", "$Destination/sour
 Copy-Item -LiteralPath "$sourceRoot/COPYING.LGPLv2.1" -Destination "$Destination/LICENSE.txt"
 Copy-Item -LiteralPath "$Destination/LICENSE.txt" -Destination "$Destination/source/LICENSE.txt"
 Copy-Item -LiteralPath $sourceArchive -Destination "$Destination/source"
+Copy-Item -LiteralPath $dav1dArchive -Destination "$Destination/source"
+Copy-Item -LiteralPath "$dav1dSource/COPYING" -Destination "$Destination/doc/dav1d-BSD-2-Clause.txt"
+Copy-Item -LiteralPath "$dav1dSource/COPYING" -Destination "$Destination/source/dav1d-BSD-2-Clause.txt"
+Copy-Item -LiteralPath "$dav1dSource/doc/PATENTS" -Destination "$Destination/doc/dav1d-PATENTS.txt"
+Copy-Item -LiteralPath "$dav1dSource/doc/PATENTS" -Destination "$Destination/source/dav1d-PATENTS.txt"
+# Both pinned projects use x264's ISC-licensed assembly macros; retain their complete notice with the binaries.
+Get-Content -LiteralPath "$dav1dSource/src/ext/x86/x86inc.asm" -TotalCount 22 |
+    Set-Content -LiteralPath "$Destination/doc/x86inc-ISC.txt" -Encoding utf8NoBOM
+Copy-Item -LiteralPath "$Destination/doc/x86inc-ISC.txt" -Destination "$Destination/source/x86inc-ISC.txt"
 foreach ($recipe in @('Build-FFmpeg.ps1', 'build-ffmpeg.sh', 'ffmpeg-dependencies.json', 'Common.ps1', 'dependencies.json')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $recipe) -Destination "$Destination/source"
 }
@@ -77,8 +128,13 @@ The accompanying release source ZIP is a self-contained minimal build tree: the
 exact upstream archive is in Vendor/downloads, and the PowerShell/Bash recipes and
 its SHA-256 are in scripts/windows/ffmpeg-dependencies.json. No patches were applied.
 The build output also keeps a flat copy of the archive and recipes under source/.
-No GPL, nonfree, external codec libraries, networking or GPU acceleration are enabled.
-GNU Make and NASM are build tools only; they are not part of the installed runtime.
+No GPL, nonfree, networking or GPU acceleration are enabled. The sole external codec
+is the BSD-2-Clause dav1d library, built from the included source for software AV1/AVIF
+decoding. Its replaceable DLL is installed beside FFmpeg; see dav1d-BSD-2-Clause.txt.
+The bundled x86 assembly macros carry the notice in x86inc-ISC.txt. The upstream
+AV1 patent notice is included as dav1d-PATENTS.txt.
+Python, Meson, Ninja, pkgconf, GNU Make and NASM are isolated build tools only;
+they are not part of the installed runtime and do not require system installation.
 
 To rebuild on Windows x64:
 1. Extract the accompanying source ZIP and change to its root directory. A DigUp
@@ -92,8 +148,9 @@ To rebuild on Windows x64:
    compiler instead, pass -Compiler cl (its English language pack is needed by configure).
 The script checks every download's SHA-256, then runs the exact configure command in
 build-ffmpeg.sh and GNU Make. Its output includes replaceable DLLs and ffmpeg/ffprobe.
-The bundled source archive is reused from Vendor/downloads. GNU Make and NASM are
-downloaded with pinned hashes on the first build; they are not runtime dependencies.
+The bundled FFmpeg and dav1d source archives are reused from Vendor/downloads.
+Build tools are downloaded with pinned hashes on the first build. Meson builds
+dav1d with the same compiler before FFmpeg configures with --enable-libdav1d.
 Build outputs may differ byte-for-byte across MSVC/Windows SDK revisions; CI controls
 the hosted runner family and records the compiler versions with the release checksums.
 
@@ -106,6 +163,12 @@ Copy-Item -LiteralPath "$Destination/doc/BUILDING.txt" -Destination "$Destinatio
 @{
     sourceVersion = $ffmpegManifest.source.version
     sourceSha256 = $ffmpegManifest.source.sha256
+    dav1dVersion = $ffmpegManifest.dav1d.version
+    dav1dSha256 = $ffmpegManifest.dav1d.sha256
+    pythonVersion = $ffmpegManifest.python.version
+    mesonVersion = $ffmpegManifest.meson.version
+    ninjaVersion = $ffmpegManifest.ninja.version
+    pkgconfVersion = $ffmpegManifest.pkgconf.version
     compiler = $Compiler
     compilerVersion = @($compilerVersion)
     msvcToolsVersion = $env:VCToolsVersion
@@ -115,6 +178,10 @@ Copy-Item -LiteralPath "$Destination/doc/BUILDING.txt" -Destination "$Destinatio
 } | ConvertTo-Json | Set-Content -LiteralPath "$Destination/source/BUILD-VERSIONS.json" -Encoding utf8NoBOM
 Invoke-Checked "$Destination/bin/ffmpeg.exe" @('-hide_banner', '-version')
 Invoke-Checked "$Destination/bin/ffprobe.exe" @('-hide_banner', '-version')
+$decoders = (& "$Destination/bin/ffmpeg.exe" -hide_banner -decoders 2>&1 | Out-String)
+if ($LASTEXITCODE -ne 0 -or $decoders -notmatch '\blibdav1d\b') {
+    throw 'FFmpeg lacks the required software AV1 decoder (libdav1d); AVIF would require unavailable hardware.'
+}
 $license = (& "$Destination/bin/ffmpeg.exe" -hide_banner -L 2>&1 | Out-String)
 if ($LASTEXITCODE -ne 0 -or $license -notmatch 'Lesser General Public License') { throw 'FFmpeg did not identify an LGPL build.' }
 Write-Host "Native LGPL FFmpeg is ready in $Destination. Publish its source/ directory with the binaries."
