@@ -87,9 +87,10 @@ does not install an updater or make macOS Sparkle requests.
 
 Open the search panel with **Ctrl+Shift+Space**, or from the tray. The tray offers
 settings and quit. Starting at login is opt-in, stored in the current user's Run
-key, and removed on uninstall. Results open through the Windows default handler;
-opening a PDF at a page or media at a timestamp depends on the receiving application.
-Preview inside DigUp is the portable place to inspect the matching passage/page/time.
+key, and removed on uninstall. Results open through the Windows default handler.
+The current Windows shell passes only the file path; it does not pass a PDF page or
+media timestamp to external viewers. Use DigUp's internal preview to inspect the
+matching passage, page or time.
 
 CLI examples from an unpacked portable build:
 
@@ -179,8 +180,9 @@ be resolved by choosing an accessible folder, without elevating DigUp.
 
 Use Windows Settings → Apps → DigUp → Uninstall. Models, settings and indexes are
 retained to allow reinstalling; after quitting DigUp, remove the two user-data
-directories above if complete removal is desired. A portable build is removed by
-deleting its unpacked folder and, optionally, those user-data directories.
+directories above if complete removal is desired. Before removing a portable build,
+turn off starting at login in Settings so its Run entry is removed, then quit DigUp
+and delete its unpacked folder and, optionally, those user-data directories.
 
 ## Signing and updates
 
@@ -219,8 +221,8 @@ VM. Record OS build, user privilege level, artifact SHA-256 and result. Hosted
   combining Unicode and paths beyond 260 characters work with default OS policy.
 - [ ] Disconnect/reconnect a chosen removable drive and an SMB share; unavailable
   roots do not cause the existing index to be pruned as if files were deleted.
-- [ ] Open files in default applications; document exactly which viewers support
-  page/time seeking. An unsupported viewer still opens the original file.
+- [ ] Open files in default applications and inspect the matching page/time in
+  DigUp's internal preview. External page/time seeking is not implemented.
 - [ ] Disable networking after installing WebView2 and obtaining the model. Launch,
   index, search and restart remain usable in CPU-only mode.
 - [ ] Verify Authenticode with the release certificate, and inspect SmartScreen

@@ -2,8 +2,9 @@
 
 DigUp is MIT licensed; that does not change the licenses of separately distributed
 components. The model is **not** embedded in the installer. Dependencies and exact
-archive SHA-256 values are in `scripts/windows/dependencies.json`; Cargo dependencies
-are locked in `shell/src-tauri/Cargo.lock`. Installed and portable builds contain a
+archive SHA-256 values are in `scripts/windows/dependencies.json` and
+`scripts/windows/ffmpeg-dependencies.json`; Cargo dependencies are locked in
+`shell/src-tauri/Cargo.lock`. Installed and portable builds contain a
 `licenses` directory with the supplied license texts and a Cargo package inventory.
 
 | Component | Version / source | License / handling |
