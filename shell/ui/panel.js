@@ -13,7 +13,8 @@ const fileURL = (path) => tauri.core.convertFileSrc(path);
 const TYPING_PAUSE = 120;          // ms after the last keystroke until the meaning results show
 const ROWS_PER_GROUP = 6;
 const FIELD_HEIGHT = 56;
-const PANEL_HEIGHT = 480;
+const INDEX_HEIGHT = 80;
+const PANEL_HEIGHT = 560;
 const WEAKER = "\u0000weaker";     // the selectable row that folds and unfolds the weaker matches
 const isMac = /Mac/.test(navigator.platform);
 const isWindows = /Win/.test(navigator.platform);
@@ -28,7 +29,9 @@ const KIND_TITLE = { screenshot: "Screenshot", image: "Image", pdf: "PDF", doc: 
 
 const $ = (id) => document.getElementById(id);
 const $query = $("query"), $body = $("body"), $list = $("list"), $preview = $("preview");
-const $footer = $("footer"), $summary = $("summary"), $keys = $("keys"), $activity = $("activity");
+const $footer = $("footer"), $summary = $("summary"), $keys = $("keys");
+const $indexStatus = $("index-status"), $indexTitle = $("index-title"), $indexCount = $("index-count");
+const $indexDetail = $("index-detail"), $indexProgress = $("index-progress");
 
 const state = {
   generation: 0,
@@ -47,9 +50,12 @@ const state = {
   height: FIELD_HEIGHT,
   home: "",
   error: null,
-  indexing: null,        // {done, total} while the index helper works through new files
+  indexing: null,
+  indexStatus: null,     // replayable Rust snapshot of real index-service events
 };
 let debugPending = false;
+const progressHistory = [];
+let progressQueued = false;
 
 // MARK: Searching
 
@@ -156,7 +162,7 @@ function revealSelected() {
 
 function render() {
   const empty = state.phase === "empty";
-  const height = empty ? FIELD_HEIGHT : PANEL_HEIGHT;
+  const height = empty ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
     invoke("panel_height", { height }).catch(() => {});
@@ -237,8 +243,7 @@ function renderPreview() {
     if (state.phase === "codeHint") {
       $preview.append(message("Search your code", "Say what the code does, or type a name that's in it."));
     } else if (state.indexing) {
-      const { done, total } = state.indexing;
-      $preview.append(message("Nothing yet", `Still indexing (${done} of ${total} files). Until a file is read, `
+      $preview.append(message("Nothing yet", "Still indexing. Until a file is read, "
         + "DigUp finds it only by its name."));
     } else if (state.isCode) {
       $preview.append(message("No good matches in your code", "Try saying what the code does, or a name that's in it."));
@@ -347,7 +352,7 @@ function renderFooter() {
   else if (state.phase === "codeHint") summary = "Searching your code";
   else summary = `${strong} ${strong === 1 ? "result" : "results"}` + (weaker ? ` · ${weaker} weaker` : "");
   // Results while indexing are partial: say so where they're counted.
-  if (state.indexing && !state.error) summary += ` · still indexing (${state.indexing.done} of ${state.indexing.total})`;
+  if (state.indexing && !state.error) summary += " · indexing is still in progress";
   $summary.textContent = summary;
   $keys.textContent = `↩ Open   ${MOD}↩ Show in ${FILE_MANAGER}`;
 }
@@ -545,6 +550,7 @@ tauri.event.listen("panel-shown", () => {
   $query.focus();
   $query.select();
   ask({ op: "prewarm" }).catch(() => {});
+  refreshIndexStatus();
 });
 
 tauri.event.listen("helper", ({ payload }) => {
@@ -553,18 +559,79 @@ tauri.event.listen("helper", ({ payload }) => {
     state.encoder = event.state;
     if (state.phase !== "empty") renderFooter();
   }
-  if (from === "index") {
-    if (event.event === "file" && event.total) {
-      state.indexing = { done: event.done, total: event.total };
-      $activity.textContent = `Indexing ${event.done}/${event.total}`;
-      $activity.hidden = false;
-    } else if (event.event === "idle" || event.event === "exit") {
-      state.indexing = null;
-      $activity.hidden = true;
-    }
-    if (state.phase !== "empty") renderFooter();
-  }
 });
+
+// Listen before asking for the snapshot. Revisions prevent a slower initial IPC reply
+// from replacing a newer event, including when the panel is reopened after completion.
+tauri.event.listen("index-status", ({ payload }) => showIndexStatus(payload))
+  .then(refreshIndexStatus).catch(indexStatusFailed);
+
+function refreshIndexStatus() {
+  return invoke("index_status").then(showIndexStatus).catch(indexStatusFailed);
+}
+
+function indexStatusFailed() {
+  if (state.indexStatus) return;
+  $indexTitle.textContent = "Index status unavailable";
+  $indexDetail.textContent = "Close and reopen the search panel to check again.";
+}
+
+function showIndexStatus(status) {
+  if (state.indexStatus && status.revision <= state.indexStatus.revision) return;
+  state.indexStatus = status;
+  state.indexing = ["starting", "scanning", "indexing", "rest"].includes(status.stage) ? status : null;
+  progressHistory.push({ ...status });
+  if (progressHistory.length > 64) progressHistory.shift();
+  if (progressQueued) return;
+  progressQueued = true;
+  queueMicrotask(() => {
+    progressQueued = false;
+    renderIndexStatus();
+    if (state.phase !== "empty") renderFooter();
+  });
+}
+
+function renderIndexStatus() {
+  const s = state.indexStatus;
+  if (!s) return;
+  const titles = {
+    starting: "Starting indexing…", scanning: s.code ? "Scanning code folders…" : "Scanning folders…",
+    indexing: s.code ? "Indexing source code" : "Indexing files", rest: "Reading the rest of long files",
+    idle: s.failed || s.unavailable || s.message ? "Indexing finished with issues" : "Indexing complete",
+    paused: "Indexing paused", waiting: "Waiting for the model", error: "Indexing needs attention",
+    stopped: "Indexing stopped", "no-folders": "No folders selected",
+  };
+  const details = {
+    starting: "Preparing the local index. Files already indexed remain searchable.",
+    scanning: "Looking for new, changed and deleted files. The total is not known yet.",
+    indexing: "Files become searchable as they are indexed. Counts are for this pass.",
+    rest: "Long files are read in parts. Counts are for the remaining parts in this pass.",
+    idle: "Watching the selected folders for changes.",
+    paused: "Choose Index Now / Resume in the tray to continue. Your index is saved.",
+    waiting: "Indexing starts when the local model is ready.",
+    error: "Check folder access and the processing device, then resume from the tray.",
+    stopped: "Choose Index Now / Resume in the tray to try again.",
+    "no-folders": "Choose Folders… in the tray to start indexing.",
+  };
+  const number = (n) => n.toLocaleString();
+  const counted = Number.isFinite(s.done) && Number.isFinite(s.total);
+  $indexStatus.dataset.stage = s.stage;
+  $indexTitle.textContent = titles[s.stage] || "Indexing";
+  $indexCount.textContent = counted ? `${number(s.done)} of ${number(s.total)} ${s.unit} processed`
+    : s.stage === "idle" && s.searchable != null ? `${number(s.searchable)} files searchable` : "";
+  const problems = [s.failed ? `${number(s.failed)} failed` : "", s.skipped ? `${number(s.skipped)} skipped` : "",
+    s.unavailable ? `${number(s.unavailable)} folders unavailable` : ""].filter(Boolean).join(" · ");
+  $indexDetail.textContent = [s.message || details[s.stage], problems].filter(Boolean).join(" · ");
+  $indexDetail.title = $indexDetail.textContent;
+  $indexProgress.hidden = !counted || s.total === 0 || s.done > s.total || !["indexing", "rest"].includes(s.stage);
+  if (!$indexProgress.hidden) {
+    $indexProgress.max = s.total;
+    $indexProgress.value = s.done;
+    $indexProgress.setAttribute("aria-valuetext", $indexCount.textContent);
+  }
+}
+
+render();
 
 tauri.path.homeDir().then((home) => { state.home = home.replace(/[\\/]$/, ""); }).catch(() => {});
 
@@ -601,6 +668,8 @@ function report() {
         thumbnails: `${thumbs.filter((image) => image.complete && image.naturalWidth > 0).length} of ${thumbs.length} drawn`,
         facts: [...$preview.querySelectorAll(".facts .title, .facts .line, .reason span")].map((node) => node.textContent),
         footer: [$summary.textContent, $keys.textContent],
+        indexing: { current: state.indexStatus, history: progressHistory, visible: !$indexStatus.hidden,
+          title: $indexTitle.textContent, detail: $indexDetail.textContent },
       },
     }).catch(() => {});
   }, 1500);

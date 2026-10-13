@@ -13,8 +13,15 @@
       </svg>
       <input id="query" type="text" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search"
              placeholder="Describe it: “payment error screenshot”, “zebra in a video”…">
-      <span id="activity" class="activity" hidden></span>
     </header>
+    <section id="index-status" class="index-status" aria-label="Indexing progress">
+      <div class="index-heading" role="status" aria-live="polite" aria-atomic="true">
+        <strong id="index-title">Starting indexing…</strong>
+        <span id="index-count"></span>
+      </div>
+      <p id="index-detail">Checking the local index.</p>
+      <progress id="index-progress" aria-label="Current indexing pass" hidden></progress>
+    </section>
     <section id="body" class="body" hidden>
       <div id="list" class="list" role="listbox" aria-label="Results"></div>
       <div id="preview" class="preview" aria-live="polite"></div>

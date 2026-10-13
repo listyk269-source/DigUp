@@ -42,6 +42,10 @@ pub struct Options {
     pub debug_report: Option<PathBuf>,
     /// Debug runs: show the panel at launch and keep it up when it loses focus.
     pub debug_show: bool,
+    /// Explicit smoke isolation: no shared single-instance endpoint, tray, hotkey or WebView profile.
+    pub debug_isolated: bool,
+    /// A second real setup pass adds this folder before the debug query.
+    pub debug_reconfigure_folder: Option<PathBuf>,
 }
 
 impl Options {
@@ -76,6 +80,8 @@ impl Options {
             debug_quit: false,
             debug_report: None,
             debug_show: false,
+            debug_isolated: false,
+            debug_reconfigure_folder: None,
         };
         while let Some(arg) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -99,6 +105,10 @@ impl Options {
                 "--debug-quit" => options.debug_quit = true,
                 "--debug-report" => options.debug_report = Some(value()?.into()),
                 "--debug-show" => options.debug_show = true,
+                "--debug-isolated" => options.debug_isolated = true,
+                "--debug-reconfigure-folder" => {
+                    options.debug_reconfigure_folder = Some(value()?.into())
+                }
                 _ => return Err(format!("unknown argument {arg}")),
             }
         }
@@ -107,6 +117,18 @@ impl Options {
         }
         if options.debug_device.is_some() && !options.debug_setup {
             return Err("--debug-device requires --debug-setup".into());
+        }
+        if options.debug_isolated
+            && [&options.index, &options.settings, &options.debug_report]
+                .into_iter()
+                .any(|path| !path.as_ref().is_some_and(|path| path.is_absolute()))
+        {
+            return Err("--debug-isolated requires explicit absolute --index, --settings and --debug-report paths".into());
+        }
+        if let Some(folder) = &options.debug_reconfigure_folder {
+            if !options.debug_isolated || !options.debug_setup || !folder.is_absolute() {
+                return Err("--debug-reconfigure-folder requires --debug-isolated, --debug-setup and an absolute folder path".into());
+            }
         }
         // On a Mac the shell is only tried out: the helper's default index there is the Mac app's.
         if cfg!(target_os = "macos") && options.index.is_none() {
@@ -223,5 +245,30 @@ mod tests {
         assert!(!options.device_is_overridden());
         assert_eq!(options.effective_device(Device::Auto), Device::Auto);
         assert!(parse(&["--debug-device", "gpu"], None, None).is_err());
+    }
+
+    #[test]
+    fn isolated_smoke_requires_private_explicit_paths() {
+        assert!(parse(&["--debug-isolated"], None, None).is_err());
+        assert!(parse(&["--debug-reconfigure-folder", "relative"], None, None).is_err());
+        let root = std::env::temp_dir().join("DigUp test кириллица");
+        let args = [
+            "--debug-isolated".to_string(),
+            "--debug-setup".into(),
+            "--index".into(),
+            root.join("index").display().to_string(),
+            "--settings".into(),
+            root.join("settings.json").display().to_string(),
+            "--debug-report".into(),
+            root.join("report.json").display().to_string(),
+            "--debug-reconfigure-folder".into(),
+            root.join("Документы").display().to_string(),
+        ];
+        let options = Options::from_arguments(args.into_iter(), None, None).unwrap();
+        assert!(options.debug_isolated);
+        assert_eq!(
+            options.debug_reconfigure_folder,
+            Some(root.join("Документы"))
+        );
     }
 }

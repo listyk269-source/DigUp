@@ -34,6 +34,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -89,15 +90,22 @@ html, body {
 
 #query::placeholder { color: var(--tertiary); }
 
-.activity {
-  font-size: 11px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--secondary);
-  padding: 3px 8px;
-  border-radius: 99px;
-  background: var(--chip);
-  white-space: nowrap;
+.index-status { flex: none; height: 80px; padding: 9px 18px 10px; border-top: 1px solid var(--line); }
+.index-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.index-heading strong { font-size: 13px; font-weight: 600; }
+#index-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--secondary); }
+#index-detail { margin: 4px 0 6px; font-size: 12px; line-height: 16px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#index-progress { display: block; width: 100%; height: 5px; border: 0; accent-color: var(--moss); }
+#index-progress[hidden] { display: none; }
+#index-progress::-webkit-progress-bar { background: var(--chip); border-radius: 3px; }
+#index-progress::-webkit-progress-value { background: var(--moss); border-radius: 3px; }
+.index-status[data-stage="error"] #index-title,
+.index-status[data-stage="stopped"] #index-title { color: #a43c13; }
+@media (prefers-color-scheme: dark) {
+  .index-status[data-stage="error"] #index-title,
+  .index-status[data-stage="stopped"] #index-title { color: #ffb083; }
+  #index-progress { accent-color: #8ec3a7; }
+  #index-progress::-webkit-progress-value { background: #8ec3a7; }
 }
 
 /* Results and preview */

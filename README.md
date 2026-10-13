@@ -169,6 +169,12 @@ are opt-in. The tray offers folder settings, pause/resume, retrying the model do
 indexing and searching are local. Installation needs the Microsoft WebView2 runtime; if absent the installer
 runs its bundled, verified Microsoft bootstrapper, so first installation needs a connection.
 
+The panel shows folder scanning, files processed in the current pass, later parts of long files,
+and paused/completed/error states. Press Start after choosing folders to open that progress;
+reopening the panel restores its latest state. Windows crawling uses 64-bit file sizes, including
+large files that will be ignored by type filtering. See the isolated Cyrillic/progress smoke in
+the Windows guide for the regression check.
+
 The CLI is `helper/digup.exe` inside the installed/portable directory. `helper/digup.exe --help` documents its
 commands. Windows has no automatic updater yet: install a newer verified installer manually. Default-app
 opening does not promise PDF-page or media-timestamp navigation; the search panel supplies previews.

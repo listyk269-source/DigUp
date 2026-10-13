@@ -24,7 +24,7 @@ async function start() {
   for (const path of info.offered) addFolder(path, firstTime ? !/[\\/]Downloads$/i.test(path) || info.auto : chosen.has(path));
   for (const path of info.chosen) if (!folders.has(path)) addFolder(path, true);
   for (const path of info.codeRoots || []) addFolder(path, true, true);
-  estimate([...folders.keys()]);
+  const estimating = estimate([...folders.keys()]);
   showModel(info.model);
   tauri.event.listen("model", ({ payload }) => showModel(payload));
   showKeys(info.hotkey);
@@ -37,7 +37,10 @@ async function start() {
   const asked = PAGES.indexOf(new URLSearchParams(location.search).get("page"));   // dev snapshots: ?page=folders
   if (asked >= 0) page = asked;
   render();
-  if (info.auto) setTimeout(clickThrough, 500);
+  if (info.auto) {
+    await estimating;
+    setTimeout(clickThrough, 500);
+  }
 }
 
 // MARK: Pages
@@ -59,6 +62,14 @@ $("next").addEventListener("click", async () => {
   $("next").textContent = "Applying…";
   $("back").disabled = true;
   try {
+    if (info.auto) {
+      await invoke("debug_setup_snapshot", { report: {
+        reconfigure: !!info.debugReconfigure,
+        folders: [...folders].map(([path, folder]) => ({ path, checked: folder.checked,
+          counts: folder.counts.textContent, estimate: folder.estimate || null })),
+        codeRoots: chosenCodeFolders(), device: $("device").value,
+      } });
+    }
     await invoke("finish_setup", {
       folders: chosenFolders(),
       codeRoots: chosenCodeFolders(),
@@ -79,6 +90,14 @@ $("back").addEventListener("click", () => {
 
 /// Debug runs (--debug-setup): every offered folder, every page, then Start.
 async function clickThrough() {
+  if (info.debugReconfigure) {
+    // The second smoke setup adds an offered folder through the same checkbox/change
+    // path as a person; finish_setup still saves and reconfigures the real helpers.
+    for (const folder of folders.values()) {
+      const checkbox = folder.row.querySelector("input");
+      if (!checkbox.checked) checkbox.click();
+    }
+  }
   while (page < PAGES.length - 1) {
     $("next").click();
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -141,15 +160,10 @@ async function estimate(paths) {
     return;
   }
   for (const path of paths) {
-    const answer = answers.find((item) => same(item.folder, path));
-    folders.get(path).counts.textContent = answer ? countsText(answer) : "";
+    const answer = answers.find((item) => item.requestedFolder === path);
+    folders.get(path).estimate = answer;
+    folders.get(path).counts.textContent = answer ? countsText(answer) : "Couldn't match this folder's estimate";
   }
-}
-
-/// The helper reports folders with forward slashes (and Windows paths compare without case).
-function same(a, b) {
-  const plain = (path) => (path || "").replaceAll("\\", "/").replace(/\/$/, "");
-  return isWindows ? plain(a).toLowerCase() === plain(b).toLowerCase() : plain(a) === plain(b);
 }
 
 /// "1,204 pictures · 37 PDFs · 12 documents · 3 videos"
@@ -168,10 +182,12 @@ function countsText(answer) {
 }
 
 $("add-folder").addEventListener("click", async () => {
-  const picked = (await invoke("pick_folders")).filter((path) => !folders.has(path));
-  for (const path of picked) addFolder(path, true);
-  estimate(picked);
-  render();
+  try {
+    const picked = (await invoke("pick_folders")).filter((path) => !folders.has(path));
+    for (const path of picked) addFolder(path, true);
+    estimate(picked);
+    render();
+  } catch (error) { $("model").textContent = String(error); }
 });
 
 $("add-code-folder").addEventListener("click", async () => {

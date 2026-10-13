@@ -298,6 +298,8 @@ impl Drop for SearchService {
 pub struct IndexService {
     running: Mutex<Option<Indexing>>,
     closed: AtomicBool,
+    /// Events from a helper being stopped must not overwrite its replacement's progress.
+    generation: Arc<AtomicU64>,
     on_event: EventSink,
 }
 
@@ -318,6 +320,7 @@ impl IndexService {
         IndexService {
             running: Mutex::new(None),
             closed: AtomicBool::new(false),
+            generation: Arc::new(AtomicU64::new(0)),
             on_event: Arc::new(on_event),
         }
     }
@@ -334,18 +337,41 @@ impl IndexService {
                         .and_then(|_| indexing.stdin.flush())
                         .map_err(|error| error.to_string());
                 }
+                self.generation.fetch_add(1, Ordering::SeqCst);
                 let indexing = running.take().unwrap();
                 stop(indexing.child, indexing.stdin, "stop");
             }
         }
+        let current = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let (child, stdin, stdout) = launch.spawn()?;
         let on_event = self.on_event.clone();
+        let generation = self.generation.clone();
         std::thread::spawn(move || {
+            let mut settled = false;
             for line in BufReader::new(stdout).lines() {
                 let Ok(line) = line else { break };
+                if generation.load(Ordering::SeqCst) != current {
+                    return;
+                }
                 if let Ok(event) = serde_json::from_str::<Value>(&line) {
+                    match event["event"].as_str().unwrap_or_default() {
+                        "idle" | "error" | "exit" => settled = true,
+                        "scanning" | "sync" | "indexing" | "file" | "reading-rest" | "rest" => {
+                            settled = false;
+                        }
+                        _ => {}
+                    }
                     on_event(event);
                 }
+            }
+            if generation.load(Ordering::SeqCst) != current {
+                return;
+            }
+            if !settled {
+                on_event(json!({
+                    "event": "error", "fatal": true, "unexpectedExit": true,
+                    "message": "The index helper stopped unexpectedly. Check the index log, folder access and runtime installation, then try indexing again."
+                }));
             }
             on_event(json!({"event": "exit"}));
         });
@@ -358,6 +384,7 @@ impl IndexService {
     }
 
     pub fn stop(&self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
         if let Some(indexing) = self.running.lock().unwrap().take() {
             stop(indexing.child, indexing.stdin, "stop");
         }
@@ -502,9 +529,21 @@ mod tests {
             "{}",
             json!({"event": "device", "device": device, "pid": pid})
         );
+        if let Ok(action) = std::env::var("DIGUP_TEST_INDEX_EXIT") {
+            if action != "before-idle" {
+                println!("{}", json!({"event": "idle", "searchable": 3}));
+            }
+            if action != "after-idle" {
+                println!("{}", json!({"event": "scanning"}));
+                std::process::exit(23);
+            }
+            return;
+        }
         for line in std::io::stdin().lock().lines() {
             let line = line.unwrap();
             if line == "stop" {
+                // An old helper may have already queued its terminal event when replacement starts.
+                println!("{}", json!({"event": "idle", "staleStop": true}));
                 break;
             }
             if line == "sync" {
@@ -596,5 +635,63 @@ mod tests {
             service.run(&launch("missing".into())).unwrap_err(),
             "DigUp is shutting down"
         );
+    }
+
+    #[test]
+    fn indexer_reports_unexpected_eof_and_preserves_normal_idle_exit() {
+        for action in ["before-idle", "after-idle", "idle-then-work"] {
+            let (directory, mut launch) = device_process(&format!("eof-{action}"));
+            launch
+                .env
+                .push(("DIGUP_TEST_INDEX_EXIT".into(), action.into()));
+            let (events, received) = std::sync::mpsc::channel();
+            let service = IndexService::new(move |event| {
+                let _ = events.send(event);
+            });
+            service.run(&launch).unwrap();
+            let mut errors = Vec::new();
+            loop {
+                let event = received.recv_timeout(Duration::from_secs(10)).unwrap();
+                if event["event"] == "error" {
+                    errors.push(event.clone());
+                }
+                if event["event"] == "exit" {
+                    break;
+                }
+            }
+            if action == "after-idle" {
+                assert!(
+                    errors.is_empty(),
+                    "normal idle must not be reported as a crash"
+                );
+            } else {
+                assert_eq!(errors.len(), 1);
+                assert_eq!(errors[0]["unexpectedExit"], true);
+                assert_eq!(errors[0]["fatal"], true);
+            }
+            service.stop();
+            std::fs::remove_dir_all(directory).unwrap();
+        }
+    }
+
+    #[test]
+    fn stopped_indexer_does_not_publish_stale_terminal_events() {
+        let (directory, launch) = device_process("stale-stop");
+        let (events, received) = std::sync::mpsc::channel();
+        let service = IndexService::new(move |event| {
+            let _ = events.send(event);
+        });
+        service.run(&launch).unwrap();
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(10)).unwrap()["event"],
+            "device"
+        );
+        service.stop();
+        drop(service);
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(10)),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
+        );
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

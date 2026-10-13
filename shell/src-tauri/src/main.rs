@@ -6,6 +6,7 @@
 
 mod autostart;
 mod helper;
+mod index_status;
 mod options;
 mod process;
 mod resources;
@@ -13,6 +14,7 @@ mod settings;
 mod watcher;
 
 use helper::{IndexService, Launch, ModelDownload, SearchService};
+use index_status::IndexStatus;
 use options::{Options, DEFAULT_HOTKEY};
 use serde_json::{json, Value};
 use settings::{Device, Settings};
@@ -49,10 +51,17 @@ struct Shell {
     watcher: Mutex<Option<FolderWatcher>>,
     /// The tray menu's first line: what's going on.
     status: Mutex<Option<MenuItem<Wry>>>,
+    /// Replayed when a webview starts or is shown after indexing has already begun.
+    index_status: Mutex<IndexStatus>,
     /// When the search service last reloaded the index (while indexing, at most every few seconds).
     reloaded: Mutex<Instant>,
     /// Debug runs with setup: the panel's query waits until the first index is in.
     debug_query_sent: AtomicBool,
+    debug_reconfigure_started: AtomicBool,
+    debug_reconfigure_done: AtomicBool,
+    debug_panel_reopened: AtomicBool,
+    debug_setup_history: Mutex<Vec<Value>>,
+    debug_index_history: Mutex<Vec<Value>>,
     indexing_paused: AtomicBool,
     shutting_down: AtomicBool,
     logs: PathBuf,
@@ -175,6 +184,11 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
     shell.search.ask(request).await
 }
 
+#[tauri::command]
+fn index_status(shell: State<'_, Arc<Shell>>) -> IndexStatus {
+    shell.index_status.lock().unwrap().clone()
+}
+
 /// What indexing these folders would take, one answer per folder (`digup estimate --json`): files by kind, the first
 /// pass's seconds, the rest of long files, subfolders. For setup.
 #[tauri::command]
@@ -183,23 +197,41 @@ async fn estimate(
     folders: Vec<String>,
 ) -> Result<Vec<Value>, String> {
     let mut args = vec!["estimate".to_string(), "--json".to_string()];
-    args.extend(folders);
+    args.extend(shell.index_arguments());
+    args.extend(folders.clone());
     let launch = shell.launch(args, "estimate.log");
     tauri::async_runtime::spawn_blocking(move || {
         let (status, output) = launch.output()?;
         if !status.success() {
-            return Err("DigUp couldn't count these folders. Check folder access and the installed runtime DLLs.".into());
+            return Err(format!("DigUp couldn't count these folders ({status}). Check folder access and the installed runtime DLLs."));
         }
-        Ok(String::from_utf8_lossy(&output).lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
+        associate_estimates(&output, &folders)
     })
     .await
     .map_err(|error| error.to_string())?
 }
 
+/// `estimate --json` emits one line per input, in order, including unreadable folders.
+/// The returned folder can use a canonical Windows/8.3 spelling; keep the UI's original key.
+fn associate_estimates(output: &[u8], folders: &[String]) -> Result<Vec<Value>, String> {
+    let mut answers: Vec<Value> = String::from_utf8_lossy(output)
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<_, _>>()
+        .map_err(|_| "DigUp returned an invalid folder estimate".to_string())?;
+    if answers.len() != folders.len() || answers.iter().any(|answer| !answer.is_object()) {
+        return Err("DigUp didn't report an estimate for every chosen folder".into());
+    }
+    for (answer, folder) in answers.iter_mut().zip(folders) {
+        answer["requestedFolder"] = json!(folder);
+    }
+    Ok(answers)
+}
+
 /// What the setup window starts from: the folders it offers, the hotkey, the model, the folders already chosen.
 #[tauri::command]
 fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
-    let offered: Vec<PathBuf> = match &shell.options.offered {
+    let mut offered: Vec<PathBuf> = match &shell.options.offered {
         Some(folders) => folders.clone(),
         None => {
             let paths = app.path();
@@ -217,6 +249,12 @@ fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
             .collect()
         }
     };
+    let reconfigure = shell.debug_reconfigure_started.load(Ordering::SeqCst);
+    if reconfigure {
+        if let Some(folder) = &shell.options.debug_reconfigure_folder {
+            offered.push(folder.clone());
+        }
+    }
     json!({
         "offered": offered.iter().map(|folder| folder.display().to_string()).collect::<Vec<_>>(),
         "chosen": shell.folders(),
@@ -225,6 +263,7 @@ fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
         "model": shell.model_state.lock().unwrap().clone(),
         "auto": shell.options.debug_setup,
         "debugDevice": shell.options.debug_device,
+        "debugReconfigure": reconfigure,
         "autostart": autostart::enabled(),
         "autostartSupported": cfg!(windows),
         "device": shell.options.effective_device(shell.settings.lock().unwrap().device),
@@ -292,6 +331,9 @@ async fn finish_setup(
         }
         *settings = updated;
         drop(settings);
+        if shell.debug_reconfigure_started.load(Ordering::SeqCst) {
+            shell.debug_reconfigure_done.store(true, Ordering::SeqCst);
+        }
         if device_changed {
             shell.index.stop();
         }
@@ -302,6 +344,9 @@ async fn finish_setup(
     .map_err(|error| error.to_string())??;
     if let Some(window) = app.get_webview_window("setup") {
         let _ = window.close();
+    }
+    if !app.state::<Arc<Shell>>().options.debug_setup {
+        show_panel(&app);
     }
     Ok(())
 }
@@ -349,11 +394,21 @@ fn panel_height(app: AppHandle, height: f64) {
 
 /// Debug runs: the query the panel types in when it loads (with setup, it comes later as a "debug-query" event).
 #[tauri::command]
-fn debug_query(shell: State<'_, Arc<Shell>>) -> Option<String> {
-    if shell.options.debug_setup {
-        return None;
+async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, String> {
+    if shell.options.debug_setup && !shell.debug_panel_reopened.load(Ordering::SeqCst) {
+        return Ok(None);
     }
-    shell.options.debug_query.clone()
+    if shell.debug_panel_reopened.load(Ordering::SeqCst) {
+        let _ = shell.search.ask(json!({"op": "reload"})).await;
+    }
+    Ok(shell.options.debug_query.clone())
+}
+
+#[tauri::command]
+fn debug_setup_snapshot(shell: State<'_, Arc<Shell>>, report: Value) {
+    if shell.options.debug_setup {
+        shell.debug_setup_history.lock().unwrap().push(report);
+    }
 }
 
 /// Debug runs: what the page showed for the debug query, printed (and the shell quits, if asked).
@@ -363,6 +418,9 @@ fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value)
     report["savedDevice"] = json!(saved_device);
     report["devicePreference"] = json!(shell.options.effective_device(saved_device));
     report["deviceOverridden"] = json!(shell.options.device_is_overridden());
+    report["setupHistory"] = json!(shell.debug_setup_history.lock().unwrap().clone());
+    report["indexing"]["engineHistory"] = json!(shell.debug_index_history.lock().unwrap().clone());
+    report["indexing"]["panelReopened"] = json!(shell.debug_panel_reopened.load(Ordering::SeqCst));
     println!("{report}");
     if let Some(path) = &shell.options.debug_report {
         if std::fs::write(path, report.to_string()).is_err() {
@@ -394,10 +452,13 @@ fn main() {
             std::process::exit(2);
         }
     };
-    let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+    let mut builder = tauri::Builder::default();
+    if !options.debug_isolated {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
             show_panel(app)
-        }))
+        }));
+    }
+    let app = builder
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -412,6 +473,7 @@ fn main() {
         .setup(move |app| setup(app, options))
         .invoke_handler(tauri::generate_handler![
             ask,
+            index_status,
             estimate,
             setup_info,
             pick_folders,
@@ -422,6 +484,7 @@ fn main() {
             panel_height,
             debug_query,
             debug_report,
+            debug_setup_snapshot,
             retry_model
         ])
         .build(tauri::generate_context!())
@@ -446,7 +509,15 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
         &std::env::current_exe()?,
         app.path().resource_dir().ok().as_deref(),
     );
-    let logs = app.path().app_log_dir()?;
+    let logs = if options.debug_isolated {
+        options
+            .index
+            .as_ref()
+            .expect("validated isolated index")
+            .join("shell-logs")
+    } else {
+        app.path().app_log_dir()?
+    };
     std::fs::create_dir_all(&logs)?;
     let settings_path = match &options.settings {
         Some(path) => path.clone(),
@@ -521,8 +592,14 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
         model_state: Mutex::new(json!({"state": "checking"})),
         watcher: Mutex::new(None),
         status: Mutex::new(None),
+        index_status: Mutex::new(IndexStatus::default()),
         reloaded: Mutex::new(Instant::now()),
         debug_query_sent: AtomicBool::new(false),
+        debug_reconfigure_started: AtomicBool::new(false),
+        debug_reconfigure_done: AtomicBool::new(false),
+        debug_panel_reopened: AtomicBool::new(false),
+        debug_setup_history: Mutex::new(Vec::new()),
+        debug_index_history: Mutex::new(Vec::new()),
         indexing_paused: AtomicBool::new(false),
         shutting_down: AtomicBool::new(false),
         logs,
@@ -531,16 +608,18 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
 
     make_panel(&handle)?;
     // No tray (a session without a taskbar, a Linux desktop without one): the hotkey and the panel still work.
-    if let Err(error) = make_tray(&handle, &shell) {
-        eprintln!("digup-shell: no tray icon: {error}");
-    }
-    let hotkey = shell.hotkey();
-    if let Err(error) = app.global_shortcut().register(hotkey.as_str()) {
-        set_status(
-            &handle,
-            &format!("The shortcut {} is taken", shortcut_text(&hotkey)),
-        );
-        eprintln!("digup-shell: can't use {hotkey} as the shortcut: {error}");
+    if !shell.options.debug_isolated {
+        if let Err(error) = make_tray(&handle, &shell) {
+            eprintln!("digup-shell: no tray icon: {error}");
+        }
+        let hotkey = shell.hotkey();
+        if let Err(error) = app.global_shortcut().register(hotkey.as_str()) {
+            set_status(
+                &handle,
+                &format!("The shortcut {} is taken", shortcut_text(&hotkey)),
+            );
+            eprintln!("digup-shell: can't use {hotkey} as the shortcut: {error}");
+        }
     }
 
     // The search service starts now (the first search is then quick); the model is checked (and fetched if it's
@@ -625,6 +704,7 @@ fn watch_folders(app: &AppHandle) {
         let shell = shell.clone();
         tauri::async_runtime::spawn_blocking(move || shell.index.stop());
         set_status(app, "No folders chosen yet");
+        set_index_phase(app, "no-folders", None);
         return;
     }
     let changed = {
@@ -635,7 +715,14 @@ fn watch_folders(app: &AppHandle) {
         &folders,
         shell.options.index_folder(),
         changed,
-        |warning| set_status(app, warning),
+        |warning| {
+            set_status(app, warning);
+            let shell = app.state::<Arc<Shell>>();
+            let mut status = shell.index_status.lock().unwrap();
+            status.message = Some(warning.into());
+            status.revision += 1;
+            let _ = app.emit("index-status", status.clone());
+        },
     ));
     run_index(app);
 }
@@ -656,6 +743,11 @@ fn run_index(app: &AppHandle) {
         }
         if let Err(error) = shell.index.run(&shell.index_launch()) {
             set_status(&app, &format!("Indexing couldn't start: {error}"));
+            set_index_phase(
+                &app,
+                "error",
+                Some(format!("Indexing couldn't start: {error}")),
+            );
         }
     });
 }
@@ -684,7 +776,12 @@ fn quit(app: &AppHandle) {
 // MARK: Windows
 
 fn make_panel(app: &AppHandle) -> tauri::Result<()> {
-    let panel = WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()))
+    let mut builder = WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()));
+    let shell = app.state::<Arc<Shell>>();
+    if shell.options.debug_isolated {
+        builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
+    }
+    let panel = builder
         .title("DigUp")
         .inner_size(PANEL_WIDTH, FIELD_HEIGHT)
         .decorations(false)
@@ -747,7 +844,12 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     let hidden = app.state::<Arc<Shell>>().options.debug_setup;
-    WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()))
+    let mut builder = WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()));
+    let shell = app.state::<Arc<Shell>>();
+    if shell.options.debug_isolated {
+        builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
+    }
+    builder
         .title("Set Up DigUp")
         .inner_size(720.0, 600.0)
         .resizable(false)
@@ -840,14 +942,21 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
                 let _ = show_setup(app);
             }
             "index" => {
-                app.state::<Arc<Shell>>()
-                    .indexing_paused
-                    .store(false, Ordering::SeqCst);
+                let shell = app.state::<Arc<Shell>>();
+                shell.indexing_paused.store(false, Ordering::SeqCst);
+                if shell.all_folders().is_empty() {
+                    set_index_phase(app, "no-folders", None);
+                } else if shell.model_ready() {
+                    set_index_phase(app, "starting", None);
+                } else {
+                    set_index_phase(app, "waiting", Some("The model is not ready. Choose Retry Model Download in the tray if the download failed.".into()));
+                }
                 run_index(app);
             }
             "pause" => {
                 let shell = app.state::<Arc<Shell>>().inner().clone();
                 shell.indexing_paused.store(true, Ordering::SeqCst);
+                set_index_phase(app, "paused", None);
                 let app = app.clone();
                 tauri::async_runtime::spawn_blocking(move || {
                     shell.index.stop();
@@ -886,6 +995,13 @@ fn set_status(app: &AppHandle, text: &str) {
     let _ = app.emit("status", text);
 }
 
+fn set_index_phase(app: &AppHandle, stage: &str, message: Option<String>) {
+    let shell = app.state::<Arc<Shell>>();
+    let mut status = shell.index_status.lock().unwrap();
+    status.phase(stage, message);
+    let _ = app.emit("index-status", status.clone());
+}
+
 // MARK: The helpers' events
 
 fn search_event(app: &AppHandle, event: Value) {
@@ -907,7 +1023,24 @@ fn index_event(app: &AppHandle, event: Value) {
         println!("index: {event}");
     }
     let count = |key: &str| event[key].as_u64().unwrap_or(0);
+    {
+        let shell = app.state::<Arc<Shell>>();
+        let mut status = shell.index_status.lock().unwrap();
+        if status.observe(&event) {
+            if shell.options.debug_report.is_some() {
+                let mut history = shell.debug_index_history.lock().unwrap();
+                if history.len() == 64 {
+                    history.remove(0);
+                }
+                history.push(json!(status.clone()));
+            }
+            let _ = app.emit("index-status", status.clone());
+        }
+    }
     match event["event"].as_str().unwrap_or_default() {
+        "scanning" => set_status(app, "Scanning folders…"),
+        "indexing" => set_status(app, "Preparing to index files…"),
+        "reading-rest" => set_status(app, "Reading the rest of long files…"),
         "file" => {
             set_status(
                 app,
@@ -923,10 +1056,42 @@ fn index_event(app: &AppHandle, event: Value) {
             reload(app, false);
         }
         "idle" => {
-            set_status(app, &format!("Up to date · {} files", count("searchable")));
+            set_status(
+                app,
+                &format!(
+                    "Up to date · {} files",
+                    count("searchable") + count("code_searchable")
+                ),
+            );
             reload(app, true);
             // A debug run through setup searches once the first index is in.
             let shell = app.state::<Arc<Shell>>();
+            if shell.options.debug_reconfigure_folder.is_some() {
+                if !shell.debug_reconfigure_started.swap(true, Ordering::SeqCst) {
+                    let app = app.clone();
+                    let dispatch = app.clone();
+                    let _ = dispatch.run_on_main_thread(move || {
+                        let _ = show_setup(&app);
+                    });
+                    return;
+                }
+                if !shell.debug_reconfigure_done.load(Ordering::SeqCst) {
+                    return;
+                }
+                if !shell.debug_panel_reopened.swap(true, Ordering::SeqCst) {
+                    let app = app.clone();
+                    let dispatch = app.clone();
+                    let _ = dispatch.run_on_main_thread(move || {
+                        if let Some(panel) = app.get_webview_window("panel") {
+                            let _ = panel.destroy();
+                        }
+                        if make_panel(&app).is_err() {
+                            app.exit(2);
+                        }
+                    });
+                    return;
+                }
+            }
             if let Some(query) = &shell.options.debug_query {
                 if shell.options.debug_setup && !shell.debug_query_sent.swap(true, Ordering::SeqCst)
                 {
@@ -983,9 +1148,33 @@ fn model_event(app: &AppHandle, event: Value) {
     let ready = state["state"] == "ready";
     *shell.model_state.lock().unwrap() = state.clone();
     let _ = app.emit("model", state);
+    if !ready && !shell.indexing_paused.load(Ordering::SeqCst) {
+        let model = shell.model_state.lock().unwrap().clone();
+        let message = match model["state"].as_str() {
+            Some("failed") => format!(
+                "The model couldn't download: {}. Retry Model Download in the tray.",
+                model["message"].as_str().unwrap_or("unknown error")
+            ),
+            Some("downloading") => "Downloading the model before indexing can start…".into(),
+            Some("waiting") => "Waiting for the network to download the model…".into(),
+            _ => "Checking the model before indexing can start…".into(),
+        };
+        set_index_phase(
+            app,
+            if model["state"] == "failed" {
+                "error"
+            } else {
+                "waiting"
+            },
+            Some(message),
+        );
+    }
     if ready {
         if shell.all_folders().is_empty() {
             set_status(app, "No folders chosen yet");
+            set_index_phase(app, "no-folders", None);
+        } else if !shell.indexing_paused.load(Ordering::SeqCst) {
+            set_index_phase(app, "starting", None);
         }
         run_index(app);
     }
@@ -1010,4 +1199,28 @@ fn reload(app: &AppHandle, now: bool) {
             println!("search: reload {reply:?}");
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn estimates_keep_requested_unicode_and_alias_keys() {
+        let requested = vec![
+            r"\\?\C:\DOCUME~1\Кириллица 🚀".to_string(),
+            "D:/Other folder".into(),
+        ];
+        let output = concat!(
+            "{\"folder\":\"C:/Documents/Кириллица 🚀\",\"readable\":true,\"files\":{\"doc\":3}}\n",
+            "{\"folder\":\"D:/Other folder\",\"readable\":false}\n"
+        );
+        let answers = associate_estimates(output.as_bytes(), &requested).unwrap();
+        assert_eq!(answers[0]["requestedFolder"], requested[0]);
+        assert_eq!(answers[0]["files"]["doc"], 3);
+        assert_eq!(answers[1]["requestedFolder"], requested[1]);
+        assert_eq!(answers[1]["readable"], false);
+        assert!(associate_estimates(b"{}\n", &requested).is_err());
+        assert!(associate_estimates(b"not JSON\n{}\n", &requested).is_err());
+    }
 }

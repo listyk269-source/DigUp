@@ -101,6 +101,7 @@ jobs:
           ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models $models -OutputDirectory 'build.noindex/windows/smoke'
           ./scripts/windows/Media-Smoke.ps1 -PackageDirectory 'build.noindex/windows/package' -Models $models -OutputDirectory 'build.noindex/windows/media-smoke'
           ./scripts/windows/Portable-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/portable-smoke'
+          ./scripts/windows/Cyrillic-Progress-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/cyrillic-progress'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
           $env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
@@ -127,6 +128,9 @@ jobs:
             build.noindex/windows/media-smoke/*.txt
             build.noindex/windows/portable-smoke/*.json
             build.noindex/windows/portable-smoke/*.txt
+            build.noindex/windows/cyrillic-progress/*.json
+            build.noindex/windows/cyrillic-progress/*.txt
+            build.noindex/windows/cyrillic-progress/Отдельный индекс/worker*.log
             build.noindex/windows/gpu-policy-smoke/*.json
             build.noindex/windows/gpu-policy-smoke/*.jsonl
             build.noindex/windows/gpu-policy-smoke/*.txt

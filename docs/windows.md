@@ -161,7 +161,9 @@ CLI examples from an unpacked portable build:
 ./helper/digup.exe status
 ```
 
-The `DIGUP_MODELS` environment variable overrides the model directory;
+The `DIGUP_MODELS` environment variable overrides engine model lookup. To download
+into a custom directory, pass `download-model --to DIR`; launch the GUI with
+`DigUp.exe --models DIR` to use that directory for first-run setup as well.
 `DIGUP_CPU_ONLY=1` explicitly requests CPU inference. `--index` selects a separate
 index directory for tests. Keep personal document paths out of bug reports: inspect
 logs before sharing, as existing extraction errors and query logs can contain names
@@ -182,6 +184,7 @@ $installer = Get-ChildItem build.noindex/windows/artifacts/*-setup.exe | Select-
 ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Media-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Portable-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models"
+./scripts/windows/Cyrillic-Progress-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models" -OutputDirectory "$PWD/build.noindex/windows/cyrillic-progress"
 ./scripts/windows/Gpu-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models" -NoGpuRequired
 ./scripts/windows/Test-ModelDownload.ps1 -Cli "$PWD/build.noindex/windows/package/helper/digup.exe" -OutputDirectory "$PWD/build.noindex/windows/download-resume-check"
 ```
@@ -206,6 +209,22 @@ For direct `swift test`, DLLs must be available beside the test executable or in
 **process-local** PATH just as `Build.ps1` arranges (`Vendor/llama/lib`,
 `Vendor/pdfium/bin`, `Vendor/ffmpeg/bin`, Swift runtime). End-user binaries do not
 depend on that developer setup.
+
+The search panel shows indexing from the initial folder scan through file processing
+and the later pass for long-file parts. File/part counters describe the current pass;
+the scan has no percentage because its total is not known yet. Paused, failed and
+completed states remain visible when the panel is opened later. An unexpected helper
+exit is reported instead of leaving an apparently idle panel. After choosing folders
+and pressing Start, the panel opens with the current progress.
+
+`Cyrillic-Progress-Smoke.ps1` uses a private index, settings, WebView profile and logs.
+It leaves any running user installation alone, creates the index only through the
+real setup WebView, then adds a Cyrillic folder through the same running GUI. It checks
+folder estimates, persisted choices, real semantic/FTS search, scan/file progress and
+snapshot replay after recreating the panel. A 3 GiB sparse unsupported file is included:
+Windows crawling must use 64-bit Win32 metadata before filtering extensions. This
+regresses a Foundation size-conversion crash at 2 GiB, independent of folder language.
+The native folder picker itself is still a manual check.
 
 The smoke script uses synthetic documents only, clears child PATH to Windows system
 directories, removes any reference worker override, defaults to CPU inference and uses
