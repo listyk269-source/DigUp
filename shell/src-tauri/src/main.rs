@@ -350,6 +350,17 @@ fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, report: Value) {
 }
 
 fn main() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Diagnostics::Debug::{
+            GetErrorMode, SetErrorMode, SEM_FAILCRITICALERRORS,
+        };
+        // SAFETY: initialize once, before creating threads. Helpers inherit this mode; loader failures are reported
+        // through our protocol/error handling instead of blocking behind a Windows critical-error message box.
+        unsafe {
+            SetErrorMode(GetErrorMode() | SEM_FAILCRITICALERRORS);
+        }
+    }
     let options = match Options::from_args() {
         Ok(options) => options,
         Err(error) => {
@@ -425,7 +436,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
             .map(|root| root.display().to_string())
             .collect()
     };
-    let mut search_args = vec!["search-service".to_string()];
+    let mut search_args = vec!["search-service".to_string(), "--restrict-roots".to_string()];
     search_args.extend(
         options
             .index
@@ -552,7 +563,7 @@ fn apply_folders(app: &AppHandle) {
         let settings = shell.settings.lock().unwrap();
         (settings.skipped.clone(), settings.skip_types.clone())
     };
-    let mut search_args = vec!["search-service".to_string()];
+    let mut search_args = vec!["search-service".to_string(), "--restrict-roots".to_string()];
     search_args.extend(shell.index_arguments());
     for folder in &code_roots {
         search_args.extend(["--code-root".to_string(), folder.clone()]);

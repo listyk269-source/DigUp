@@ -61,25 +61,28 @@ impl Launch {
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
+            crate::resources::validate_packaged_runtime(&self.program)?;
             // Runtime tools live beside the helper. An installed app must not pick up another FFmpeg, a development
             // Python worker, or an unrelated llama backend from the caller's environment.
             let runtime = self
                 .program
                 .parent()
                 .expect("absolute program has a parent");
-            command
-                .env("DIGUP_FFMPEG", runtime)
-                .env("DIGUP_BACKENDS", runtime)
-                .env("DIGUP_CPU_ONLY", "1")
-                .env_remove("DIGUP_WORKER_DIR");
-            let mut paths = vec![runtime.to_path_buf()];
-            if let Some(windows) = std::env::var_os("SystemRoot") {
-                paths.push(PathBuf::from(windows).join("System32"));
+            if crate::resources::is_packaged_helper(&self.program) {
+                command
+                    .env("DIGUP_FFMPEG", runtime)
+                    .env("DIGUP_BACKENDS", runtime)
+                    .env("DIGUP_CPU_ONLY", "1")
+                    .env_remove("DIGUP_WORKER_DIR");
+                let mut paths = vec![runtime.to_path_buf()];
+                if let Some(windows) = std::env::var_os("SystemRoot") {
+                    paths.push(PathBuf::from(windows).join("System32"));
+                }
+                command.env(
+                    "PATH",
+                    std::env::join_paths(paths).map_err(|error| error.to_string())?,
+                );
             }
-            command.env(
-                "PATH",
-                std::env::join_paths(paths).map_err(|error| error.to_string())?,
-            );
             // CREATE_NO_WINDOW (no console flashes up), and BELOW_NORMAL_PRIORITY_CLASS for background work.
             command.creation_flags(0x0800_0000 | if self.background { 0x0000_4000 } else { 0 });
         }
@@ -384,7 +387,9 @@ impl ModelDownload {
                 }
             }
             if !ended {
-                on_event(json!({"event": "error", "message": "the download stopped"}));
+                on_event(
+                    json!({"event": "error", "message": "The model helper stopped unexpectedly. Check the model log, retry the download, or reinstall DigUp if a runtime DLL is missing."}),
+                );
             }
         });
         *running = Some(child);

@@ -44,9 +44,74 @@ pub fn resolve_helper(
         })
 }
 
+/// Check the pinned runtime's essential files before Windows can display a loader dialog.
+/// An explicit helper in a developer's .build directory keeps its existing development layout.
+#[cfg(windows)]
+pub fn is_packaged_helper(helper: &Path) -> bool {
+    helper
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("helper"))
+}
+
+#[cfg(windows)]
+pub fn validate_packaged_runtime(helper: &Path) -> Result<(), String> {
+    if !is_packaged_helper(helper) {
+        return Ok(());
+    }
+    let folder = helper.parent().expect("packaged helper has a parent");
+    let missing: Vec<_> = [
+        "swiftCore.dll",
+        "swift_Concurrency.dll",
+        "swiftWinSDK.dll",
+        "swiftCRT.dll",
+        "swiftDispatch.dll",
+        "Foundation.dll",
+        "FoundationEssentials.dll",
+        "FoundationInternationalization.dll",
+        "FoundationNetworking.dll",
+        "_FoundationICU.dll",
+        "BlocksRuntime.dll",
+        "dispatch.dll",
+        "llama.dll",
+        "mtmd.dll",
+        "ggml.dll",
+        "ggml-base.dll",
+        "pdfium.dll",
+        "vcruntime140.dll",
+        "ffmpeg.exe",
+        "ffprobe.exe",
+    ]
+    .into_iter()
+    .filter(|name| !folder.join(name).is_file())
+    .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(format!("DigUp's installation is incomplete: {} missing from its helper folder. Reinstall DigUp or extract the entire portable archive.", missing.join(", ")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn missing_runtime_names_files_without_disclosing_private_paths() {
+        let error = validate_packaged_runtime(Path::new(r"C:\Private documents\helper\digup.exe"))
+            .unwrap_err();
+        assert!(error.contains("swiftCore.dll"));
+        assert!(error.contains("ffmpeg.exe"));
+        assert!(!error.contains("Private documents"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn custom_development_helper_keeps_its_layout() {
+        assert!(
+            validate_packaged_runtime(Path::new(r"C:\checkout\.build\release\digup.exe")).is_ok()
+        );
+    }
 
     #[test]
     fn windows_never_resolves_the_gui_as_its_own_helper() {
