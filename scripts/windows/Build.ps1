@@ -43,8 +43,14 @@ if (!$SwiftRuntimeDirectory -or !(Test-Path "$SwiftRuntimeDirectory/swiftCore.dl
 # Build/test processes need native libraries before packaging. Never alter the machine PATH.
 $originalPath = $env:PATH
 $originalCpuOnly = $env:DIGUP_CPU_ONLY
+$originalBackends = $env:DIGUP_BACKENDS
+$originalFFmpeg = $env:DIGUP_FFMPEG
 try {
     $env:DIGUP_CPU_ONLY = '1'
+    # Dev test executables have no sibling runtime yet. Windows deliberately does
+    # not discover helper tools or dynamic model backends through a user's PATH.
+    $env:DIGUP_BACKENDS = "$script:Vendor/llama/lib"
+    $env:DIGUP_FFMPEG = "$script:Vendor/ffmpeg/bin"
     $env:PATH = "$script:Vendor/llama/lib;$script:Vendor/pdfium/bin;$script:Vendor/ffmpeg/bin;$SwiftRuntimeDirectory;$originalPath"
     # Embed while linking: post-link mt.exe can corrupt Swift's PE/DWARF layout.
     Invoke-Checked swift @('build', '-c', 'release', '--product', 'digup', '--jobs', "$Jobs",
@@ -176,4 +182,10 @@ try {
         "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
     } | Set-Content "$output/SHA256SUMS.txt" -Encoding ascii
     Write-Host "Built artifacts: $output"
-} finally { Restore-MacResolution; $env:PATH = $originalPath; $env:DIGUP_CPU_ONLY = $originalCpuOnly }
+} finally {
+    Restore-MacResolution
+    $env:PATH = $originalPath
+    $env:DIGUP_CPU_ONLY = $originalCpuOnly
+    $env:DIGUP_BACKENDS = $originalBackends
+    $env:DIGUP_FFMPEG = $originalFFmpeg
+}

@@ -47,7 +47,7 @@ function Invoke-SmokeProcess {
     $start.Environment['PATH'] = "$env:SystemRoot/System32;$env:SystemRoot"
     $start.Environment['DIGUP_MODELS'] = [IO.Path]::GetFullPath($Models)
     $start.Environment['DIGUP_CPU_ONLY'] = '1'
-    $start.Environment.Remove('DIGUP_WORKER_DIR') | Out-Null
+    foreach ($variable in @('DIGUP_WORKER_DIR', 'DIGUP_BACKENDS', 'DIGUP_FFMPEG')) { $start.Environment.Remove($variable) | Out-Null }
     $process = [Diagnostics.Process]::Start($start)
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
@@ -135,7 +135,7 @@ try {
     $watchStart.Environment['PATH'] = "$env:SystemRoot/System32;$env:SystemRoot"
     $watchStart.Environment['DIGUP_MODELS'] = [IO.Path]::GetFullPath($Models)
     $watchStart.Environment['DIGUP_CPU_ONLY'] = '1'
-    $watchStart.Environment.Remove('DIGUP_WORKER_DIR') | Out-Null
+    foreach ($variable in @('DIGUP_WORKER_DIR', 'DIGUP_BACKENDS', 'DIGUP_FFMPEG')) { $watchStart.Environment.Remove($variable) | Out-Null }
     $watcherProcess = [Diagnostics.Process]::Start($watchStart)
     try {
         $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)

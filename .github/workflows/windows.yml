@@ -103,6 +103,8 @@ jobs:
           ./scripts/windows/Portable-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/portable-smoke'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
+          $env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
+          $env:DIGUP_FFMPEG = "$PWD/Vendor/ffmpeg/bin"
           $env:PATH = "$PWD/Vendor/llama/lib;$PWD/Vendor/pdfium/bin;$PWD/Vendor/ffmpeg/bin;$env:PATH"
           swift test --skip-build --filter ReferenceVectorTests
           if ($LASTEXITCODE) { throw 'Real model reference vector checks failed' }

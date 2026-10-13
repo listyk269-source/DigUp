@@ -110,6 +110,9 @@ or queries. Do not share the index database itself.
 
 ```powershell
 . ./scripts/windows/Enter-Environment.ps1
+$env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
+$env:DIGUP_FFMPEG = "$PWD/Vendor/ffmpeg/bin"
+$env:PATH = "$PWD/Vendor/llama/lib;$PWD/Vendor/pdfium/bin;$PWD/Vendor/ffmpeg/bin;$env:PATH"
 swift test
 cargo fmt --manifest-path shell/src-tauri/Cargo.toml --all -- --check
 cargo clippy --manifest-path shell/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
