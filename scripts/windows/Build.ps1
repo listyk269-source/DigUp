@@ -69,7 +69,7 @@ try {
     if ($crt.Count -ne 1) { throw 'Cannot uniquely locate the MSVC x64 redistributable CRT.' }
     Copy-RuntimeDlls $crt[0].FullName $helper
     Copy-RuntimeDlls $crt[0].FullName $package
-    Copy-Item "$script:Repo/LICENSE", "$script:Repo/THIRD_PARTY_NOTICES.md", "$PSScriptRoot/dependencies.json" $licenses
+    Copy-Item "$script:Repo/LICENSE", "$script:Repo/THIRD_PARTY_NOTICES.md", "$PSScriptRoot/dependencies.json", "$PSScriptRoot/ffmpeg-dependencies.json" $licenses
     Restore-MacResolution
     @{
         sourceCommit = (& git rev-parse HEAD)
@@ -88,7 +88,16 @@ try {
     Copy-Item "$script:Vendor/llama.cpp/LICENSE" "$licenses/llama.cpp-MIT.txt"
     Copy-Item "$script:Vendor/ffmpeg/LICENSE.txt" "$licenses/FFmpeg-LGPL-2.1.txt"
     Copy-Item "$script:Vendor/ffmpeg/doc" "$licenses/FFmpeg-doc" -Recurse
-    if (!(Test-Path "$script:Vendor/ffmpeg/source/ffmpeg-8.1.3.tar.xz")) { throw 'Native FFmpeg corresponding source is missing; run Build-FFmpeg.ps1.' }
+    $mediaManifest = Get-Content "$PSScriptRoot/ffmpeg-dependencies.json" -Raw | ConvertFrom-Json
+    foreach ($source in @($mediaManifest.source, $mediaManifest.dav1d)) {
+        $sourceFile = "$script:Vendor/ffmpeg/source/$($source.file)"
+        if (!(Test-Path -LiteralPath $sourceFile) -or (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash -ne $source.sha256) {
+            throw "Native media corresponding source is missing or damaged: $($source.file); run Build-FFmpeg.ps1."
+        }
+    }
+    foreach ($notice in @('dav1d-BSD-2-Clause.txt', 'dav1d-PATENTS.txt', 'x86inc-ISC.txt')) {
+        if (!(Test-Path "$script:Vendor/ffmpeg/source/$notice")) { throw "A media dependency notice is missing: $notice; run Build-FFmpeg.ps1." }
+    }
     Copy-Item "$script:Vendor/miniz/miniz.c" "$licenses/miniz-source-and-license.c"
     Copy-Item "$script:Vendor/stb/include/*.h" $licenses
     if (Test-Path "$script:Vendor/pdfium/LICENSE") { Copy-Item "$script:Vendor/pdfium/LICENSE" "$licenses/PDFium-LICENSE.txt" }
@@ -154,11 +163,14 @@ try {
     $sourcePackage = "$script:Repo/build.noindex/windows/ffmpeg-source"
     Reset-BuildDirectory $sourcePackage
     New-Item -ItemType Directory -Force "$sourcePackage/scripts/windows", "$sourcePackage/Vendor/downloads" | Out-Null
-    Copy-Item "$script:Vendor/ffmpeg/source/ffmpeg-8.1.3.tar.xz" "$sourcePackage/Vendor/downloads"
+    Get-ChildItem -LiteralPath "$script:Vendor/ffmpeg/source" -File |
+        Where-Object Name -Match '\.tar\.(xz|gz|bz2|zst)$|\.zip$' |
+        Copy-Item -Destination "$sourcePackage/Vendor/downloads"
     foreach ($recipe in @('Build-FFmpeg.ps1', 'build-ffmpeg.sh', 'ffmpeg-dependencies.json', 'Common.ps1', 'dependencies.json', 'Enter-Environment.ps1')) {
         Copy-Item -LiteralPath "$PSScriptRoot/$recipe" -Destination "$sourcePackage/scripts/windows"
     }
     Copy-Item "$script:Vendor/ffmpeg/LICENSE.txt", "$script:Vendor/ffmpeg/source/BUILDING.txt", "$script:Vendor/ffmpeg/source/BUILD-VERSIONS.json" $sourcePackage
+    Copy-Item "$script:Vendor/ffmpeg/source/dav1d-BSD-2-Clause.txt", "$script:Vendor/ffmpeg/source/dav1d-PATENTS.txt", "$script:Vendor/ffmpeg/source/x86inc-ISC.txt" $sourcePackage
     Compress-Archive -Path "$sourcePackage/*" -DestinationPath "$output/DigUp-FFmpeg-8.1.3-source.zip"
     Get-ChildItem -LiteralPath $output -File | Sort-Object Name | ForEach-Object {
         "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"

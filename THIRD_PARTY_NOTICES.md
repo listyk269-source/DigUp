@@ -14,7 +14,8 @@ are locked in `shell/src-tauri/Cargo.lock`. Installed and portable builds contai
 | stb | `2c980bb59875b0d32144a71867fbdebb2f77cd20`, https://github.com/nothings/stb | MIT or public-domain alternative; original headers and notices included |
 | miniz | 3.1.2, https://github.com/richgel999/miniz | MIT; notice in bundled source |
 | PDFium package | chromium/8086, https://github.com/bblanchon/pdfium-binaries | Wrapper MIT, PDFium BSD and transitive notices; original `licenses/` included |
-| FFmpeg / ffprobe / libav DLLs | 8.1.3, https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz | LGPL-2.1-or-later; built locally from unmodified official source with no GPL, nonfree, external codec libraries, network protocols or GPU support; replaceable shared DLLs |
+| FFmpeg / ffprobe / libav DLLs | 8.1.3, https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz | LGPL-2.1-or-later; built locally from unmodified official source with no GPL, nonfree, network protocols or GPU support; replaceable shared DLLs |
+| dav1d | 1.5.4, https://code.videolan.org/videolan/dav1d | BSD-2-Clause; software AV1 decoder needed for AVIF images, built from pinned upstream source; BSD, x86inc ISC and upstream patent notices in `licenses/FFmpeg-doc/` |
 | Swift runtime | 6.3.3, https://github.com/swiftlang/swift | Apache-2.0 with Runtime Library Exception; Windows runtime also contains third-party support DLLs |
 | Tauri / Rust crates | exact versions in Cargo.lock | Individual licenses in `licenses/Rust-packages.json` and `licenses/crates/` |
 | Microsoft Visual C++ runtime | app-local x64 CRT from installed VS 2022 redistributables | Microsoft redistribution terms from the licensed build tools; copied only from `VCToolsRedistDir` |
@@ -24,11 +25,11 @@ are locked in `shell/src-tauri/Cargo.lock`. Installed and portable builds contai
 ## FFmpeg corresponding source
 
 The build produces `DigUp-FFmpeg-8.1.3-source.zip` alongside the binary artifacts.
-It contains the exact official source archive, SHA-256 manifest, build scripts,
+It contains the exact FFmpeg and dav1d source archives, SHA-256 manifest, build scripts,
 tool versions and build instructions. Distribute this source artifact together
-with every Windows binary release and preserve it in mirrors. No external codec
-libraries are linked into this minimal build; their separately licensed code is
-not redistributed. The LGPL text is installed in `licenses/FFmpeg-LGPL-2.1.txt`.
+with every Windows binary release and preserve it in mirrors. The only external
+codec library is dav1d, whose BSD license is also included in the source artifact.
+The LGPL text is installed in `licenses/FFmpeg-LGPL-2.1.txt`.
 The configurable upstream source is unchanged and shared DLLs remain replaceable.
 
 ## Runtime and crate notice review

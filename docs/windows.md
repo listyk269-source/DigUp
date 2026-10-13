@@ -44,8 +44,9 @@ can be passed with `-SwiftRuntimeDirectory C:/path/to/runtime/usr/bin`.
 
 The build downloads checksum-pinned SQLite, stb, miniz, PDFium and CMake into
 `Vendor/`, verifies the existing pinned llama.cpp commit and patch, builds all CPU
-variants with GPU/OpenMP/network components disabled, builds FFmpeg 8.1.3 from its
-official source using pinned Make/NASM/Swift LLVM tools, and runs Swift tests, Rust
+variants with GPU/OpenMP/network components disabled, builds FFmpeg 8.1.3 and its
+dav1d 1.5.4 software AV1 decoder from official sources using pinned build tools,
+and runs Swift tests, Rust
 format checking, Clippy and Rust tests. It builds the release CLI and Tauri GUI,
 embeds the CLI's `asInvoker`/long-path manifest, and stages runtime DLLs beside the
 helper. Use `-SkipVendor` only when the pinned vendor build is already available;
@@ -57,7 +58,7 @@ Outputs:
 - `build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip`: unpacked app,
   CLI in `helper/`, and the same runtime dependencies and notices.
 - `build.noindex/windows/artifacts/DigUp-FFmpeg-8.1.3-source.zip`: corresponding
-  FFmpeg source, license, pinned build recipes and compiler version record; preserve
+  FFmpeg and dav1d sources, licenses, pinned build recipes and compiler version record; preserve
   this artifact alongside the binaries when redistributing.
 - `build.noindex/windows/artifacts/SHA256SUMS.txt`: SHA-256 of every release artifact.
 
@@ -116,6 +117,7 @@ cargo test --manifest-path shell/src-tauri/Cargo.toml --locked
 $installer = Get-ChildItem build.noindex/windows/artifacts/*-setup.exe | Select-Object -First 1
 ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Media-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models"
+./scripts/windows/Portable-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Test-ModelDownload.ps1 -Cli "$PWD/build.noindex/windows/package/helper/digup.exe" -OutputDirectory "$PWD/build.noindex/windows/download-resume-check"
 ```
 
@@ -149,6 +151,9 @@ download on every CI run.
 fixtures, exercises actual local extractors and model inference, checks a page-2
 PDF hit and rejects deliberately damaged files. It also checks that a source file
 containing a side effect is indexed without ever being executed.
+`Portable-Smoke.ps1` extracts the actual portable ZIP into a path with Cyrillic,
+spaces and emoji, then runs its renamed `DigUp.exe` and helper with only Windows
+system directories in PATH. It checks resource lookup, real embeddings and GUI setup/search.
 
 ## Diagnostics and removal
 
