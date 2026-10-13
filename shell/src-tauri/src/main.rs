@@ -4,8 +4,11 @@
 // folders. The Mac app (Sources/DigUpApp) is the reference for behavior.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod autostart;
 mod helper;
 mod options;
+mod process;
+mod resources;
 mod settings;
 mod watcher;
 
@@ -19,7 +22,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl, WebviewWindowBuilder, WindowEvent, Wry};
+use tauri::{
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, State, WebviewUrl,
+    WebviewWindowBuilder, WindowEvent, Wry,
+};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
@@ -45,6 +51,8 @@ struct Shell {
     reloaded: Mutex<Instant>,
     /// Debug runs with setup: the panel's query waits until the first index is in.
     debug_query_sent: AtomicBool,
+    indexing_paused: AtomicBool,
+    shutting_down: AtomicBool,
     logs: PathBuf,
 }
 
@@ -52,18 +60,49 @@ impl Shell {
     /// The folders searched: the launch arguments' in dev runs, else the settings'.
     fn folders(&self) -> Vec<String> {
         if !self.options.roots.is_empty() {
-            return self.options.roots.iter().map(|root| root.display().to_string()).collect();
+            return self
+                .options
+                .roots
+                .iter()
+                .map(|root| root.display().to_string())
+                .collect();
         }
         self.settings.lock().unwrap().folders.clone()
     }
 
     fn is_set_up(&self) -> bool {
-        !self.options.roots.is_empty() || self.settings.lock().unwrap().set_up
+        !self.options.roots.is_empty()
+            || !self.options.code_roots.is_empty()
+            || self.settings.lock().unwrap().set_up
+    }
+
+    fn code_roots(&self) -> Vec<String> {
+        if !self.options.code_roots.is_empty() {
+            return self
+                .options
+                .code_roots
+                .iter()
+                .map(|root| root.display().to_string())
+                .collect();
+        }
+        self.settings.lock().unwrap().code_roots.clone()
+    }
+
+    fn all_folders(&self) -> Vec<String> {
+        let mut folders = self.folders();
+        folders.extend(self.code_roots());
+        folders.sort();
+        folders.dedup();
+        folders
     }
 
     fn hotkey(&self) -> String {
         let chosen = self.settings.lock().unwrap().hotkey.clone();
-        self.options.hotkey.clone().unwrap_or(if chosen.is_empty() { DEFAULT_HOTKEY.to_string() } else { chosen })
+        self.options.hotkey.clone().unwrap_or(if chosen.is_empty() {
+            DEFAULT_HOTKEY.to_string()
+        } else {
+            chosen
+        })
     }
 
     /// A background helper (indexing, the download), below the person's own programs for the processor.
@@ -71,14 +110,23 @@ impl Shell {
         Launch {
             program: self.options.helper.clone(),
             args,
-            env: self.options.models.iter().map(|models| ("DIGUP_MODELS".to_string(), models.display().to_string())).collect(),
+            env: self
+                .options
+                .models
+                .iter()
+                .map(|models| ("DIGUP_MODELS".to_string(), models.display().to_string()))
+                .collect(),
             log: Some(self.logs.join(log)),
             background: true,
         }
     }
 
     fn index_arguments(&self) -> Vec<String> {
-        self.options.index.iter().flat_map(|index| ["--index".to_string(), index.display().to_string()]).collect()
+        self.options
+            .index
+            .iter()
+            .flat_map(|index| ["--index".to_string(), index.display().to_string()])
+            .collect()
     }
 
     /// `index-service` for the folders as they are now.
@@ -91,6 +139,9 @@ impl Shell {
         }
         for extension in &settings.skip_types {
             args.extend(["--exclude-ext".to_string(), extension.clone()]);
+        }
+        for folder in self.code_roots() {
+            args.extend(["--code-root".to_string(), folder]);
         }
         args.extend(self.folders());
         self.launch(args, "index.log")
@@ -106,8 +157,20 @@ impl Shell {
 /// The panel's questions for `search-service`.
 #[tauri::command]
 async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, String> {
-    let op = request.get("op").and_then(Value::as_str).unwrap_or_default();
-    if !["search", "embed_ahead", "text", "render", "prewarm", "status"].contains(&op) {
+    let op = request
+        .get("op")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if ![
+        "search",
+        "embed_ahead",
+        "text",
+        "render",
+        "prewarm",
+        "status",
+    ]
+    .contains(&op)
+    {
         return Err(format!("not a question the panel asks: {op}"));
     }
     shell.search.ask(request).await
@@ -116,18 +179,19 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
 /// What indexing these folders would take, one answer per folder (`digup estimate --json`): files by kind, the first
 /// pass's seconds, the rest of long files, subfolders. For setup.
 #[tauri::command]
-async fn estimate(shell: State<'_, Arc<Shell>>, folders: Vec<String>) -> Result<Vec<Value>, String> {
-    let helper = shell.options.helper.clone();
+async fn estimate(
+    shell: State<'_, Arc<Shell>>,
+    folders: Vec<String>,
+) -> Result<Vec<Value>, String> {
+    let mut args = vec!["estimate".to_string(), "--json".to_string()];
+    args.extend(folders);
+    let launch = shell.launch(args, "estimate.log");
     tauri::async_runtime::spawn_blocking(move || {
-        let mut command = std::process::Command::new(&helper);
-        command.arg("estimate").args(&folders).arg("--json");
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        let (status, output) = launch.output()?;
+        if !status.success() {
+            return Err("DigUp couldn't count these folders. Check folder access and the installed runtime DLLs.".into());
         }
-        let output = command.output().map_err(|error| format!("can't run {}: {error}", helper.display()))?;
-        Ok(String::from_utf8_lossy(&output.stdout).lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
+        Ok(String::from_utf8_lossy(&output).lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
     })
     .await
     .map_err(|error| error.to_string())?
@@ -140,20 +204,29 @@ fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
         Some(folders) => folders.clone(),
         None => {
             let paths = app.path();
-            [paths.document_dir(), paths.picture_dir(), paths.video_dir(), paths.audio_dir(), paths.desktop_dir(),
-             paths.download_dir()]
-                .into_iter()
-                .filter_map(Result::ok)
-                .filter(|folder| folder.is_dir())
-                .collect()
+            [
+                paths.document_dir(),
+                paths.picture_dir(),
+                paths.video_dir(),
+                paths.audio_dir(),
+                paths.desktop_dir(),
+                paths.download_dir(),
+            ]
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|folder| folder.is_dir())
+            .collect()
         }
     };
     json!({
         "offered": offered.iter().map(|folder| folder.display().to_string()).collect::<Vec<_>>(),
         "chosen": shell.folders(),
+        "codeRoots": shell.code_roots(),
         "hotkey": shortcut_text(&shell.hotkey()),
         "model": shell.model_state.lock().unwrap().clone(),
         "auto": shell.options.debug_setup,
+        "autostart": autostart::enabled(),
+        "autostartSupported": cfg!(windows),
     })
 }
 
@@ -161,21 +234,48 @@ fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
 #[tauri::command]
 async fn pick_folders(app: AppHandle) -> Vec<String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    app.dialog().file().set_title("Add Folders").pick_folders(move |folders| {
-        let _ = sender.send(folders);
-    });
+    app.dialog()
+        .file()
+        .set_title("Add Folders")
+        .pick_folders(move |folders| {
+            let _ = sender.send(folders);
+        });
     let picked = receiver.await.ok().flatten().unwrap_or_default();
-    picked.into_iter().filter_map(|folder| folder.into_path().ok()).map(|path| path.display().to_string()).collect()
+    picked
+        .into_iter()
+        .filter_map(|folder| folder.into_path().ok())
+        .map(|path| path.display().to_string())
+        .collect()
 }
 
 /// Setup's last step: the folders are saved and indexing starts (once the model is in).
 #[tauri::command]
-fn finish_setup(app: AppHandle, shell: State<'_, Arc<Shell>>, folders: Vec<String>) -> Result<(), String> {
+fn finish_setup(
+    app: AppHandle,
+    shell: State<'_, Arc<Shell>>,
+    folders: Vec<String>,
+    code_roots: Option<Vec<String>>,
+    launch_at_login: Option<bool>,
+) -> Result<(), String> {
+    let was_enabled = autostart::enabled();
+    if let Some(enabled) = launch_at_login {
+        autostart::set(enabled)?;
+    }
     {
         let mut settings = shell.settings.lock().unwrap();
-        settings.folders = folders;
-        settings.set_up = true;
-        settings.save(&shell.settings_path).map_err(|error| format!("can't save the settings: {error}"))?;
+        let mut updated = settings.clone();
+        updated.folders = folders;
+        if let Some(code_roots) = code_roots {
+            updated.code_roots = code_roots;
+        }
+        updated.set_up = true;
+        if let Err(error) = updated.save(&shell.settings_path) {
+            if launch_at_login.is_some() {
+                let _ = autostart::set(was_enabled);
+            }
+            return Err(format!("Can't save the settings: {error}"));
+        }
+        *settings = updated;
     }
     apply_folders(&app);
     if let Some(window) = app.get_webview_window("setup") {
@@ -188,14 +288,18 @@ fn finish_setup(app: AppHandle, shell: State<'_, Arc<Shell>>, folders: Vec<Strin
 #[tauri::command]
 fn open_path(app: AppHandle, path: String) -> Result<(), String> {
     hide_panel(app.clone());
-    app.opener().open_path(path, None::<&str>).map_err(|error| error.to_string())
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 /// Shows a result in the file manager, selected.
 #[tauri::command]
 fn reveal(app: AppHandle, path: String) -> Result<(), String> {
     hide_panel(app.clone());
-    app.opener().reveal_item_in_dir(path).map_err(|error| error.to_string())
+    app.opener()
+        .reveal_item_in_dir(path)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -205,11 +309,19 @@ fn hide_panel(app: AppHandle) {
     }
 }
 
+#[tauri::command]
+fn retry_model(app: AppHandle) {
+    start_model_download(&app);
+}
+
 /// The panel grows to show results and shrinks back to its field.
 #[tauri::command]
 fn panel_height(app: AppHandle, height: f64) {
     if let Some(panel) = app.get_webview_window("panel") {
-        let _ = panel.set_size(LogicalSize::new(PANEL_WIDTH, height.clamp(FIELD_HEIGHT, 640.0)));
+        let _ = panel.set_size(LogicalSize::new(
+            PANEL_WIDTH,
+            height.clamp(FIELD_HEIGHT, 640.0),
+        ));
     }
 }
 
@@ -226,6 +338,12 @@ fn debug_query(shell: State<'_, Arc<Shell>>) -> Option<String> {
 #[tauri::command]
 fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, report: Value) {
     println!("{report}");
+    if let Some(path) = &shell.options.debug_report {
+        if std::fs::write(path, report.to_string()).is_err() {
+            app.exit(2);
+            return;
+        }
+    }
     if shell.options.debug_quit {
         quit(&app);
     }
@@ -240,7 +358,9 @@ fn main() {
         }
     };
     let app = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| show_panel(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_panel(app)
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -254,24 +374,41 @@ fn main() {
         )
         .setup(move |app| setup(app, options))
         .invoke_handler(tauri::generate_handler![
-            ask, estimate, setup_info, pick_folders, finish_setup, open_path, reveal, hide_panel, panel_height,
-            debug_query, debug_report
+            ask,
+            estimate,
+            setup_info,
+            pick_folders,
+            finish_setup,
+            open_path,
+            reveal,
+            hide_panel,
+            panel_height,
+            debug_query,
+            debug_report,
+            retry_model
         ])
         .build(tauri::generate_context!())
         .expect("DigUp couldn't start");
     app.run(|app, event| match event {
         tauri::RunEvent::Exit => stop_helpers(app),
         // Closing the setup window isn't quitting: DigUp lives in the tray.
-        tauri::RunEvent::ExitRequested { code: None, api, .. } => api.prevent_exit(),
+        tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } => api.prevent_exit(),
         _ => {}
     });
 }
 
-fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::error::Error>> {
+fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "macos")]
     app.set_activation_policy(tauri::ActivationPolicy::Accessory); // the menu bar only, no Dock icon
 
     let handle = app.handle().clone();
+    options.helper = resources::resolve_helper(
+        options.helper_explicit.then_some(options.helper.as_path()),
+        &std::env::current_exe()?,
+        app.path().resource_dir().ok().as_deref(),
+    );
     let logs = app.path().app_log_dir()?;
     std::fs::create_dir_all(&logs)?;
     let settings_path = match &options.settings {
@@ -282,18 +419,43 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
     let roots: Vec<String> = if options.roots.is_empty() {
         settings.folders.clone()
     } else {
-        options.roots.iter().map(|root| root.display().to_string()).collect()
+        options
+            .roots
+            .iter()
+            .map(|root| root.display().to_string())
+            .collect()
     };
     let mut search_args = vec!["search-service".to_string()];
-    search_args.extend(options.index.iter().flat_map(|index| ["--index".to_string(), index.display().to_string()]));
+    search_args.extend(
+        options
+            .index
+            .iter()
+            .flat_map(|index| ["--index".to_string(), index.display().to_string()]),
+    );
     search_args.extend(roots);
+    let code_roots: Vec<String> = if options.code_roots.is_empty() {
+        settings.code_roots.clone()
+    } else {
+        options
+            .code_roots
+            .iter()
+            .map(|root| root.display().to_string())
+            .collect()
+    };
+    for folder in &code_roots {
+        search_args.extend(["--code-root".to_string(), folder.clone()]);
+    }
     let search = SearchService::new(
         Launch {
             program: options.helper.clone(),
             args: search_args,
-            env: options.models.iter().map(|models| ("DIGUP_MODELS".to_string(), models.display().to_string())).collect(),
+            env: options
+                .models
+                .iter()
+                .map(|models| ("DIGUP_MODELS".to_string(), models.display().to_string()))
+                .collect(),
             log: Some(logs.join("search.log")),
-            background: false,   // it answers typing
+            background: false, // it answers typing
         },
         {
             let app = handle.clone();
@@ -309,7 +471,7 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
         move |event| model_event(&app, event)
     });
     // Previews show files from the chosen folders (and the helper's renders, once it says where the index is).
-    for root in &settings.folders {
+    for root in settings.folders.iter().chain(code_roots.iter()) {
         let _ = app.asset_protocol_scope().allow_directory(root, true);
     }
     for root in &options.roots {
@@ -327,6 +489,8 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
         status: Mutex::new(None),
         reloaded: Mutex::new(Instant::now()),
         debug_query_sent: AtomicBool::new(false),
+        indexing_paused: AtomicBool::new(false),
+        shutting_down: AtomicBool::new(false),
         logs,
     });
     app.manage(shell.clone());
@@ -338,7 +502,10 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
     }
     let hotkey = shell.hotkey();
     if let Err(error) = app.global_shortcut().register(hotkey.as_str()) {
-        set_status(&handle, &format!("The shortcut {} is taken", shortcut_text(&hotkey)));
+        set_status(
+            &handle,
+            &format!("The shortcut {} is taken", shortcut_text(&hotkey)),
+        );
         eprintln!("digup-shell: can't use {hotkey} as the shortcut: {error}");
     }
 
@@ -348,13 +515,7 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
     tauri::async_runtime::spawn(async move {
         let _ = warm.search.ask(json!({"op": "status"})).await;
     });
-    let mut download = vec!["download-model".to_string()];
-    if let Some(models) = &shell.options.models {
-        download.extend(["--to".to_string(), models.display().to_string()]);
-    }
-    if let Err(error) = shell.model.run(&shell.launch(download, "model.log")) {
-        model_event(&handle, json!({"event": "error", "message": error}));
-    }
+    start_model_download(&handle);
     if shell.is_set_up() {
         watch_folders(&handle);
     } else {
@@ -366,20 +527,53 @@ fn setup(app: &mut tauri::App, options: Options) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+fn start_model_download(app: &AppHandle) {
+    let shell = app.state::<Arc<Shell>>().inner().clone();
+    if shell.shutting_down.load(Ordering::SeqCst) {
+        return;
+    }
+    let mut download = vec!["download-model".to_string()];
+    if let Some(models) = &shell.options.models {
+        download.extend(["--to".to_string(), models.display().to_string()]);
+    }
+    *shell.model_state.lock().unwrap() = json!({"state": "checking"});
+    let _ = app.emit("model", json!({"state": "checking"}));
+    if let Err(error) = shell.model.run(&shell.launch(download, "model.log")) {
+        model_event(app, json!({"event": "error", "message": error}));
+    }
+}
+
 /// After setup or a change of folders: the search service, the watcher and indexing follow the new folders.
 fn apply_folders(app: &AppHandle) {
     let shell = app.state::<Arc<Shell>>().inner().clone();
     let folders = shell.folders();
+    let code_roots = shell.code_roots();
     let (skipped, types) = {
         let settings = shell.settings.lock().unwrap();
         (settings.skipped.clone(), settings.skip_types.clone())
     };
-    for folder in &folders {
+    let mut search_args = vec!["search-service".to_string()];
+    search_args.extend(shell.index_arguments());
+    for folder in &code_roots {
+        search_args.extend(["--code-root".to_string(), folder.clone()]);
+    }
+    for folder in &skipped {
+        search_args.extend(["--exclude".to_string(), folder.clone()]);
+    }
+    for extension in &types {
+        search_args.extend(["--exclude-ext".to_string(), extension.clone()]);
+    }
+    search_args.extend(folders.clone());
+    shell.search.configure(search_args);
+    for folder in folders.iter().chain(code_roots.iter()) {
         let _ = app.asset_protocol_scope().allow_directory(folder, true);
     }
     let search = shell.clone();
     tauri::async_runtime::spawn(async move {
-        let _ = search.search.ask(json!({"op": "folders", "roots": folders, "skipped": skipped, "types": types})).await;
+        let _ = search
+            .search
+            .ask(json!({"op": "folders", "roots": folders, "skipped": skipped, "types": types, "code_roots": code_roots}))
+            .await;
     });
     watch_folders(app);
 }
@@ -387,8 +581,12 @@ fn apply_folders(app: &AppHandle) {
 /// Watches the folders, and indexes them now when the model is in.
 fn watch_folders(app: &AppHandle) {
     let shell = app.state::<Arc<Shell>>().inner().clone();
-    let folders: Vec<PathBuf> = shell.folders().iter().map(PathBuf::from).collect();
+    let folders: Vec<PathBuf> = shell.all_folders().iter().map(PathBuf::from).collect();
+    // Stop the previous subscription even when the last selected folder was removed.
+    shell.watcher.lock().unwrap().take();
     if folders.is_empty() {
+        let shell = shell.clone();
+        tauri::async_runtime::spawn_blocking(move || shell.index.stop());
         set_status(app, "No folders chosen yet");
         return;
     }
@@ -396,31 +594,53 @@ fn watch_folders(app: &AppHandle) {
         let app = app.clone();
         move || run_index(&app)
     };
-    *shell.watcher.lock().unwrap() = Some(FolderWatcher::start(&folders, shell.options.index_folder(), changed));
+    *shell.watcher.lock().unwrap() = Some(FolderWatcher::start(
+        &folders,
+        shell.options.index_folder(),
+        changed,
+        |warning| set_status(app, warning),
+    ));
     run_index(app);
 }
 
 /// Has the index helper sync and index, once there's a model and a folder.
 fn run_index(app: &AppHandle) {
-    let shell = app.state::<Arc<Shell>>();
-    if !shell.is_set_up() || shell.folders().is_empty() || !shell.model_ready() {
+    let shell = app.state::<Arc<Shell>>().inner().clone();
+    if !shell.is_set_up() || shell.all_folders().is_empty() || !shell.model_ready() {
         return;
     }
-    if let Err(error) = shell.index.run(&shell.index_launch()) {
-        set_status(app, &format!("Indexing couldn't start: {error}"));
-    }
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        if shell.indexing_paused.load(Ordering::SeqCst)
+            || shell.shutting_down.load(Ordering::SeqCst)
+        {
+            return;
+        }
+        if let Err(error) = shell.index.run(&shell.index_launch()) {
+            set_status(&app, &format!("Indexing couldn't start: {error}"));
+        }
+    });
 }
 
 fn stop_helpers(app: &AppHandle) {
     let shell = app.state::<Arc<Shell>>();
+    shell.shutting_down.store(true, Ordering::SeqCst);
+    shell.watcher.lock().unwrap().take();
     shell.model.stop();
-    shell.index.stop();
+    shell.index.close();
     shell.search.stop();
 }
 
 fn quit(app: &AppHandle) {
-    stop_helpers(app);
-    app.exit(0);
+    let shell = app.state::<Arc<Shell>>();
+    if shell.shutting_down.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        stop_helpers(&app);
+        app.exit(0);
+    });
 }
 
 // MARK: Windows
@@ -457,7 +677,9 @@ fn show_panel(app: &AppHandle) {
         let _ = show_setup(app);
         return;
     }
-    let Some(panel) = app.get_webview_window("panel") else { return };
+    let Some(panel) = app.get_webview_window("panel") else {
+        return;
+    };
     // On the screen with the pointer, centered, a fifth of the way down.
     if let Ok(pointer) = app.cursor_position() {
         if let Ok(Some(screen)) = app.monitor_from_point(pointer.x, pointer.y) {
@@ -503,9 +725,18 @@ fn shortcut_text(accelerator: &str) -> String {
     let parts: Vec<&str> = accelerator.split('+').collect();
     if cfg!(target_os = "macos") {
         let mut text = String::new();
-        for (name, sign) in [("Ctrl", "⌃"), ("Control", "⌃"), ("Alt", "⌥"), ("Option", "⌥"), ("Shift", "⇧"),
-                             ("CommandOrControl", "⌘"), ("CmdOrCtrl", "⌘"), ("Cmd", "⌘"), ("Command", "⌘"),
-                             ("Super", "⌘")] {
+        for (name, sign) in [
+            ("Ctrl", "⌃"),
+            ("Control", "⌃"),
+            ("Alt", "⌥"),
+            ("Option", "⌥"),
+            ("Shift", "⇧"),
+            ("CommandOrControl", "⌘"),
+            ("CmdOrCtrl", "⌘"),
+            ("Cmd", "⌘"),
+            ("Command", "⌘"),
+            ("Super", "⌘"),
+        ] {
             if parts.iter().any(|part| part.eq_ignore_ascii_case(name)) && !text.contains(sign) {
                 text.push_str(sign);
             }
@@ -527,14 +758,32 @@ fn shortcut_text(accelerator: &str) -> String {
 
 fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
     let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
-    let search = MenuItem::with_id(app, "search", "Search…", true, Some(shell.hotkey().as_str()))?;
+    let search = MenuItem::with_id(
+        app,
+        "search",
+        "Search…",
+        true,
+        Some(shell.hotkey().as_str()),
+    )?;
     let folders = MenuItem::with_id(app, "folders", "Choose Folders…", true, None::<&str>)?;
-    let index = MenuItem::with_id(app, "index", "Index Now", true, None::<&str>)?;
+    let index = MenuItem::with_id(app, "index", "Index Now / Resume", true, None::<&str>)?;
+    let pause = MenuItem::with_id(app, "pause", "Pause Indexing", true, None::<&str>)?;
+    let model = MenuItem::with_id(app, "model", "Retry Model Download", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "Quit DigUp", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
-        &[&status, &separator, &search, &folders, &index, &PredefinedMenuItem::separator(app)?, &quit_item],
+        &[
+            &status,
+            &separator,
+            &search,
+            &folders,
+            &index,
+            &pause,
+            &model,
+            &PredefinedMenuItem::separator(app)?,
+            &quit_item,
+        ],
     )?;
     // A Mac's menu bar takes a template (it colors it); trays elsewhere show the app's own small icon.
     #[cfg(target_os = "macos")]
@@ -552,13 +801,36 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
             "folders" => {
                 let _ = show_setup(app);
             }
-            "index" => run_index(app),
+            "index" => {
+                app.state::<Arc<Shell>>()
+                    .indexing_paused
+                    .store(false, Ordering::SeqCst);
+                run_index(app);
+            }
+            "pause" => {
+                let shell = app.state::<Arc<Shell>>().inner().clone();
+                shell.indexing_paused.store(true, Ordering::SeqCst);
+                let app = app.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    shell.index.stop();
+                    set_status(
+                        &app,
+                        "Indexing paused — choose Index Now / Resume to continue",
+                    );
+                });
+            }
+            "model" => start_model_download(app),
             "quit" => quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             // Windows and Linux: a click opens the panel, the menu is on the other button.
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
                 if !cfg!(target_os = "macos") {
                     toggle_panel(tray.app_handle());
                 }
@@ -584,7 +856,9 @@ fn search_event(app: &AppHandle, event: Value) {
     }
     if event["event"] == "ready" {
         if let Some(index) = event["index"].as_str() {
-            let _ = app.asset_protocol_scope().allow_directory(Path::new(index).join("previews"), false);
+            let _ = app
+                .asset_protocol_scope()
+                .allow_directory(Path::new(index).join("previews"), false);
         }
     }
     let _ = app.emit("helper", json!({"from": "search", "event": event}));
@@ -597,11 +871,17 @@ fn index_event(app: &AppHandle, event: Value) {
     let count = |key: &str| event[key].as_u64().unwrap_or(0);
     match event["event"].as_str().unwrap_or_default() {
         "file" => {
-            set_status(app, &format!("Indexing {} of {}", count("done"), count("total")));
+            set_status(
+                app,
+                &format!("Indexing {} of {}", count("done"), count("total")),
+            );
             reload(app, false);
         }
         "rest" => {
-            set_status(app, &format!("Reading the rest of {} long files", count("files")));
+            set_status(
+                app,
+                &format!("Reading the rest of {} long files", count("files")),
+            );
             reload(app, false);
         }
         "idle" => {
@@ -610,13 +890,21 @@ fn index_event(app: &AppHandle, event: Value) {
             // A debug run through setup searches once the first index is in.
             let shell = app.state::<Arc<Shell>>();
             if let Some(query) = &shell.options.debug_query {
-                if shell.options.debug_setup && !shell.debug_query_sent.swap(true, Ordering::SeqCst) {
-                    let _ = app.emit_to("panel", "debug-query", query.clone());
+                if shell.options.debug_setup && !shell.debug_query_sent.swap(true, Ordering::SeqCst)
+                {
+                    let (app, shell, query) = (app.clone(), shell.inner().clone(), query.clone());
+                    tauri::async_runtime::spawn(async move {
+                        let _ = shell.search.ask(json!({"op": "reload"})).await;
+                        let _ = app.emit_to("panel", "debug-query", query);
+                    });
                 }
             }
         }
         "waiting" => set_status(app, "Waiting for the model"),
-        "error" => set_status(app, &format!("Indexing: {}", event["message"].as_str().unwrap_or("error"))),
+        "error" => set_status(
+            app,
+            &format!("Indexing: {}", event["message"].as_str().unwrap_or("error")),
+        ),
         "exit" => reload(app, true),
         _ => {}
     }
@@ -630,8 +918,17 @@ fn model_event(app: &AppHandle, event: Value) {
     let shell = app.state::<Arc<Shell>>().inner().clone();
     let state = match event["event"].as_str().unwrap_or_default() {
         "progress" => {
-            let (bytes, total) = (event["all_bytes"].as_f64().unwrap_or(0.0), event["all_total"].as_f64().unwrap_or(1.0));
-            set_status(app, &format!("Downloading the model · {:.0}%", 100.0 * bytes / total.max(1.0)));
+            let (bytes, total) = (
+                event["all_bytes"].as_f64().unwrap_or(0.0),
+                event["all_total"].as_f64().unwrap_or(1.0),
+            );
+            set_status(
+                app,
+                &format!(
+                    "Downloading the model · {:.0}%",
+                    100.0 * bytes / total.max(1.0)
+                ),
+            );
             json!({"state": "downloading", "bytes": bytes, "total": total})
         }
         "file" => json!({"state": "downloading", "from": event["from"]}),
@@ -649,7 +946,7 @@ fn model_event(app: &AppHandle, event: Value) {
     *shell.model_state.lock().unwrap() = state.clone();
     let _ = app.emit("model", state);
     if ready {
-        if shell.folders().is_empty() {
+        if shell.all_folders().is_empty() {
             set_status(app, "No folders chosen yet");
         }
         run_index(app);
@@ -659,6 +956,9 @@ fn model_event(app: &AppHandle, event: Value) {
 /// Has the search service read the index again: at once when indexing settles, else at most every three seconds.
 fn reload(app: &AppHandle, now: bool) {
     let shell = app.state::<Arc<Shell>>().inner().clone();
+    if shell.shutting_down.load(Ordering::SeqCst) {
+        return;
+    }
     {
         let mut reloaded = shell.reloaded.lock().unwrap();
         if !now && reloaded.elapsed() < Duration::from_secs(3) {

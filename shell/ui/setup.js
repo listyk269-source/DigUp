@@ -11,6 +11,7 @@ const PAGES = ["welcome", "folders", "shortcut", "ready"];
 
 const $ = (id) => document.getElementById(id);
 const folders = new Map();   // path → {checked, row, counts}
+const codeFolders = new Map();
 let page = 0;
 let info = { offered: [], chosen: [], hotkey: "", model: { state: "checking" }, auto: false };
 
@@ -19,13 +20,16 @@ async function start() {
   // The usual folders, then any chosen before (Choose Folders… after setup). On a first launch they start checked,
   // all but Downloads (much of what lands there is passing through).
   const chosen = new Set(info.chosen);
-  const firstTime = chosen.size === 0;
+  const firstTime = chosen.size === 0 && !(info.codeRoots || []).length;
   for (const path of info.offered) addFolder(path, firstTime ? !/[\\/]Downloads$/i.test(path) || info.auto : chosen.has(path));
   for (const path of info.chosen) if (!folders.has(path)) addFolder(path, true);
+  for (const path of info.codeRoots || []) addFolder(path, true, true);
   estimate([...folders.keys()]);
   showModel(info.model);
   tauri.event.listen("model", ({ payload }) => showModel(payload));
   showKeys(info.hotkey);
+  $("startup-option").hidden = !info.autostartSupported;
+  $("launch-at-login").checked = !!info.autostart;
   if (!firstTime) page = 1;   // Choose Folders…: straight to the folders
   const asked = PAGES.indexOf(new URLSearchParams(location.search).get("page"));   // dev snapshots: ?page=folders
   if (asked >= 0) page = asked;
@@ -39,7 +43,7 @@ function render() {
   PAGES.forEach((name, index) => { $(name).hidden = index !== page; });
   $("back").hidden = page === 0;
   $("next").textContent = page === PAGES.length - 1 ? "Start" : "Continue";
-  $("next").disabled = page === 1 && !chosenFolders().length;
+  $("next").disabled = page === 1 && !chosenFolders().length && !chosenCodeFolders().length;
 }
 
 $("next").addEventListener("click", async () => {
@@ -50,7 +54,11 @@ $("next").addEventListener("click", async () => {
   }
   $("next").disabled = true;
   try {
-    await invoke("finish_setup", { folders: chosenFolders() });
+    await invoke("finish_setup", {
+      folders: chosenFolders(),
+      codeRoots: chosenCodeFolders(),
+      launchAtLogin: info.auto || !info.autostartSupported ? null : $("launch-at-login").checked,
+    });
   } catch (error) {
     $("model").textContent = String(error);
     $("next").disabled = false;
@@ -73,14 +81,15 @@ async function clickThrough() {
 
 // MARK: Folders
 
-function addFolder(path, checked) {
+function addFolder(path, checked, forCode = false) {
+  const collection = forCode ? codeFolders : folders;
   const row = document.createElement("label");
   row.className = "folder";
   const box = document.createElement("input");
   box.type = "checkbox";
   box.checked = checked;
   box.addEventListener("change", () => {
-    folders.get(path).checked = box.checked;
+    collection.get(path).checked = box.checked;
     render();
   });
   const text = document.createElement("div");
@@ -94,14 +103,18 @@ function addFolder(path, checked) {
   text.append(name, where);
   const counts = document.createElement("div");
   counts.className = "counts";
-  counts.textContent = "Counting…";
+  counts.textContent = forCode ? "Search with code:" : "Counting…";
   row.append(box, text, counts);
-  $("folder-list").append(row);
-  folders.set(path, { checked, row, counts });
+  $(forCode ? "code-folder-list" : "folder-list").append(row);
+  collection.set(path, { checked, row, counts });
 }
 
 function chosenFolders() {
   return [...folders].filter(([, folder]) => folder.checked).map(([path]) => path);
+}
+
+function chosenCodeFolders() {
+  return [...codeFolders].filter(([, folder]) => folder.checked).map(([path]) => path);
 }
 
 async function estimate(paths) {
@@ -110,7 +123,8 @@ async function estimate(paths) {
   try {
     answers = await invoke("estimate", { folders: paths });
   } catch (error) {
-    for (const path of paths) folders.get(path).counts.textContent = "";
+    for (const path of paths) folders.get(path).counts.textContent = "Couldn't read folder";
+    $("model").textContent = String(error);
     return;
   }
   for (const path of paths) {
@@ -147,6 +161,14 @@ $("add-folder").addEventListener("click", async () => {
   render();
 });
 
+$("add-code-folder").addEventListener("click", async () => {
+  try {
+    const picked = (await invoke("pick_folders")).filter((path) => !codeFolders.has(path));
+    for (const path of picked) addFolder(path, true, true);
+    render();
+  } catch (error) { $("model").textContent = String(error); }
+});
+
 // MARK: The shortcut and the model
 
 function showKeys(hotkey) {
@@ -177,6 +199,11 @@ function showModel(model) {
     if (model.problem) text += ` (${model.problem}, trying again)`;
   }
   $("model").textContent = text;
+  $("retry-model").hidden = model.state !== "failed";
 }
 
-start();
+$("retry-model").addEventListener("click", () => invoke("retry_model").catch((error) => {
+  $("model").textContent = String(error);
+}));
+
+start().catch((error) => { $("model").textContent = String(error); });

@@ -112,6 +112,7 @@ function show(reply, text, phase) {
 function failed(error) {
   state.error = String(error);
   renderFooter();
+  if (debugPending) report();
 }
 
 function rowIDs() {
@@ -587,6 +588,7 @@ function report() {
       report: {
         query: $query.value,
         phase: state.phase,
+        error: state.error,
         groups: state.groups.map((group) => ({ title: group.title, rows: group.rows.map((hit) => nameOf(hit.path)) })),
         weaker: state.weaker.length,
         selected: state.selection && nameOf(state.selection),

@@ -106,3 +106,7 @@ footer {
 }
 .model { font-size: 11px; color: var(--secondary); }
 .buttons { display: flex; gap: 8px; }
+
+.startup { display: block; max-width: 470px; margin: 24px auto 0; }
+.startup[hidden] { display: none; }
+.startup input { accent-color: var(--moss); vertical-align: middle; }

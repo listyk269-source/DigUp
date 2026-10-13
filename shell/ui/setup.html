@@ -30,6 +30,10 @@
       <p class="subtitle">Pick folders. You can change this anytime from the tray: Choose Folders…</p>
       <div class="folders" id="folder-list"></div>
       <button class="link" id="add-folder">Add Folder…</button>
+      <h3>Source code (optional)</h3>
+      <div class="folders" id="code-folder-list"></div>
+      <button class="link" id="add-code-folder">Add Code Folder…</button>
+      <p class="note">Search these folders with <b>code:</b> followed by your query. Code is read as text and never executed.</p>
       <p class="note">DigUp only reads files: it never changes, moves or uploads them.</p>
     </section>
 
@@ -39,7 +43,7 @@
       <div class="keys" id="keys"></div>
       <h3>In the search panel</h3>
       <dl class="panel-keys">
-        <dt>↩</dt><dd>opens the file (at the page or moment, where it can)</dd>
+        <dt>↩</dt><dd>opens the file in its default app</dd>
         <dt id="reveal-key">Ctrl+↩</dt><dd id="reveal-text">shows it in its folder</dd>
         <dt>↑ ↓</dt><dd>move between results</dd>
         <dt>Esc</dt><dd>closes the panel</dd>
@@ -53,11 +57,13 @@
       </div>
       <p class="subtitle centered" id="ready-text">DigUp lives in the tray, which shows how indexing is going. Files are
         searchable by name at once, and by what's in them as they're indexed.</p>
+      <label class="startup" id="startup-option" hidden><input type="checkbox" id="launch-at-login"> Start DigUp when I sign in to Windows</label>
     </section>
   </main>
 
   <footer>
     <span class="model" id="model"></span>
+    <button id="retry-model" hidden>Retry download</button>
     <span class="buttons">
       <button id="back" hidden>Back</button>
       <button class="primary" id="next">Continue</button>

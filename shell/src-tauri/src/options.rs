@@ -9,6 +9,7 @@ pub const DEFAULT_HOTKEY: &str = "CommandOrControl+Shift+Space";
 pub struct Options {
     /// DigUp's helper, `digup` (default: beside this program, where the installers put it).
     pub helper: PathBuf,
+    pub helper_explicit: bool,
     /// The index folder. None: the helper's own default (%LOCALAPPDATA%\DigUp\index on Windows,
     /// ~/.local/share/digup/index on Linux).
     pub index: Option<PathBuf>,
@@ -16,6 +17,7 @@ pub struct Options {
     pub models: Option<PathBuf>,
     /// The folders to search and keep indexed, instead of the settings' (dev runs; setup is then skipped).
     pub roots: Vec<PathBuf>,
+    pub code_roots: Vec<PathBuf>,
     /// The hotkey, instead of the settings'.
     pub hotkey: Option<String>,
     /// The settings file, instead of the one in the app's config folder (a fresh first launch in tests).
@@ -29,6 +31,8 @@ pub struct Options {
     pub debug_query: Option<String>,
     /// Debug runs: quit once the report is in.
     pub debug_quit: bool,
+    /// A machine-readable smoke result, also available in release builds without a console.
+    pub debug_report: Option<PathBuf>,
     /// Debug runs: show the panel at launch and keep it up when it loses focus.
     pub debug_show: bool,
 }
@@ -36,33 +40,41 @@ pub struct Options {
 impl Options {
     pub fn from_args() -> Result<Options, String> {
         let mut options = Options {
-            helper: default_helper(),
+            helper: PathBuf::new(),
+            helper_explicit: false,
             index: None,
             models: None,
             roots: Vec::new(),
+            code_roots: Vec::new(),
             hotkey: None,
             settings: None,
             offered: None,
             debug_setup: false,
             debug_query: None,
             debug_quit: false,
+            debug_report: None,
             debug_show: false,
         };
         let mut args = std::env::args().skip(1);
         while let Some(arg) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
             match arg.as_str() {
-                "--helper" => options.helper = value()?.into(),
+                "--helper" => {
+                    options.helper = value()?.into();
+                    options.helper_explicit = true;
+                }
                 "--index" => options.index = Some(value()?.into()),
                 "--models" => options.models = Some(value()?.into()),
                 // Separated as PATH is: ":" here, ";" on Windows.
                 "--roots" => options.roots = std::env::split_paths(&value()?).collect(),
+                "--code-root" => options.code_roots.push(value()?.into()),
                 "--hotkey" => options.hotkey = Some(value()?),
                 "--settings" => options.settings = Some(value()?.into()),
                 "--offer" => options.offered = Some(std::env::split_paths(&value()?).collect()),
                 "--debug-setup" => options.debug_setup = true,
                 "--debug-query" => options.debug_query = Some(value()?),
                 "--debug-quit" => options.debug_quit = true,
+                "--debug-report" => options.debug_report = Some(value()?.into()),
                 "--debug-show" => options.debug_show = true,
                 _ => return Err(format!("unknown argument {arg}")),
             }
@@ -82,21 +94,15 @@ impl Options {
             return self.index.clone();
         }
         if cfg!(windows) {
-            return std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join("DigUp").join("index"));
+            return std::env::var_os("LOCALAPPDATA")
+                .map(|local| PathBuf::from(local).join("DigUp").join("index"));
         }
-        let data = std::env::var_os("XDG_DATA_HOME").filter(|value| !value.is_empty()).map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
+        let data = std::env::var_os("XDG_DATA_HOME")
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share"))
+            });
         data.map(|data| data.join("digup").join("index"))
     }
-}
-
-/// The helper beside this program, or in its `helper` folder (a test build keeps the helper and its libraries there:
-/// on Windows "DigUp.exe" and "digup.exe" can't share a folder).
-fn default_helper() -> PathBuf {
-    let name = if cfg!(windows) { "digup.exe" } else { "digup" };
-    let Some(folder) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from)) else {
-        return PathBuf::from(name);
-    };
-    let inside = folder.join("helper").join(name);
-    if inside.is_file() { inside } else { folder.join(name) }
 }
