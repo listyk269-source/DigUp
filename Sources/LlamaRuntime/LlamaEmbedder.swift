@@ -2,7 +2,7 @@ import CLlama
 import DigUpKit
 import Foundation
 
-/// EmbeddingGemma 2 on llama.cpp (Metal), in this process: the image and audio encoders (mtmd) feed the text model, and
+/// EmbeddingGemma 2 on llama.cpp, in this process: the image and audio encoders (mtmd) feed the text model, and
 /// its mean-pooled, L2-normalized output is the vector.
 ///
 /// Inputs are framed as the reference (mlx-vlm, transformers) frames them: `<bos> text <eos>`,
@@ -31,6 +31,8 @@ public final class LlamaEmbedder: Embedder {
                                              loadSeconds: nil)
 
     public private(set) var info: WorkerInfo
+    /// The device actually selected after successful model preparation and warmup.
+    public let deviceName: String
     private var model: OpaquePointer?
     private var context: OpaquePointer?
     private var media: OpaquePointer?
@@ -45,8 +47,8 @@ public final class LlamaEmbedder: Embedder {
     private var position: llama_pos = 0
 
     /// `textOnly`: just the text model (queries). `log`: where llama.cpp's warnings and errors go (stderr when nil).
-    public init(models: LlamaModels, textOnly: Bool, log: URL? = nil) throws {
-        let started = Date()
+    public convenience init(models: LlamaModels, textOnly: Bool, log: URL? = nil, device: LlamaDevice? = nil) throws {
+        let preference = try LlamaDevice.resolve(requested: device)
         LlamaLog.shared.send(to: log)
         _ = Self.backend
         #if !os(macOS)
@@ -57,9 +59,41 @@ public final class LlamaEmbedder: Embedder {
         guard textOnly || models.media != nil else {
             throw WorkerError.notFound("\(LlamaModels.mediaFile) (images and audio) isn't downloaded yet")
         }
+        let gpu = (0..<ggml_backend_dev_count()).compactMap { ggml_backend_dev_get($0) }.first {
+            let type = ggml_backend_dev_type($0)
+            return type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU
+        }
+        if preference == .gpu && gpu == nil {
+            throw WorkerError.failed("no supported GPU backend is available; on Windows install a Vulkan-capable graphics driver, "
+                                     + "or choose Auto / CPU in DigUp settings")
+        }
+        if preference != .cpu, let gpu {
+            do {
+                try self.init(models: models, textOnly: textOnly, gpu: gpu)
+                return
+            } catch {
+                guard preference == .auto else {
+                    throw WorkerError.failed("GPU initialization failed (\(error)); choose Auto / CPU or check the graphics driver")
+                }
+                LlamaLog.shared.line("GPU initialization failed; retrying on CPU")
+            }
+        }
+        try self.init(models: models, textOnly: textOnly, gpu: nil)
+    }
+
+    private init(models: LlamaModels, textOnly: Bool, gpu: OpaquePointer?) throws {
+        let started = Date()
+        deviceName = gpu.map { String(cString: ggml_backend_dev_name($0)) } ?? "CPU"
         var modelParams = llama_model_default_params()
-        modelParams.n_gpu_layers = Self.cpuOnly ? 0 : 999
-        guard let model = llama_model_load_from_file(models.text.path, modelParams) else {
+        modelParams.n_gpu_layers = gpu == nil ? 0 : 999
+        // An explicit empty list also prevents CPU mode from offloading operations opportunistically.
+        // The pinned llama.cpp copies these handles into model.devices during loading; later inference uses that list.
+        var devices: [OpaquePointer?] = gpu.map { [$0, nil] } ?? [nil]
+        let loaded = devices.withUnsafeMutableBufferPointer { buffer in
+            modelParams.devices = buffer.baseAddress
+            return llama_model_load_from_file(models.text.path, modelParams)
+        }
+        guard let model = loaded else {
             throw WorkerError.failed("can't load the text model; run digup download-model to verify or repair it")
         }
         // One input must fit one micro-batch: 2048 tokens (the reference's cut), which also holds a 1120-token image or
@@ -73,6 +107,8 @@ public final class LlamaEmbedder: Embedder {
         params.kv_unified = true   // each input may use the whole context, as in llama-embedding
         params.embeddings = true
         params.pooling_type = LLAMA_POOLING_TYPE_MEAN
+        params.offload_kqv = gpu != nil
+        params.op_offload = gpu != nil
         #if !os(macOS)
         params.n_threads = Self.threads
         params.n_threads_batch = Self.threads
@@ -84,7 +120,8 @@ public final class LlamaEmbedder: Embedder {
         var media: OpaquePointer?
         if let mediaFile = models.media, !textOnly {
             var mediaParams = mtmd_context_params_default()
-            mediaParams.use_gpu = !Self.cpuOnly
+            mediaParams.use_gpu = gpu != nil
+            mediaParams.device = gpu
             mediaParams.print_timings = false
             mediaParams.warmup = true
             mediaParams.image_min_tokens = 1      // never rescale: images arrive at their final size (ImageSizing)
@@ -110,7 +147,7 @@ public final class LlamaEmbedder: Embedder {
         let known = Self.modelInfo
         info = WorkerInfo(model: known.model, revision: known.revision, runtime: known.runtime, dtype: known.dtype,
                           dim: embeddingSize, textOnly: textOnly, loadSeconds: nil)
-        // The first calls build the Metal pipelines: pay that now (the panel is opening).
+        // The first calls prepare compute pipelines: pay that now (the panel is opening).
         do {
             for _ in 0..<2 { _ = try embedTexts([Prompts.query("warm up")]) }
         } catch {
@@ -121,7 +158,7 @@ public final class LlamaEmbedder: Embedder {
         info = WorkerInfo(model: info.model, revision: info.revision, runtime: info.runtime, dtype: info.dtype,
                           dim: info.dim, textOnly: textOnly, loadSeconds: seconds)
         LlamaLog.shared.line("ready in \(seconds) s (\(textOnly ? "text-only" : "full"), llama.cpp \(Self.buildTag), "
-                             + "vectors \(Self.vectorVersion))")
+                             + "vectors \(Self.vectorVersion), device \(deviceName))")
     }
 
     deinit { close() }
@@ -135,9 +172,6 @@ public final class LlamaEmbedder: Embedder {
     }
 
     // MARK: Embedder
-
-    /// A reproducible CPU-only mode for baseline release checks, even on a machine with GPU backends installed.
-    static var cpuOnly: Bool { ProcessInfo.processInfo.environment["DIGUP_CPU_ONLY"] == "1" }
 
     public func embedTexts(_ texts: [String]) throws -> [[Float]] {
         reset()
@@ -403,7 +437,8 @@ final class LlamaLog: @unchecked Sendable {
     private func write(_ level: ggml_log_level, _ text: String) {
         lock.withLock {
             if level != GGML_LOG_LEVEL_CONT { self.level = level }
-            guard self.level.rawValue >= GGML_LOG_LEVEL_WARN.rawValue else { return }
+            // Preserve the model's offload summary as evidence of GPU use, without tensor names or input text.
+            guard self.level.rawValue >= GGML_LOG_LEVEL_WARN.rawValue || text.contains("offloaded ") else { return }
             (file ?? .standardError).write(Data(text.utf8))
         }
     }

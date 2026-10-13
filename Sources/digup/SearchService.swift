@@ -1,5 +1,6 @@
 import DigUpKit
 import Foundation
+import LlamaRuntime
 
 /// `digup search-service`: the app's searcher as a process, for shells that can't link DigUpKit (the Windows and Linux
 /// shell). It keeps the index open and the query encoder warm, so a search while typing costs what it costs
@@ -36,6 +37,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private var roots: [String]?
     private var skipped: [String], types: Set<String>, codeRoots: [String], codeSkipped: [String]
     private let idleSeconds: Double
+    private let device: LlamaDevice?
     private let log: URL
 
     private var encoder: (any Embedder)?
@@ -52,7 +54,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private let renderSlots = DispatchSemaphore(value: 2)
 
     init(index: URL, roots: [String]?, skipped: [String], types: Set<String>, codeRoots: [String],
-         codeSkipped: [String], idleSeconds: Double) throws {
+         codeSkipped: [String], idleSeconds: Double, device: LlamaDevice?) throws {
         directory = index
         store = try IndexStore(directory: index, file: IndexStore.mainFile)
         searcher = try Searcher(store: store, loadVectors: false)
@@ -62,6 +64,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         self.codeRoots = codeRoots
         self.codeSkipped = codeSkipped
         self.idleSeconds = idleSeconds
+        self.device = device
         log = index.appendingPathComponent("worker-query.log")
         previews = index.appendingPathComponent("previews")
         try? FileManager.default.removeItem(at: previews)
@@ -248,7 +251,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         encoderState = "starting"
         do {
             let started = Date()
-            let worker = try makeEmbedder(textOnly: true, log: log, qos: .userInitiated)
+            let worker = try makeEmbedder(textOnly: true, log: log, qos: .userInitiated, device: device)
             encoder = worker
             encoderState = "ready"
             write(["event": "encoder", "state": "ready", "seconds": (Date().timeIntervalSince(started) * 100).rounded() / 100,
@@ -314,7 +317,7 @@ func searchService(_ args: Arguments) throws -> Int32 {
         types: IndexOptions.extensions((args.lists["--exclude-ext"] ?? []).joined(separator: ",")),
         codeRoots: (args.lists["--code-root"] ?? []).map { Arguments.folderURL($0).path },
         codeSkipped: (args.lists["--code-exclude"] ?? []).map { Arguments.folderURL($0).path },
-        idleSeconds: args.values["--encoder-idle"].flatMap(Double.init) ?? 300)
+        idleSeconds: args.values["--encoder-idle"].flatMap(Double.init) ?? 300, device: args.device)
     emit(["event": "ready", "index": args.indexFolder.path])
     return service.serve()
 }

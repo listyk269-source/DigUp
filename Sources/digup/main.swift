@@ -34,6 +34,7 @@ let usage = """
 
     Options:
       --index DIR          index folder (default: DigUp's Application Support folder; see `digup status`)
+      --device MODE        auto (default), cpu or gpu; gpu requires an available accelerator
       --code               estimate, index or show the code index of these folders (code.sqlite in the index
                            folder): source files, their repos' docs and notebooks, minus what git ignores
       --kind K,K           screenshot, image, pdf, doc, audio, video
@@ -49,7 +50,8 @@ let usage = """
 
     The model: EmbeddingGemma 2 on llama.cpp, from $DIGUP_MODELS (only there, when set), else
     DigUp's application data folder (on Windows: %LOCALAPPDATA%\\DigUp\\Models), then the Hugging Face cache.
-    DIGUP_CPU_ONLY=1 forces the CPU backend. DIGUP_WORKER_DIR=worker uses the
+    DIGUP_DEVICE=auto|cpu|gpu chooses the device; --device overrides it. DIGUP_CPU_ONLY=1 always forces CPU.
+    DIGUP_WORKER_DIR=worker uses the
     mlx-vlm reference worker instead (evals).
     """
 
@@ -63,9 +65,10 @@ struct Arguments {
     var values: [String: String] = [:]
     var lists: [String: [String]] = [:]
     var flags: Set<String> = []
+    var device: LlamaDevice?
     static let valued: Set<String> = ["--index", "--limit", "--kind", "-n", "--zgate", "--word-weight", "--new-limit",
                                       "--linger", "--shot-tokens", "--code-stretch", "--encoder-idle", "--to",
-                                      "--memory-limit", "--time-limit"]
+                                      "--memory-limit", "--time-limit", "--device"]
     static let repeated: Set<String> = ["--exclude", "--exclude-ext", "--code-root", "--code-exclude"]
 
     init(_ raw: ArraySlice<String>) throws {
@@ -87,6 +90,10 @@ struct Arguments {
                 positional.append(argument)
                 index += 1
             }
+        }
+        if let chosen = values["--device"] {
+            guard let parsed = LlamaDevice(rawValue: chosen) else { throw CLIError("--device must be auto, cpu or gpu") }
+            device = parsed
         }
     }
 
@@ -202,13 +209,14 @@ func skippedLine(_ skipped: [String: Int]) -> String {
 // MARK: Commands
 
 /// The embedding runtime: llama.cpp in this process, or the worker in $DIGUP_WORKER_DIR (the mlx-vlm reference).
-func makeEmbedder(textOnly: Bool, log: URL, qos: QualityOfService = .default) throws -> any Embedder {
+func makeEmbedder(textOnly: Bool, log: URL, qos: QualityOfService = .default,
+                  device: LlamaDevice? = nil) throws -> any Embedder {
     if var config = try WorkerConfig.fromEnvironment() {
         config.log = log
         config.qos = qos
         return try EmbeddingWorker(config, textOnly: textOnly)
     }
-    return try LlamaEmbedder(models: try LlamaModels.locate(), textOnly: textOnly, log: log)
+    return try LlamaEmbedder(models: try LlamaModels.locate(), textOnly: textOnly, log: log, device: device)
 }
 
 /// `makeEmbedder`'s vector source when it's known without starting it: llama.cpp's always is.
@@ -305,7 +313,7 @@ func index(_ args: Arguments) throws {
     let store = try args.store()
     if args.flags.contains("--reindex") { try store.resetAll() }
     let indexer = try Indexer(store: store, options: args.options, makeEmbedder: {
-        try makeEmbedder(textOnly: false, log: store.directory.appendingPathComponent("worker.log"))
+        try makeEmbedder(textOnly: false, log: store.directory.appendingPathComponent("worker.log"), device: args.device)
     })
     indexer.embedderSource = embedderSource()
     indexer.costsFolder = store.directory
@@ -351,9 +359,9 @@ func statesLine(_ states: [String: Int]) -> String {
 /// Embeds queries with the text model alone (0.3B params, ~0.25 GB): the query encoder. `prompt`: the search's
 /// (`Prompts.query`, or `Prompts.codeQuery` for the code index).
 func queryVectors(_ queries: [String], store: IndexStore, searcher: Searcher,
-                  prompt: (String) -> String = Prompts.query) throws -> [[Float]]? {
+                  prompt: (String) -> String = Prompts.query, device: LlamaDevice? = nil) throws -> [[Float]]? {
     guard searcher.vectorCount > 0, !queries.isEmpty else { return nil }
-    let worker = try makeEmbedder(textOnly: true, log: store.directory.appendingPathComponent("worker-query.log"))
+    let worker = try makeEmbedder(textOnly: true, log: store.directory.appendingPathComponent("worker-query.log"), device: device)
     defer { worker.close() }
     if let source = searcher.vectorSource, source != worker.info.vectorSource {
         throw CLIError("index vectors come from \(source) but the query encoder is \(worker.info.vectorSource)")
@@ -371,7 +379,7 @@ func search(_ args: Arguments) throws {
     let searcher = try Searcher(store: store)
     let started = Date()
     let vector = try queryVectors([query], store: store, searcher: searcher,
-                                  prompt: code == nil ? Prompts.query : Prompts.codeQuery)?.first
+                                  prompt: code == nil ? Prompts.query : Prompts.codeQuery, device: args.device)?.first
     let encoded = Date()
     let hits = try searcher.search(query, queryVector: vector, kinds: try args.kinds(),
                                    limit: args.values["-n"].flatMap(Int.init) ?? 10, zGate: args.zGate,
@@ -419,7 +427,8 @@ func status(_ args: Arguments) throws {
 func indexService(_ args: Arguments) throws -> Int32 {
     // One model for both indexes, started when the first file needs it (`SharedEmbedder`).
     let model = SharedEmbedder {
-        try makeEmbedder(textOnly: false, log: args.indexFolder.appendingPathComponent("worker.log"), qos: .utility)
+        try makeEmbedder(textOnly: false, log: args.indexFolder.appendingPathComponent("worker.log"), qos: .utility,
+                         device: args.device)
     }
     func part(_ file: String, options: IndexOptions, roots: [URL]) throws -> IndexService.Part {
         let store = try IndexStore(directory: args.indexFolder, file: file)
@@ -508,7 +517,7 @@ func evaluate(_ args: Arguments) throws {
         searchers[code] = searcher
         let indices = texts.indices.filter { isCode[$0] == code }
         let embedded = try queryVectors(indices.map { texts[$0] }, store: store, searcher: searcher,
-                                        prompt: code ? Prompts.codeQuery : Prompts.query)
+                                        prompt: code ? Prompts.codeQuery : Prompts.query, device: args.device)
         for (index, vector) in zip(indices, embedded ?? []) { vectors[index] = vector }
     }
     let depth = args.values["-n"].flatMap(Int.init) ?? 10

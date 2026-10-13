@@ -8,7 +8,8 @@ import LlamaRuntime
 func workerService(_ args: Arguments) -> Int32 {
     let embedder: LlamaEmbedder
     do {
-        embedder = try LlamaEmbedder(models: try LlamaModels.locate(), textOnly: args.flags.contains("--text-only"))
+        embedder = try LlamaEmbedder(models: try LlamaModels.locate(), textOnly: args.flags.contains("--text-only"),
+                                   device: args.device)
     } catch {
         emit(["ready": false, "error": "\(error)"])
         return 1
@@ -17,6 +18,7 @@ func workerService(_ args: Arguments) -> Int32 {
     let infoFields: [String: Any] = [
         "model": info.model, "revision": info.revision, "runtime": info.runtime, "dtype": info.dtype, "dim": info.dim,
         "text_only": info.textOnly, "load_seconds": info.loadSeconds ?? 0,
+        "device": embedder.deviceName,
     ]
     emit(["ready": true, "info": infoFields])
     while let line = readLine() {
