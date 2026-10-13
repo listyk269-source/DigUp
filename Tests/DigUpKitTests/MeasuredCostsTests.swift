@@ -142,11 +142,17 @@ import WinSDK
         })
         try #require(handle != INVALID_HANDLE_VALUE)
         let bits = UInt(bitPattern: handle), closed = DispatchSemaphore(value: 0)
-        DispatchQueue.global().async {
+        let started = DispatchSemaphore(value: 0)
+        // The global dispatch pool can be busy with other tests longer than the writer's entire retry budget.
+        // Start a dedicated releaser first, so its 40 ms hold is not preceded by an unbounded queue delay.
+        let releaser = Thread {
+            started.signal()
             Thread.sleep(forTimeInterval: 0.04)
             CloseHandle(HANDLE(bitPattern: bits))
             closed.signal()
         }
+        releaser.start()
+        started.wait()
         defer { closed.wait() }
         var changed = previous
         changed.speed = MeasuredCosts.Speed(embedding: 3, ocr: 1)
