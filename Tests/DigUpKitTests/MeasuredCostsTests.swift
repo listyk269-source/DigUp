@@ -1,6 +1,9 @@
 import Foundation
 import Testing
 @testable import DigUpKit
+#if os(Windows)
+import WinSDK
+#endif
 
 /// What indexing costs on this machine (`MeasuredCosts`), and the estimates made from it.
 @Suite final class MeasuredCostsTests {
@@ -75,4 +78,80 @@ import Testing
             #expect(saved.tallies == measured.tallies)
         }
     }
+
+    #if os(Windows)
+    @Test func atomicUpdatesSurviveConcurrentMediaHelperLaunches() throws {
+        let helper = try #require(FFmpeg.ffprobe)
+        let workers = DispatchGroup()
+        // Foundation's atomic staging handles used to escape into concurrently launched children. Exercise
+        // real bundled helpers while replacing the same file, and verify every update, not just the last one.
+        for _ in 0..<3 {
+            workers.enter()
+            DispatchQueue.global().async {
+                defer { workers.leave() }
+                do {
+                    for _ in 0..<30 {
+                        let process = Process()
+                        process.executableURL = URL(fileURLWithPath: helper)
+                        process.arguments = ["-version"]
+                        process.standardInput = FileHandle.nullDevice
+                        process.standardOutput = FileHandle.nullDevice
+                        process.standardError = FileHandle.nullDevice
+                        try process.run()
+                        process.waitUntilExit()
+                        #expect(process.terminationStatus == 0)
+                    }
+                } catch { Issue.record(error) }
+            }
+        }
+        defer { workers.wait() }
+        for i in 1...300 {
+            var measured = MeasuredCosts()
+            measured.speed = MeasuredCosts.Speed(embedding: Double(i), ocr: 1)
+            measured.add("docChunk", units: Double(i), seconds: 2)
+            measured.save(to: folder)
+            #expect(MeasuredCosts.load(from: folder) == measured)
+        }
+    }
+
+    @Test func failedAtomicReplacementKeepsThePreviousFileAndCleansItsTemporary() throws {
+        var previous = MeasuredCosts()
+        previous.speed = MeasuredCosts.Speed(embedding: 2, ocr: 1)
+        previous.save(to: folder)
+        let original = try Data(contentsOf: MeasuredCosts.file(in: folder))
+        let handle = try #require(FileAccess.path(MeasuredCosts.file(in: folder).path).withCString(encodedAs: UTF16.self) {
+            CreateFileW($0, DWORD(GENERIC_READ), DWORD(FILE_SHARE_READ | FILE_SHARE_WRITE), nil,
+                        DWORD(OPEN_EXISTING), DWORD(FILE_ATTRIBUTE_NORMAL), nil)
+        })
+        try #require(handle != INVALID_HANDLE_VALUE)
+        defer { CloseHandle(handle) }
+        var changed = previous
+        changed.speed = MeasuredCosts.Speed(embedding: 3, ocr: 1)
+        changed.save(to: folder) // The held reader denies replacement for longer than all bounded retries.
+        #expect(try Data(contentsOf: MeasuredCosts.file(in: folder)) == original)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["costs.json"])
+    }
+
+    @Test func temporaryDeleteSharingDenialDoesNotDropTheUpdate() throws {
+        var previous = MeasuredCosts()
+        previous.speed = MeasuredCosts.Speed(embedding: 2, ocr: 1)
+        previous.save(to: folder)
+        let handle = try #require(FileAccess.path(MeasuredCosts.file(in: folder).path).withCString(encodedAs: UTF16.self) {
+            CreateFileW($0, DWORD(GENERIC_READ), DWORD(FILE_SHARE_READ | FILE_SHARE_WRITE), nil,
+                        DWORD(OPEN_EXISTING), DWORD(FILE_ATTRIBUTE_NORMAL), nil)
+        })
+        try #require(handle != INVALID_HANDLE_VALUE)
+        let bits = UInt(bitPattern: handle), closed = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            Thread.sleep(forTimeInterval: 0.04)
+            CloseHandle(HANDLE(bitPattern: bits))
+            closed.signal()
+        }
+        defer { closed.wait() }
+        var changed = previous
+        changed.speed = MeasuredCosts.Speed(embedding: 3, ocr: 1)
+        changed.save(to: folder)
+        #expect(MeasuredCosts.load(from: folder) == changed)
+    }
+    #endif
 }

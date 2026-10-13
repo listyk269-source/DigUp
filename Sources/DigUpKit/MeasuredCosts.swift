@@ -1,4 +1,7 @@
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 /// What indexing costs on this Mac, from the indexing itself: seconds and units (pictures, PDF pages, document chunks,
 /// seconds of audio or video, stretches of code) summed kind by kind as jobs finish, in `costs.json` beside the index.
@@ -96,22 +99,39 @@ public struct MeasuredCosts: Codable, Sendable, Equatable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         guard let data = try? encoder.encode(self) else { return }
         #if os(Windows)
-        // Foundation reports Win32 ERROR_SHARING_VIOLATION as fileWriteNoPermission; its underlying Win32Error
-        // type is private. A briefly held reader (including a virus scanner) must not silently drop an update.
-        // Keep atomic replacement and bound retries to 150 ms; persistent denial leaves the previous file intact.
-        for attempt in 0..<5 {
-            do {
-                try data.write(to: Self.file(in: folder), options: .atomic)
-                return
-            } catch {
-                guard (error as? CocoaError)?.code == .fileWriteNoPermission, attempt < 4 else { return }
-                Thread.sleep(forTimeInterval: 0.01 * Double(1 << attempt))
-            }
-        }
+        Self.saveWindows(data, to: Self.file(in: folder))
         #else
         try? data.write(to: Self.file(in: folder), options: .atomic)
         #endif
     }
+
+    #if os(Windows)
+    private static func saveWindows(_ data: Data, to destination: URL) {
+        // Foundation's .atomic staging file uses an inheritable CRT handle. A concurrent Process launch can
+        // inherit it and prevent replacement/cleanup for the child's lifetime. Its non-atomic writer instead
+        // uses CreateFileW with a non-inheritable handle. Stage once beside the destination, then rename on the
+        // same volume; never truncate or delete the previous costs file if writing/replacement fails.
+        let temporary = destination.deletingLastPathComponent().appendingPathComponent(".costs-\(UUID()).tmp")
+        let temporaryURL = FileAccess.url(temporary)
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
+        do { try data.write(to: temporaryURL, options: .withoutOverwriting) } catch { return }
+        FileAccess.path(temporary.path).withCString(encodedAs: UTF16.self) { source in
+            FileAccess.path(destination.path).withCString(encodedAs: UTF16.self) { target in
+                for attempt in 0..<5 {
+                    if MoveFileExW(source, target, DWORD(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                        return
+                    }
+                    // MoveFileEx reports a reader denying delete-sharing as ACCESS_DENIED or SHARING_VIOLATION.
+                    // Bound retries to 150 ms; persistent denial leaves the previous JSON complete.
+                    let code = GetLastError()
+                    guard code == DWORD(ERROR_SHARING_VIOLATION) || code == DWORD(ERROR_ACCESS_DENIED),
+                          attempt < 4 else { return }
+                    Thread.sleep(forTimeInterval: 0.01 * Double(1 << attempt))
+                }
+            }
+        }
+    }
+    #endif
 
     private static let lock = NSLock()
 
