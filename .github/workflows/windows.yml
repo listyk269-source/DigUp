@@ -24,12 +24,14 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Cache verified downloads
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: downloads
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: Vendor/downloads
           key: windows-downloads-${{ hashFiles('scripts/windows/dependencies.json', 'scripts/windows/ffmpeg-dependencies.json') }}
       - name: Cache Cargo downloads and pinned Tauri CLI
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: cargo
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/registry
@@ -37,6 +39,7 @@ jobs:
             ~/.cargo/bin/cargo-tauri.exe
           key: windows-rust195-tauri2122-${{ hashFiles('shell/src-tauri/Cargo.lock') }}
       - name: Install pinned Swift and Rust
+        id: toolchains
         run: |
           . ./scripts/windows/Common.ps1
           $installer = Get-VerifiedDownload $script:Manifest.downloads.swift
@@ -50,6 +53,15 @@ jobs:
             cargo install tauri-cli --version $script:Manifest.tools.tauriCli --locked
             if ($LASTEXITCODE) { throw 'Tauri CLI installation failed' }
           }
+      - name: Save installed Tauri CLI before build and smoke
+        if: steps.cargo.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-tauri.exe
+          key: ${{ steps.cargo.outputs.cache-primary-key }}
       - name: Build CLI, GUI, NSIS and portable archive; run unit tests
         env:
           WINDOWS_CERTIFICATE_PFX: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
@@ -70,6 +82,12 @@ jobs:
             if ($certificate) { Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($certificate.Thumbprint)" }
             if (Test-Path -LiteralPath $pfx) { Remove-Item -LiteralPath $pfx -Force }
           }
+      - name: Save dependency downloads even if compilation or tests fail
+        if: always() && steps.toolchains.outcome == 'success' && steps.downloads.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: Vendor/downloads
+          key: ${{ steps.downloads.outputs.cache-primary-key }}
       - name: Cache verified model bytes for real smoke
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
