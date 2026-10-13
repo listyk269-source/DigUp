@@ -10,7 +10,8 @@ import Testing
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let url = caches.appendingPathComponent("DigUpTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        return url
+        // Windows caches/TEMP can contain an 8.3 alias; exact SQL lookups need the crawl's full spelling.
+        return URL(fileURLWithPath: FolderSelection.realPath(url.path))
     }()
 
     deinit {

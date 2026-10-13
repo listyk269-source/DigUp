@@ -167,7 +167,8 @@ import WinSDK
         try Data("789".utf8).write(to: excluded.appendingPathComponent("secret.txt"))
         var options = IndexOptions()
         options.excludedFolders = [excluded.path.uppercased()]
-        #expect(Crawler.crawl([variant], options: options).candidates.map(\.path) == [file.path])
+        // The temporary directory itself may use an 8.3 alias, independently of the tested root casing.
+        #expect(Crawler.crawl([variant], options: options).candidates.map(\.path) == [FolderSelection.realPath(file.path)])
         try FileManager.default.removeItem(at: file)
         try FileManager.default.removeItem(at: excluded)
         #expect(try indexer.sync([variant]).removed == 1)
@@ -198,7 +199,7 @@ import WinSDK
         #expect(file.path.utf16.count > 260)
         try Data("123 456".utf8).write(to: FileAccess.url(file))
         #expect(FileSystem.info(of: file.path)?.isRegular == true)
-        #expect(Crawler.crawl([base], options: IndexOptions()).candidates.map(\.path) == [file.path])
+        #expect(Crawler.crawl([base], options: IndexOptions()).candidates.map(\.path) == [FolderSelection.realPath(file.path)])
         #expect(try DocExtractor.text(of: file) == "123 456")
         // Preview/model output can live under a Unicode username and a long temporary directory too.
         let image = RGBImage(width: 2, height: 2, pixels: [UInt8](repeating: 127, count: 12))
