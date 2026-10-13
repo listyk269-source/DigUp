@@ -10,7 +10,9 @@ archive SHA-256 values are in `scripts/windows/dependencies.json` and
 | Component | Version / source | License / handling |
 |---|---|---|
 | DigUp | this checkout | MIT, `LICENSE` |
-| llama.cpp / ggml / mtmd | b11461, `4d756bc72bf00a4aacf410ae15a2d315f3db400d`, https://github.com/ggml-org/llama.cpp | MIT; built from source with `scripts/llama.cpp-no-logits.patch`, CPU backends only |
+| llama.cpp / ggml / mtmd | b11461, `4d756bc72bf00a4aacf410ae15a2d315f3db400d`, https://github.com/ggml-org/llama.cpp | MIT; built from source with `scripts/llama.cpp-no-logits.patch`, CPU and optional Vulkan backends |
+| Vulkan-Headers / Vulkan-Hpp | Vulkan SDK 1.4.341.1, headers tag `vulkan-sdk-1.4.341.0`, https://github.com/KhronosGroup/Vulkan-Headers | Apache-2.0; some headers also offer MIT. Original notices, full licenses and representative generated headers are included in `licenses/Vulkan/` |
+| SPIRV-Headers | `vulkan-sdk-1.4.341.0`, https://github.com/KhronosGroup/SPIRV-Headers | Khronos MIT-style license; original full notice and the used generated SPIR-V header included in `licenses/Vulkan/` |
 | SQLite | amalgamation 3.54.0, https://sqlite.org/2026/sqlite-amalgamation-3540000.zip | Public domain; statically compiled with FTS5 and extension loading disabled |
 | stb | `2c980bb59875b0d32144a71867fbdebb2f77cd20`, https://github.com/nothings/stb | MIT or public-domain alternative; original headers and notices included |
 | miniz | 3.1.2, https://github.com/richgel999/miniz | MIT; notice in bundled source |
@@ -34,6 +36,13 @@ The LGPL text is installed in `licenses/FFmpeg-LGPL-2.1.txt`.
 The configurable upstream source is unchanged and shared DLLs remain replaceable.
 
 ## Runtime and crate notice review
+
+Vulkan SDK/glslc and Ninja are build tools and are not included in the application.
+The Vulkan backend contains the compiled llama.cpp shaders and header code; its
+source/version/hash inventory is `licenses/Vulkan/Vulkan-SOURCES.json`.
+The optional `vulkan-1.dll` loader and vendor ICD remain part of the user's graphics
+driver installation, not part of DigUp's redistributable. DigUp does not install or
+modify GPU drivers.
 
 `Resources/WindowsNotices` contains the original Swift runtime and embedded
 Foundation dependency notices, with pinned source URLs and verified text hashes.

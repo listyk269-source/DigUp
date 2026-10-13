@@ -12,9 +12,17 @@ $inventory = foreach ($file in $files) {
     $imports = @($lines | ForEach-Object {
         if ($_ -match '^\s+([A-Za-z0-9_.+-]+\.dll)\s*$') { $Matches[1] }
     } | Sort-Object -Unique)
+    $optionalSystemImports = @()
     foreach ($import in $imports) {
         # Windows API-set contracts resolve through the OS loader, not a disk file.
         if ($import -match '^(api|ext)-ms-win-') { continue }
+        if ($file.Name -ieq 'ggml-vulkan.dll' -and $import -ieq 'vulkan-1.dll') {
+            # This dynamically loaded backend is optional. The loader and ICD
+            # belong to the GPU vendor driver; a CPU machine need not have them.
+            # No other missing import receives this exception.
+            $optionalSystemImports += $import
+            continue
+        }
         if (!(Test-Path -LiteralPath (Join-Path $file.DirectoryName $import)) -and
             !(Test-Path -LiteralPath (Join-Path $system $import))) {
             throw "Unpackaged runtime dependency: $($file.Name) -> $import"
@@ -30,6 +38,7 @@ $inventory = foreach ($file in $files) {
         bytes = $file.Length
         sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         imports = $imports
+        optionalSystemImports = $optionalSystemImports
     }
 }
 $inventory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $package 'runtime-inventory.json') -Encoding utf8NoBOM

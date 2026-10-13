@@ -156,7 +156,11 @@ cargo install tauri-cli --version 2.12.2 --locked
 
 This builds the CLI, runs Swift and Rust tests, and produces a per-user NSIS installer, a portable archive,
 and SHA-256 checksums in `build.noindex/windows/artifacts/`. The plain HTML/JavaScript frontend has no Node.js,
-npm or pnpm build dependency. CPU inference is the Windows baseline. The installer contains the native runtime
+npm or pnpm build dependency. CPU inference is the Windows baseline; the same package includes a Vulkan GPU backend.
+Choose **Auto**, **CPU**, or **GPU** in setup/settings, or use `digup index <folder> --device gpu` and
+`digup search <query> --device gpu`. Auto uses a supported GPU and retries on CPU if GPU initialization fails;
+GPU mode reports an error if no accelerator is available. Vulkan requires a compatible graphics driver;
+neither the Vulkan SDK nor the CUDA toolkit is needed to run the app. The installer contains the native runtime
 libraries; it does not depend on a user's FFmpeg or llama.cpp in `PATH` and does not contain the model.
 
 On first launch, choose folders and download the model (about 865 MB, checked against pinned SHA-256 hashes;

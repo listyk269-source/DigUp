@@ -5,6 +5,8 @@
     "rust": "1.95.0",
     "tauriCli": "2.12.2",
     "cmake": "4.1.2",
+    "vulkanSdk": "1.4.341.1",
+    "ninja": "1.13.1",
     "visualStudio": "2022",
     "architecture": "x86_64-pc-windows-msvc"
   },
@@ -14,6 +16,36 @@
     "url": "https://github.com/ggml-org/llama.cpp.git"
   },
   "downloads": {
+    "ninja": {
+      "file": "ninja-win-1.13.1.zip",
+      "url": "https://github.com/ninja-build/ninja/releases/download/v1.13.1/ninja-win.zip",
+      "sha256": "26a40fa8595694dec2fad4911e62d29e10525d2133c9a4230b66397774ae25bf"
+    },
+    "vulkanSdk": {
+      "file": "vulkansdk-windows-X64-1.4.341.1.exe",
+      "url": "https://sdk.lunarg.com/sdk/download/1.4.341.1/windows/vulkansdk-windows-X64-1.4.341.1.exe",
+      "sha256": "bcf2d75aa9556889ab974858666e20b3655b6055a0db704ccb47279ff33b5bfe"
+    },
+    "vulkanHeadersLicense": {
+      "file": "Vulkan-Headers-1.4.341.0-LICENSE.md",
+      "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/vulkan-sdk-1.4.341.0/LICENSE.md",
+      "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc"
+    },
+    "vulkanApacheLicense": {
+      "file": "Vulkan-Headers-1.4.341.0-Apache-2.0.txt",
+      "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/vulkan-sdk-1.4.341.0/LICENSES/Apache-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "vulkanMitLicense": {
+      "file": "Vulkan-Headers-1.4.341.0-MIT.txt",
+      "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/vulkan-sdk-1.4.341.0/LICENSES/MIT.txt",
+      "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227"
+    },
+    "spirvHeadersLicense": {
+      "file": "SPIRV-Headers-1.4.341.0-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Headers/vulkan-sdk-1.4.341.0/LICENSE",
+      "sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613"
+    },
     "swift": {
       "file": "swift-6.3.3-RELEASE-windows10.exe",
       "url": "https://download.swift.org/swift-6.3.3-release/windows10/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-windows10.exe",

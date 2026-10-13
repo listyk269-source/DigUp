@@ -2,9 +2,9 @@
 
 The Windows app uses the existing Swift engine and `digup` CLI behind the existing
 Rust/Tauri shell. These instructions do not replace the macOS app or Linux build.
-The initial Windows target is Windows 10 **22H2** and Windows 11, x64, CPU-only.
-GPU backends and the Windows updater are separate work; neither is advertised as
-working by this build. ARM64 Windows is not a supported release target here.
+The Windows target is Windows 10 **22H2** and Windows 11, x64, with CPU execution
+and an optional Vulkan GPU backend. The Windows updater and ARM64 Windows remain
+outside this release target.
 
 ## Status and evidence
 
@@ -44,7 +44,7 @@ can be passed with `-SwiftRuntimeDirectory C:/path/to/runtime/usr/bin`.
 
 The build downloads checksum-pinned SQLite, stb, miniz, PDFium and CMake into
 `Vendor/`, verifies the existing pinned llama.cpp commit and patch, builds all CPU
-variants with GPU/OpenMP/network components disabled, builds FFmpeg 8.1.3 and its
+variants and the Vulkan backend with CUDA/OpenMP/network components disabled, builds FFmpeg 8.1.3 and its
 dav1d 1.5.4 software AV1 decoder from official sources using pinned build tools,
 and runs Swift tests, Rust
 format checking, Clippy and Rust tests. It builds the release CLI and Tauri GUI,
@@ -71,6 +71,66 @@ first installation needs a network connection to Microsoft's runtime service.
 
 Downloads use `.partial` files, HTTP Range, retry, and an expected SHA-256 before
 publication. A checksum mismatch is never ignored or replaced with `latest`.
+
+## GPU build and driver requirements
+
+Choose **Auto**, **CPU** or **GPU** in Settings, or select it for a CLI command:
+
+```powershell
+./helper/digup.exe index 'C:/Users/you/Documents' --device auto
+./helper/digup.exe search 'fresh food in orbit' --device gpu --json
+./helper/digup.exe search 'fresh food in orbit' --device cpu --json
+```
+
+Auto tries an available GPU and falls back to CPU if model initialization fails.
+Explicit GPU mode reports an unavailable/failed accelerator instead of silently
+running on CPU. Set `DIGUP_DEVICE=auto|cpu|gpu` for a process-wide CLI default;
+`--device` overrides it. The release-test override `DIGUP_CPU_ONLY=1` has highest
+priority, even over `--device gpu`. Remove that override before testing GPU mode.
+The selected device is reported by the helper after a successful model warmup.
+
+The default Windows build includes `ggml-vulkan.dll` alongside all CPU backends.
+It uses the existing llama.cpp backend interface; NVIDIA, AMD and Intel devices
+are candidates when their installed vendor driver supports the required Vulkan
+features. The pinned llama.cpp revision requires Vulkan 1.2 or newer. Device
+features and available memory can still make a GPU unsuitable; a vendor name or
+API version alone does not prove a successful inference run.
+
+`Build-Llama.ps1` downloads LunarG Vulkan SDK **1.4.341.1**, verifies its official
+SHA-256, and copies the embedded core payload into `Vendor/` using `copy_only=1`.
+An empty local metadata repository prevents selection or download of online SDK
+packages; the complete core comes from the verified installer.
+This does not register layers, install drivers, change system PATH or install SDK
+components globally. The download is about 307 MB and the build-only SDK needs
+about 2.1 GB of workspace disk space. The script passes absolute paths for glslc,
+Vulkan headers/import library and SPIRV-Headers to CMake. Pinned Ninja **1.13.1**
+and MSVC build the DLL; Ninja avoids MSBuild's nested shader-generator path limit.
+Shaders are compiled into the DLL, so SDK tools and shader sources are not needed
+on an installed machine.
+
+The application package includes the backend and its header license notices; it
+does not include the SDK, CUDA runtime or a GPU driver. `vulkan-1.dll` is an optional
+system dependency supplied by the graphics driver's Vulkan runtime. The PE import
+check records this one optional dependency explicitly; every other application
+runtime dependency remains checked. CPU execution remains required to work when
+the Vulkan driver or a usable GPU is absent. Install or update a driver through
+the GPU manufacturer's normal process when GPU mode reports it is unavailable.
+
+To deliberately produce a CPU-only developer package, use:
+
+```powershell
+./scripts/windows/Fetch-Vendor.ps1
+./scripts/windows/Build-Llama.ps1 -CpuOnly -Jobs 4
+./scripts/windows/Build-FFmpeg.ps1 -Destination Vendor/ffmpeg -Jobs 4
+./scripts/windows/Build.ps1 -SkipVendor -Jobs 4
+```
+
+CPU-only CI does not establish GPU compatibility. Record GPU model, driver/API
+versions, selected backend, real model inference and search results when testing
+GPU mode; test NVIDIA, AMD and Intel separately before making a vendor-wide claim.
+The upstream [Vulkan build instructions](https://github.com/ggml-org/llama.cpp/blob/4d756bc72bf00a4aacf410ae15a2d315f3db400d/docs/build.md#vulkan)
+and [LunarG copy-only installation documentation](https://vulkan.lunarg.com/doc/view/1.4.341.1/windows/getting_started.html)
+describe the underlying build components.
 
 ## Use, model, and offline operation
 

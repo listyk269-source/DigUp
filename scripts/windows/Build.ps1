@@ -92,6 +92,7 @@ try {
     Copy-Item "$script:Repo/Resources/Acknowledgements.txt" $licenses
     if (Test-Path "$script:Repo/Resources/WindowsNotices") { Copy-Item "$script:Repo/Resources/WindowsNotices" "$licenses/WindowsNotices" -Recurse }
     Copy-Item "$script:Vendor/llama.cpp/LICENSE" "$licenses/llama.cpp-MIT.txt"
+    if (Test-Path "$script:Vendor/llama/licenses") { Copy-Item "$script:Vendor/llama/licenses" "$licenses/Vulkan" -Recurse }
     Copy-Item "$script:Vendor/ffmpeg/LICENSE.txt" "$licenses/FFmpeg-LGPL-2.1.txt"
     Copy-Item "$script:Vendor/ffmpeg/doc" "$licenses/FFmpeg-doc" -Recurse
     $mediaManifest = Get-Content "$PSScriptRoot/ffmpeg-dependencies.json" -Raw | ConvertFrom-Json
