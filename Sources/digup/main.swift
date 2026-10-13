@@ -127,7 +127,12 @@ struct Arguments {
     }
 
     static func folderURL(_ path: String) -> URL {
-        URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+        #if os(Windows)
+        return URL(fileURLWithPath: FolderSelection.realPath(url.path))
+        #else
+        return url
+        #endif
     }
 
     static func isFolder(_ url: URL) -> Bool {

@@ -26,6 +26,14 @@ public struct CrawlReport: Sendable {
 /// in a git repo only those git keeps (`GitFiles`), and none in vendored or built folders.
 public enum Crawler {
     public static func crawl(_ roots: [URL], options: IndexOptions) -> CrawlReport {
+        #if os(Windows)
+        // Different drive/directory casing must not index the same tree twice. Preserve the filesystem's case,
+        // including genuinely distinct names in a case-sensitive directory.
+        let roots = roots.map { URL(fileURLWithPath: FolderSelection.realPath($0.standardizedFileURL.path)) }
+        let excludedFolders = options.excludedFolders.map(FolderSelection.realPath)
+        #else
+        let excludedFolders = options.excludedFolders
+        #endif
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser.path
         let keys = FileSystem.crawlKeys
@@ -45,7 +53,7 @@ public enum Crawler {
             // A skip applies inside the chosen folders that contain it: a folder chosen inside a skipped one is
             // walked whole (`FolderSelection`). The walk reports real paths (/private/var, where the root says /var).
             let real = FolderSelection.realPath(root.path)
-            let skips = options.excludedFolders.filter {
+            let skips = excludedFolders.filter {
                 FolderSelection.isInside($0, root.path) || FolderSelection.isInside($0, real)
             }.flatMap { [$0, FolderSelection.realPath($0)] }
             #if os(Windows)

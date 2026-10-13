@@ -103,7 +103,7 @@ public struct FolderSelection: Equatable, Sendable {
     /// The path as a walk of the folder reports it (/private/var where `standardizedFileURL` says /var).
     public static func realPath(_ path: String) -> String {
         #if os(Windows)
-        return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        return WindowsPaths.canonical(path)
         #else
         guard let real = realpath(path, nil) else { return path }
         defer { free(real) }

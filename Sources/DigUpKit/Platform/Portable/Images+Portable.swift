@@ -144,8 +144,9 @@ struct RGBImage {
     }
 
     func write(to url: URL, png: Bool) throws {
-        let written = png ? stbi_write_png(url.path, Int32(width), Int32(height), 3, pixels, Int32(width * 3))
-                          : stbi_write_jpg(url.path, Int32(width), Int32(height), 3, pixels, 90)
+        let path = FileAccess.path(url.path)
+        let written = png ? stbi_write_png(path, Int32(width), Int32(height), 3, pixels, Int32(width * 3))
+                          : stbi_write_jpg(path, Int32(width), Int32(height), 3, pixels, 90)
         guard written != 0 else { throw ExtractError.unreadable("can't write \(url.lastPathComponent)") }
     }
 

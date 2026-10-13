@@ -88,7 +88,9 @@ final class IndexService: @unchecked Sendable {
             if again > 0 { emit(["event": "rescan", "files": again]) }
             for part in parts {
                 try part.indexer.checkModel()   // a new model: everything is queued again
-                if let keepOnly = part.keepOnly {
+                // An unavailable root cannot resolve to its on-disk spelling (notably on Windows). Defer pruning
+                // until every selected root is readable, otherwise a disconnected drive could lose its index.
+                if let keepOnly = part.keepOnly, keepOnly.allSatisfy({ Arguments.isFolder($0) && Arguments.isReadable($0) }) {
                     let pruned = try part.store.prune(keepingUnder: keepOnly.map(\.path))
                     if pruned > 0 { emit(["event": "pruned", "files": pruned, "code": part.code]) }
                 }

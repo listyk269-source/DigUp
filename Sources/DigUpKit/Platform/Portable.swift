@@ -1,6 +1,9 @@
 // What every platform shares of the platform layer: the shapes the engine asks for, and where DigUp keeps its files.
 // Platform/Apple and Platform/Portable implement the same names.
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 /// A file's own facts, as the crawl records them (`FileSystem.info`).
 struct FileInfo {
@@ -79,6 +82,26 @@ public enum FileAccess {
 /// Absolute paths for the wide Win32 APIs, independent of the host's LongPathsEnabled setting. Keep ordinary paths
 /// in the database and UI; add the extended prefix only at the native call boundary.
 enum WindowsPaths {
+    /// Ask the filesystem for its spelling instead of lowercasing: NTFS directories can opt into case sensitivity.
+    /// Zero desired access reads the name only. Network/removed folders that cannot be opened keep their spelling.
+    static func canonical(_ path: String) -> String {
+        let handle = extended(path).withCString(encodedAs: UTF16.self) {
+            CreateFileW($0, 0, DWORD(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE), nil,
+                        DWORD(OPEN_EXISTING), DWORD(FILE_FLAG_BACKUP_SEMANTICS), nil)
+        }
+        guard let handle, handle != INVALID_HANDLE_VALUE else { return path }
+        defer { CloseHandle(handle) }
+        let count = GetFinalPathNameByHandleW(handle, nil, 0, DWORD(FILE_NAME_NORMALIZED | VOLUME_NAME_DOS))
+        guard count > 0 else { return path }
+        var buffer = [WCHAR](repeating: 0, count: Int(count) + 1)
+        let written = GetFinalPathNameByHandleW(handle, &buffer, DWORD(buffer.count), DWORD(FILE_NAME_NORMALIZED | VOLUME_NAME_DOS))
+        guard written > 0, written < buffer.count else { return path }
+        var native = String(decoding: buffer.prefix(Int(written)), as: UTF16.self)
+        if native.hasPrefix("\\\\?\\UNC\\") { native = "\\\\" + native.dropFirst(8) }
+        else if native.hasPrefix("\\\\?\\") { native = String(native.dropFirst(4)) }
+        return URL(fileURLWithPath: native).path
+    }
+
     static func extended(_ path: String) -> String {
         let native = path.replacingOccurrences(of: "/", with: "\\")
         if native.hasPrefix("\\\\?\\") || native.hasPrefix("\\\\.\\") { return native }

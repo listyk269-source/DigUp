@@ -192,11 +192,20 @@ $requests = @(
 $selection = Invoke-MediaProcess $cli @('search-service', '--index', $index, $fixture, '--restrict-roots') 'scope-changes' $requests
 if (@((Read-SearchReply $selection 1).hits).Count -ne 1 -or @((Read-SearchReply $selection 3).hits).Count -ne 0 -or
     @((Read-SearchReply $selection 5).hits).Count -ne 1) { throw 'Changing the selection lost or exposed retained index rows.' }
+$caseRoot = Join-Path $testRoot 'Документы MixedCase'
+$caseIndex = Join-Path $testRoot 'case-index'
+New-Item -ItemType Directory -Force $caseRoot | Out-Null
+'111 222 333' | Set-Content -LiteralPath "$caseRoot/Numbers.txt" -Encoding utf8NoBOM
+$firstCase = Invoke-MediaProcess $cli @('index', $caseRoot, $caseRoot.ToUpperInvariant(), '--index', $caseIndex) 'case-first'
+$secondCase = Invoke-MediaProcess $cli @('index', $caseRoot.ToUpperInvariant(), '--index', $caseIndex) 'case-again'
+if ($firstCase -notmatch 'sync: 1 new' -or $secondCase -notmatch 'sync: 0 new.*1 unchanged') {
+    throw 'Different Windows root casing created duplicate index records.'
+}
 $status = Invoke-MediaProcess $cli @('status', '--index', $index) 'status'
 if ($status -notmatch 'vectors: ([1-9][0-9, ]*) in ([1-9][0-9, ]*) segments') { throw 'No actual media vectors were persisted.' }
 @{ result = 'passed'; realModel = $true; cpuOnly = $true; path = 'System32 and Windows only';
    checks = @('PDF text and page', 'DOCX', 'ODT', 'image', 'screenshot', 'audio timestamp', 'video timestamp',
        'FTS', 'real multimodal embeddings', 'source lines without execution', 'corrupt files do not crash',
-       'explicit empty folder scope and restart') } |
+       'explicit empty folder scope and restart', 'Windows root casing is idempotent') } |
     ConvertTo-Json -Depth 5 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Real packaged multimodal smoke passed. Evidence: $testRoot"

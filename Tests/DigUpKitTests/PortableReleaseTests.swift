@@ -97,6 +97,35 @@ import WinSDK
     }
 
     #if os(Windows)
+    @Test func rootCasingDoesNotDuplicateFilesAcrossSyncs() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-case-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let documents = base.appendingPathComponent("Документы MixedCase")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        let file = documents.appendingPathComponent("Numbers.txt")
+        try Data("123 456".utf8).write(to: file)
+        let variant = URL(fileURLWithPath: documents.path.uppercased())
+        #expect(FolderSelection.realPath(variant.path) == FolderSelection.realPath(documents.path))
+        let store = try IndexStore(directory: base.appendingPathComponent("index"))
+        let indexer = try Indexer(store: store, options: IndexOptions(),
+                                  makeEmbedder: { throw WorkerError.notFound("numeric fixture needs no model") })
+        #expect(try indexer.sync([documents, variant]).added == 1)
+        #expect(try indexer.run() == ["done": 1])
+        #expect(try indexer.sync([variant]).unchanged == 1)
+        #expect(try indexer.sync([documents]).unchanged == 1)
+        #expect(try store.files(under: [variant.path]).count == 1)
+        #expect(try keywordCount("456", store: store) == 1)
+        let excluded = documents.appendingPathComponent("SkippedSubfolder")
+        try FileManager.default.createDirectory(at: excluded, withIntermediateDirectories: true)
+        try Data("789".utf8).write(to: excluded.appendingPathComponent("secret.txt"))
+        var options = IndexOptions()
+        options.excludedFolders = [excluded.path.uppercased()]
+        #expect(Crawler.crawl([variant], options: options).candidates.map(\.path) == [file.path])
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.removeItem(at: excluded)
+        #expect(try indexer.sync([variant]).removed == 1)
+    }
+
     @Test func widePathsSupportDrivesUNCUnicodeAndLongNames() {
         #expect(WindowsPaths.extended("C:/Документы/имя с пробелами.txt") == "\\\\?\\C:\\Документы\\имя с пробелами.txt")
         #expect(WindowsPaths.extended("//server/share/日本語.txt") == "\\\\?\\UNC\\server\\share\\日本語.txt")
@@ -124,6 +153,14 @@ import WinSDK
         #expect(FileSystem.info(of: file.path)?.isRegular == true)
         #expect(Crawler.crawl([base], options: IndexOptions()).candidates.map(\.path) == [file.path])
         #expect(try DocExtractor.text(of: file) == "123 456")
+        // Preview/model output can live under a Unicode username and a long temporary directory too.
+        let image = RGBImage(width: 2, height: 2, pixels: [UInt8](repeating: 127, count: 12))
+        for png in [true, false] {
+            let output = deep.appendingPathComponent("Превью 日本語." + (png ? "png" : "jpg"))
+            try image.write(to: output, png: png)
+            let decoded = try #require(RGBImage.load(output.path))
+            #expect(decoded.width == 2 && decoded.height == 2)
+        }
     }
     #endif
 
