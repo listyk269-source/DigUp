@@ -9,7 +9,7 @@ final class FileReader {
     private let handle: FileHandle
 
     init(_ url: URL) throws {
-        handle = try FileHandle(forReadingFrom: url)
+        handle = try FileHandle(forReadingFrom: FileAccess.url(url))
         size = try handle.seekToEnd()
     }
 

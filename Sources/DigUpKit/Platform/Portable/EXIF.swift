@@ -184,7 +184,7 @@ private final class FileBytes {
     private var blocks: [Int: [UInt8]] = [:]
 
     init?(_ url: URL) {
-        guard let handle = try? FileHandle(forReadingFrom: url), let end = try? handle.seekToEnd() else { return nil }
+        guard let handle = try? FileHandle(forReadingFrom: FileAccess.url(url)), let end = try? handle.seekToEnd() else { return nil }
         self.handle = handle
         size = Int(end)
     }

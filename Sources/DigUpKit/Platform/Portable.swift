@@ -26,8 +26,11 @@ public enum AppPaths {
     /// macOS: ~/Library/Application Support/DigUp. Windows: %LOCALAPPDATA%\DigUp. Linux: $XDG_DATA_HOME/digup, or
     /// ~/.local/share/digup.
     public static var applicationSupport: URL {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let environment = ProcessInfo.processInfo.environment
+        applicationSupport(environment: ProcessInfo.processInfo.environment,
+                           home: FileManager.default.homeDirectoryForCurrentUser)
+    }
+
+    static func applicationSupport(environment: [String: String], home: URL) -> URL {
         #if os(macOS)
         return home.appendingPathComponent("Library/Application Support/DigUp")
         #elseif os(Windows)
@@ -52,3 +55,39 @@ public enum AppPaths {
         #endif
     }
 }
+
+/// Only the filesystem call sees Windows' extended path spelling; displayed and indexed paths remain ordinary URLs.
+public enum FileAccess {
+    public static func path(_ path: String) -> String {
+        #if os(Windows)
+        return WindowsPaths.extended(path)
+        #else
+        return path
+        #endif
+    }
+
+    public static func url(_ url: URL) -> URL {
+        #if os(Windows)
+        return URL(fileURLWithPath: path(url.path))
+        #else
+        return url
+        #endif
+    }
+}
+
+#if os(Windows)
+/// Absolute paths for the wide Win32 APIs, independent of the host's LongPathsEnabled setting. Keep ordinary paths
+/// in the database and UI; add the extended prefix only at the native call boundary.
+enum WindowsPaths {
+    static func extended(_ path: String) -> String {
+        let native = path.replacingOccurrences(of: "/", with: "\\")
+        if native.hasPrefix("\\\\?\\") || native.hasPrefix("\\\\.\\") { return native }
+        if native.hasPrefix("\\\\") { return "\\\\?\\UNC\\" + native.dropFirst(2) }
+        let scalars = Array(native.unicodeScalars.prefix(3))
+        if scalars.count == 3, scalars[1] == ":", scalars[2] == "\\" {
+            return "\\\\?\\" + native
+        }
+        return native // Relative paths must remain relative; an extended prefix changes their meaning.
+    }
+}
+#endif

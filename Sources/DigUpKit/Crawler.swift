@@ -15,6 +15,8 @@ public struct CrawlReport: Sendable {
     public var skipped: [String: Int] = [:]          // reason → files
     public var skippedFolders: [String: Int] = [:]   // reason → folders not walked into
     public var datasets: [String: Int] = [:]         // folder → files skipped as a dataset
+    /// Folders whose contents could not be listed. Their existing index rows must survive a partial crawl.
+    public var unreadableFolders: Set<String> = []
 }
 
 /// Walks the chosen folders and applies `Rules`. Reads metadata only, never file contents (except the 600-byte
@@ -47,16 +49,29 @@ public enum Crawler {
                 FolderSelection.isInside($0, root.path) || FolderSelection.isInside($0, real)
             }.flatMap { [$0, FolderSelection.realPath($0)] }
             #if os(Windows)
-            guard let walker = FileSystem.walk(root, keys: keys) else { continue }
+            guard let walker = FileSystem.walk(root, keys: keys, onError: { url in
+                report.unreadableFolders.insert(url.path)
+            }) else { continue }
             #else
             guard let walker = fm.enumerator(at: root, includingPropertiesForKeys: keys,
                                              options: [.skipsHiddenFiles, .skipsPackageDescendants],
-                                             errorHandler: { _, _ in true }) else { continue }
+                                             errorHandler: { url, _ in
+                                                 report.unreadableFolders.insert(url.path)
+                                                 return true
+                                             }) else {
+                report.unreadableFolders.insert(root.path)
+                continue
+            }
             #endif
             func visit(_ url: URL) {
                 let values = try? url.resourceValues(forKeys: Set(keys))
                 let isPackage = FileSystem.isPackage(url, values)
-                if values?.isDirectory == true, !isPackage {
+                #if os(Windows)
+                let isDirectory = FileSystem.isDirectory(url)
+                #else
+                let isDirectory = values?.isDirectory == true
+                #endif
+                if isDirectory, !isPackage {
                     if let reason = Rules.skipReason(forFolder: url, home: home, excluded: skips)
                         ?? (options.code ? Rules.codeSkipReason(forFolder: url) : nil) {
                         walker.skipDescendants()
@@ -215,9 +230,16 @@ enum GitFiles {
         guard let git = FileSystem.git else { return nil }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: git)
-        process.arguments = ["-C", repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard"]
+        // A repository's core.fsmonitor can name a shell command. Indexing code never executes repository hooks.
+        process.arguments = ["-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false", "-C", repo,
+                             "ls-files", "-z", "--cached", "--others", "--exclude-standard"]
         // Reading only: never wait for, or take, the repo's lock (an editor's git may be busy in it).
         process.environment = ["GIT_OPTIONAL_LOCKS": "0", "PATH": "/usr/bin:/bin", "HOME": NSHomeDirectory()]
+        #if os(Windows)
+        let system = ProcessInfo.processInfo.environment.first { $0.key.uppercased() == "SYSTEMROOT" }?.value ?? "C:\\Windows"
+        process.environment?["SystemRoot"] = system
+        process.environment?["PATH"] = system + "\\System32"
+        #endif
         let output = Pipe()
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice

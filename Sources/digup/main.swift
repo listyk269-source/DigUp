@@ -47,7 +47,8 @@ let usage = """
       --code-stretch N     characters a stretch of code holds at most (default 1800; 1200 and 3600 lost on the evals)
 
     The model: EmbeddingGemma 2 on llama.cpp, from $DIGUP_MODELS (only there, when set), else
-    ~/Library/Application Support/DigUp/Models or the Hugging Face cache. DIGUP_WORKER_DIR=worker uses the
+    DigUp's application data folder (on Windows: %LOCALAPPDATA%\\DigUp\\Models), then the Hugging Face cache.
+    DIGUP_CPU_ONLY=1 forces the CPU backend. DIGUP_WORKER_DIR=worker uses the
     mlx-vlm reference worker instead (evals).
     """
 
@@ -117,7 +118,9 @@ struct Arguments {
         return try positional.map {
             let url = Self.folderURL($0)
             guard Self.isFolder(url) else { throw CLIError("not a folder: \($0)") }
-            guard Self.isReadable(url) else { throw CLIError("can't read \($0) (macOS privacy settings?)") }
+            guard Self.isReadable(url) else {
+                throw CLIError("can't read \($0); check folder permissions and that its drive or network share is connected")
+            }
             return url
         }
     }
@@ -128,13 +131,13 @@ struct Arguments {
 
     static func isFolder(_ url: URL) -> Bool {
         var isFolder: ObjCBool = false
-        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder) && isFolder.boolValue
+        return FileManager.default.fileExists(atPath: FileAccess.path(url.path), isDirectory: &isFolder) && isFolder.boolValue
     }
 
     /// The folder can be listed. One that macOS won't let us read (Files and Folders privacy) looks empty to a crawl,
     /// which must never be mistaken for "everything in it was deleted". (The first look may bring up macOS's prompt.)
     static func isReadable(_ url: URL) -> Bool {
-        (try? FileManager.default.contentsOfDirectory(atPath: url.path)) != nil
+        (try? FileManager.default.contentsOfDirectory(atPath: FileAccess.path(url.path))) != nil
     }
 
     /// Dev knobs for A/B runs in evals/.

@@ -59,6 +59,7 @@ enum DocExtractor {
     }
 
     static func readText(_ url: URL) throws -> String {
+        let url = FileAccess.url(url)
         var encoding = String.Encoding.utf8
         if let text = try? String(contentsOf: url, usedEncoding: &encoding) { return text }
         return try String(contentsOf: url, encoding: .isoLatin1)

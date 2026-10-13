@@ -16,7 +16,7 @@ extension ImageExtractor {
         var image: RGBImage
         let width: Int, height: Int
         var storedWidth: Int32 = 0, storedHeight: Int32 = 0, channels: Int32 = 0
-        if stbi_info(url.path, &storedWidth, &storedHeight, &channels) != 0 {
+        if stbi_info(FileAccess.path(url.path), &storedWidth, &storedHeight, &channels) != 0 {
             (width, height) = (Int(storedWidth), Int(storedHeight))
             guard max(width, height) >= minSide else { throw ExtractError.tooSmall(width, height) }
             guard let decoded = RGBImage.load(url.path) else { throw ExtractError.unreadable("can't decode image") }
@@ -52,7 +52,7 @@ extension ImageExtractor {
         }
         var data = Data()
         do {
-            try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-i", url.path, "-frames:v", "1", "-pix_fmt",
+            try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-i", FileAccess.path(url.path), "-frames:v", "1", "-pix_fmt",
                                            "rgb24", "-f", "image2pipe", "-c:v", "ppm", "-"]) { data.append($0) }
         } catch {
             let ext = url.pathExtension.lowercased()
@@ -86,7 +86,7 @@ struct RGBImage {
     /// Decoded from a file (nil when stb can't read it).
     static func load(_ path: String) -> RGBImage? {
         var width: Int32 = 0, height: Int32 = 0, channels: Int32 = 0
-        guard let pixels = stbi_load(path, &width, &height, &channels, 3) else { return nil }
+        guard let pixels = stbi_load(FileAccess.path(path), &width, &height, &channels, 3) else { return nil }
         defer { stbi_image_free(pixels) }
         return RGBImage(width: Int(width), height: Int(height),
                         pixels: Array(UnsafeBufferPointer(start: pixels, count: Int(width) * Int(height) * 3)))

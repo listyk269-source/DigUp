@@ -94,7 +94,8 @@ public final class Indexer {
         var byInode: [String: FileRecord] = [:]
         for file in existing {
             byPath[file.path] = file
-            byInode["\(file.device):\(file.inode)"] = file
+            // Some network/removable file systems cannot report an ID. Zero must never identify another file.
+            if file.inode != 0 { byInode["\(file.device):\(file.inode)"] = file }
         }
         let seen = Set(crawl.candidates.map(\.path))
         var movedFrom = Set<String>()
@@ -109,7 +110,7 @@ public final class Indexer {
                     } else {
                         summary.unchanged += 1
                     }
-                } else if let row = byInode["\(file.device):\(file.inode)"], !seen.contains(row.path),
+                } else if file.inode != 0, let row = byInode["\(file.device):\(file.inode)"], !seen.contains(row.path),
                           !movedFrom.contains(row.path), row.size == file.size, abs(row.mtime - file.mtime) < 0.001 {
                     try store.move(row.id, to: file.path)
                     movedFrom.insert(row.path)
@@ -124,7 +125,11 @@ public final class Indexer {
             let vanished = roots.map { $0.standardizedFileURL.path }
                 .filter { !FileManager.default.fileExists(atPath: $0) }.map { $0.hasSuffix("/") ? $0 : $0 + "/" }
             for row in existing where !seen.contains(row.path) && !movedFrom.contains(row.path)
-                && !vanished.contains(where: { row.path.hasPrefix($0) }) {
+                && !vanished.contains(where: { row.path.hasPrefix($0) })
+                && !crawl.unreadableFolders.contains(where: {
+                    row.path == $0 || FolderSelection.isInside(row.path, $0)
+                        || FolderSelection.isInside(row.path, FolderSelection.realPath($0))
+                }) {
                 try store.delete(row.id)
                 summary.removed += 1
             }

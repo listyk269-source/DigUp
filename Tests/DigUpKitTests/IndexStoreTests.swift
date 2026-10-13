@@ -91,27 +91,40 @@ import WinSDK
     @Test func missingModelFilesInDownloadOrder() throws {
         #expect(ModelFiles.missing(in: folder) == [ModelFiles.text, ModelFiles.media])
         FileManager.default.createFile(atPath: folder.appendingPathComponent(ModelFiles.text.name).path, contents: nil)
+        #expect(ModelFiles.missing(in: folder) == [ModelFiles.text, ModelFiles.media])
+        let handle = try FileHandle(forWritingTo: folder.appendingPathComponent(ModelFiles.text.name))
+        try handle.truncate(atOffset: UInt64(ModelFiles.text.bytes))
+        try handle.close()
         #expect(ModelFiles.missing(in: folder) == [ModelFiles.media])
         #expect(ModelFiles.totalBytes == 864_676_480)
     }
 
     @Test func modelFilesComeFromTheHuggingFaceCacheWhenThere() throws {
-        // As `hf download` leaves them: snapshots/<revision>/<name> → a blob. Sparse, so no disk is used.
+        // As `hf download` leaves them: symlinks on Unix, ordinary files on Windows without Developer Mode/admin.
         let hub = folder.appendingPathComponent("hub")
         let snapshot = hub.appendingPathComponent("models--ggml-org--embeddinggemma-2-GGUF/snapshots/\(ModelFiles.revision)")
         let blobs = hub.appendingPathComponent("models--ggml-org--embeddinggemma-2-GGUF/blobs")
         try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: blobs, withIntermediateDirectories: true)
+        #if os(Windows)
+        let blob = snapshot.appendingPathComponent(ModelFiles.text.name)
+        #else
         let blob = blobs.appendingPathComponent("2188ac1d")
+        #endif
         FileManager.default.createFile(atPath: blob.path, contents: nil)
-        try FileHandle(forWritingTo: blob).truncate(atOffset: UInt64(ModelFiles.text.bytes))
+        let writer = try FileHandle(forWritingTo: blob)
+        defer { try? writer.close() }
+        try writer.truncate(atOffset: UInt64(ModelFiles.text.bytes))
+        #if !os(Windows)
         try FileManager.default.createSymbolicLink(at: snapshot.appendingPathComponent(ModelFiles.text.name),
                                                    withDestinationURL: blob)
+        #endif
         setEnvironment("HF_HUB_CACHE", hub.path)
         defer { setEnvironment("HF_HUB_CACHE", nil) }
-        #expect(ModelFiles.cachedCopy(of: ModelFiles.text)?.lastPathComponent == "2188ac1d")
+        #expect(ModelFiles.cachedCopy(of: ModelFiles.text)?.lastPathComponent == blob.lastPathComponent)
+        #expect(ModelFiles.isComplete(ModelFiles.text, in: snapshot))
         #expect(ModelFiles.cachedCopy(of: ModelFiles.media) == nil)   // not there
-        try FileHandle(forWritingTo: blob).truncate(atOffset: 10)
+        try writer.truncate(atOffset: 10)
         #expect(ModelFiles.cachedCopy(of: ModelFiles.text) == nil)    // not whole
     }
 

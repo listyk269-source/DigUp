@@ -54,14 +54,22 @@ public enum ModelFiles {
         return size == file.bytes ? url : nil
     }
 
-    /// The files that aren't in `folder` yet. Only verified files get their final name, so being there is enough.
+    /// The files that aren't complete in `folder`. Check size even after installation: a truncated file or an empty
+    /// manually copied file must not make setup report success. Downloads still verify SHA-256 before publishing.
     public static func missing(in folder: URL) -> [File] {
-        all.filter { !FileManager.default.fileExists(atPath: folder.appendingPathComponent($0.name).path) }
+        all.filter { !isComplete($0, in: folder) }
+    }
+
+    public static func isComplete(_ file: File, in folder: URL) -> Bool {
+        let path = folder.appendingPathComponent(file.name).resolvingSymlinksInPath().path
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+              attributes[.type] as? FileAttributeType == .typeRegular else { return false }
+        return (attributes[.size] as? NSNumber)?.int64Value == file.bytes
     }
 
     /// The SHA-256 of a file as lowercase hex, read in 8 MB pieces (a 555 MB file takes about half a second).
     public static func sha256(of url: URL) throws -> String {
-        let handle = try FileHandle(forReadingFrom: url)
+        let handle = try FileHandle(forReadingFrom: FileAccess.url(url))
         defer { try? handle.close() }
         var hasher = SHA256()
         while true {

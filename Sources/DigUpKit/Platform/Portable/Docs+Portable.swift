@@ -50,6 +50,15 @@ enum Zip {
                 throw ExtractError.unreadable("not a zip file")
             }
             defer { mz_zip_reader_end(&zip) }
+            // Do not let a tiny, corrupt or hostile document expand without bound before the chunk limits apply.
+            let index = mz_zip_reader_locate_file(&zip, name, nil, 0)
+            var entry = mz_zip_archive_file_stat()
+            guard index >= 0, mz_zip_reader_file_stat(&zip, UInt32(index), &entry) != 0 else {
+                throw ExtractError.unreadable("no \(name) inside")
+            }
+            guard entry.m_uncomp_size <= 128 << 20 else {
+                throw ExtractError.unreadable("document text exceeds the 128 MB extraction limit")
+            }
             var size = 0
             guard let bytes = mz_zip_reader_extract_file_to_heap(&zip, name, &size, 0) else {
                 throw ExtractError.unreadable("no \(name) inside")

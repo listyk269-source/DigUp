@@ -40,6 +40,17 @@ public final class FileFetcher: NSObject, URLSessionDataDelegate, @unchecked Sen
         ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
     }
 
+    /// A resumed response must describe this pinned file, not merely start with the requested offset.
+    static func acceptsContentRange(_ header: String, offset: Int64, total: Int64) -> Bool {
+        let fields = header.split(separator: " ")
+        guard fields.count == 2, fields[0] == "bytes" else { return false }
+        let parts = fields[1].split(separator: "/")
+        guard parts.count == 2, Int64(parts[1]) == total else { return false }
+        let bounds = parts[0].split(separator: "-")
+        guard bounds.count == 2, let first = Int64(bounds[0]), let last = Int64(bounds[1]) else { return false }
+        return first == offset && first >= 0 && last >= first && last < total
+    }
+
     public func start() {
         written = Self.size(of: partial)
         if written > file.bytes {
@@ -87,7 +98,7 @@ public final class FileFetcher: NSObject, URLSessionDataDelegate, @unchecked Sen
         switch status {
         case 206:
             let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range") ?? ""
-            guard range.hasPrefix("bytes \(written)-") else {
+            guard Self.acceptsContentRange(range, offset: written, total: file.bytes) else {
                 // Not where we asked: start the file over next time.
                 try? FileManager.default.removeItem(at: partial)
                 problem = ("The download couldn't resume", true)
@@ -115,6 +126,11 @@ public final class FileFetcher: NSObject, URLSessionDataDelegate, @unchecked Sen
     }
 
     public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard Int64(data.count) <= file.bytes - written else {
+            problem = ("The download exceeded the expected model size", false)
+            dataTask.cancel()
+            return
+        }
         do {
             try handle?.write(contentsOf: data)
             written += Int64(data.count)

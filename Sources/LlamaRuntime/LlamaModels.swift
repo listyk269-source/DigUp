@@ -29,12 +29,12 @@ public struct LlamaModels: Sendable {
     public static func locate() throws -> LlamaModels {
         for folder in folders {
             let text = folder.appendingPathComponent(textFile)
-            guard FileManager.default.fileExists(atPath: text.path) else { continue }
+            guard ModelFiles.isComplete(ModelFiles.text, in: folder) else { continue }
             let media = folder.appendingPathComponent(mediaFile)
-            return LlamaModels(text: text, media: FileManager.default.fileExists(atPath: media.path) ? media : nil)
+            return LlamaModels(text: text, media: ModelFiles.isComplete(ModelFiles.media, in: folder) ? media : nil)
         }
         throw WorkerError.notFound("no \(textFile) in " + folders.map(\.path).joined(separator: ", ")
-            + "; get it with: hf download \(repository) \(textFile) \(mediaFile) --revision \(revision)")
+            + "; run digup download-model to download or repair the verified model files")
     }
 
     /// Both files are there, so indexing can run (checked without loading anything).

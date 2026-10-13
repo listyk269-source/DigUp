@@ -106,7 +106,7 @@ public enum Rules {
 
     /// MPEG-TS packets start with 0x47 every 188 bytes (or every 192 with a 4-byte timecode, as in .m2ts / AVCHD .mts).
     static func isMPEGTransportStream(_ url: URL) -> Bool {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        guard let handle = try? FileHandle(forReadingFrom: FileAccess.url(url)) else { return false }
         defer { try? handle.close() }
         guard let data = try? handle.read(upToCount: 600), data.count >= 400 else { return false }
         let bytes = [UInt8](data)

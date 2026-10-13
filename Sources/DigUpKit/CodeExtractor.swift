@@ -27,7 +27,7 @@ public enum CodeExtractor {
     static let longestPiece = 4000
 
     static func read(_ url: URL, options: IndexOptions) throws -> File {
-        let data = try Data(contentsOf: url)
+        let data = try Data(contentsOf: FileAccess.url(url))
         let (repo, title) = place(of: url.path)
         if url.pathExtension.lowercased() == "ipynb" {
             let cells = try notebookCells(data)

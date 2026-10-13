@@ -16,10 +16,18 @@ import Foundation
 func downloadModel(_ args: Arguments) throws -> Int32 {
     let folder = args.values["--to"].map(Arguments.folderURL) ?? ModelFiles.installed
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-    let missing = ModelFiles.missing(in: folder)
+    // Explicit setup/repair verifies even existing final files; their name alone is not proof of integrity.
+    let missing = ModelFiles.all.filter { file in
+        guard ModelFiles.isComplete(file, in: folder) else { return true }
+        emit(["event": "verifying", "name": file.name])
+        return (try? ModelFiles.sha256(of: folder.appendingPathComponent(file.name))) != file.sha256
+    }
     var done = ModelFiles.totalBytes - missing.reduce(0) { $0 + $1.bytes }
     for file in missing {
         let final = folder.appendingPathComponent(file.name)
+        if FileManager.default.fileExists(atPath: final.path) {
+            try FileManager.default.removeItem(at: final)
+        }
         if let cached = ModelFiles.cachedCopy(of: file), (try? ModelFiles.sha256(of: cached)) == file.sha256 {
             emit(["event": "file", "name": file.name, "bytes": file.bytes, "from": "cache"])
             let partial = folder.appendingPathComponent(file.name + ".partial")

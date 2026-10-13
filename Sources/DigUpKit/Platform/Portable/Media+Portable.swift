@@ -7,31 +7,50 @@ enum FFmpeg {
     static let ffmpeg = find("ffmpeg")
     static let ffprobe = find("ffprobe")
 
-    static func find(_ name: String) -> String? {
-        let environment = ProcessInfo.processInfo.environment
+    static func find(_ name: String, environment: [String: String] = ProcessInfo.processInfo.environment,
+                     executable: URL? = Bundle.main.executableURL) -> String? {
         var folders: [String] = []
         if let chosen = environment["DIGUP_FFMPEG"], !chosen.isEmpty { folders.append(chosen) }
-        if let executable = Bundle.main.executableURL { folders.append(executable.deletingLastPathComponent().path) }
+        if let executable { folders.append(executable.deletingLastPathComponent().path) }
         for folder in folders {
             let candidate = folder + "/" + FileSystem.program(name)
             if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
         }
+        #if os(Windows)
+        return nil // The installer supplies both tools; unrelated executables on the user's PATH are not a runtime.
+        #else
         return FileSystem.executable(name)
+        #endif
+    }
+
+    static func requireMediaTools() throws {
+        guard ffmpeg != nil, ffprobe != nil else {
+            throw ExtractError.unreadable("ffmpeg/ffprobe is missing; reinstall DigUp or set DIGUP_FFMPEG to their folder")
+        }
     }
 
     /// Runs a tool and hands its standard output to `read` as it comes (a long decode never sits in memory whole).
     /// Throws when the tool is missing or fails.
     static func run(_ tool: String?, _ arguments: [String], read: (Data) throws -> Void) throws {
-        guard let tool else { throw ExtractError.unreadable("ffmpeg isn't installed (audio and video need it)") }
+        guard let tool else {
+            throw ExtractError.unreadable("ffmpeg/ffprobe is missing; reinstall DigUp or set DIGUP_FFMPEG to their folder")
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: tool)
-        process.arguments = arguments
+        // Media containers/playlists may refer to URLs. Indexing a local file must not make network requests.
+        process.arguments = ["-protocol_whitelist", "file,pipe"] + arguments
         let output = Pipe()
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
         try process.run()
         let reader = output.fileHandleForReading
+        defer {
+            // A failed consumer (for example a full temporary disk) must not leave a decoder and pipe alive.
+            if process.isRunning { process.terminate() }
+            process.waitUntilExit()
+            try? reader.close()
+        }
         while true {
             let data = reader.readData(ofLength: 1 << 16)
             if data.isEmpty { break }
@@ -54,7 +73,7 @@ enum FFmpeg {
 extension MediaInfo {
     static func duration(of url: URL) -> Double? {
         guard let text = try? FFmpeg.output(FFmpeg.ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of",
-                                                             "default=noprint_wrappers=1:nokey=1", url.path])
+                                                             "default=noprint_wrappers=1:nokey=1", FileAccess.path(url.path)])
         else { return nil }
         let seconds = Double(text.trimmingCharacters(in: .whitespacesAndNewlines))
         return seconds.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
@@ -63,7 +82,7 @@ extension MediaInfo {
     /// Which kinds of streams the file has.
     static func streams(of url: URL) -> (audio: Bool, video: Bool) {
         guard let text = try? FFmpeg.output(FFmpeg.ffprobe, ["-v", "error", "-show_entries", "stream=codec_type", "-of",
-                                                             "default=noprint_wrappers=1:nokey=1", url.path])
+                                                             "default=noprint_wrappers=1:nokey=1", FileAccess.path(url.path)])
         else { return (false, false) }
         return (text.contains("audio"), text.contains("video"))
     }
@@ -81,6 +100,7 @@ extension AudioExtractor {
     /// ≤ 30 s. Streams: memory stays at one window, even for a 3-hour podcast.
     static func windows(of url: URL, window: Double, hop: Double, minimum: Double = 2, to folder: URL) async throws
         -> (pieces: [MediaPiece], duration: Double) {
+        try FFmpeg.requireMediaTools()
         guard MediaInfo.streams(of: url).audio else { return ([], 0) }
         let duration = MediaInfo.duration(of: url) ?? 0
         let windowSamples = Int(window * sampleRate), hopSamples = Int(hop * sampleRate)
@@ -96,7 +116,7 @@ extension AudioExtractor {
                                      end: Double(offset + count) / sampleRate))
         }
         var odd: UInt8?   // a byte left over when a read ends mid-sample
-        try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-i", url.path, "-vn", "-ac", "1", "-ar",
+        try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-i", FileAccess.path(url.path), "-vn", "-ac", "1", "-ar",
                                        "\(Int(sampleRate))", "-f", "s16le", "-"]) { data in
             var bytes: [UInt8] = []
             bytes.reserveCapacity(data.count + 1)
@@ -127,13 +147,14 @@ extension VideoExtractor {
     /// previous kept one (8×8 average hash within 4 bits) only extends it.
     static func keyframes(of url: URL, every interval: Double, maxPixel: Int, maxFrames: Int = 1200, to folder: URL)
         async throws -> (frames: [MediaPiece], duration: Double, hasAudio: Bool) {
+        try FFmpeg.requireMediaTools()
         let streams = MediaInfo.streams(of: url)
         let duration = MediaInfo.duration(of: url) ?? 0
         guard duration > 0, streams.video else { return ([], duration, streams.audio) }
         let step = max(interval, duration / Double(maxFrames))
         let first = min(0.5, duration / 2)
         let prefix = "frame-\(UUID().uuidString)-"
-        try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-ss", String(first), "-i", url.path, "-an", "-vf",
+        try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-ss", String(first), "-i", FileAccess.path(url.path), "-an", "-vf",
                                        "fps=\(1 / step),scale=\(maxPixel):\(maxPixel):force_original_aspect_ratio=decrease",
                                        "-q:v", "3", "-f", "image2", folder.appendingPathComponent(prefix + "%06d.jpg").path]) { _ in }
         let names = try FileManager.default.contentsOfDirectory(atPath: folder.path).filter { $0.hasPrefix(prefix) }.sorted()
@@ -158,7 +179,7 @@ extension VideoExtractor {
 
     /// The frame shown at `seconds`, its long side at most `pixels`, as a JPEG for a preview.
     static func frame(at seconds: Double, of url: URL, pixels: Int, to out: URL) async throws {
-        try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-ss", String(max(0, seconds)), "-i", url.path,
+        try FFmpeg.run(FFmpeg.ffmpeg, ["-v", "error", "-nostdin", "-ss", String(max(0, seconds)), "-i", FileAccess.path(url.path),
                                        "-frames:v", "1", "-vf",
                                        "scale='min(iw,\(pixels))':'min(ih,\(pixels))':force_original_aspect_ratio=decrease",
                                        "-q:v", "3", "-y", out.path]) { _ in }

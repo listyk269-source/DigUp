@@ -68,7 +68,7 @@ enum FileSystem {
     /// The file's own facts, without following a link. OneDrive's Files On-Demand placeholders are `dataless` (their
     /// attributes say the contents would be downloaded on read, or on open), and they're never opened here.
     static func info(of path: String) -> FileInfo? {
-        let native = path.replacingOccurrences(of: "/", with: "\\")
+        let native = WindowsPaths.extended(path)
         var found = WIN32_FIND_DATAW()
         let search = native.withCString(encodedAs: UTF16.self) {
             FindFirstFileExW($0, FindExInfoBasic, &found, FindExSearchNameMatch, nil, 0)
@@ -119,7 +119,30 @@ enum FileSystem {
     /// The crawl's walk of a folder. Foundation's enumerator on Windows skips the wrong folder's contents after
     /// `skipDescendants()` (2026-10-11, Swift 6.4: skipping one folder emptied a sibling that came before it), so the walk
     /// is `DirectoryWalk` here.
-    static func walk(_ root: URL, keys: [URLResourceKey]) -> DirectoryWalk? { DirectoryWalk(root, keys: keys) }
+    static func walk(_ root: URL, keys: [URLResourceKey], onError: @escaping (URL) -> Void) -> DirectoryWalk? {
+        DirectoryWalk(root, keys: keys, onError: onError)
+    }
+
+    /// Directory junctions and symbolic links can point back to an ancestor or outside the selected tree.
+    static func isDirectoryLink(_ url: URL) -> Bool {
+        var found = WIN32_FIND_DATAW()
+        let search = WindowsPaths.extended(url.path).withCString(encodedAs: UTF16.self) {
+            FindFirstFileExW($0, FindExInfoBasic, &found, FindExSearchNameMatch, nil, 0)
+        }
+        guard let search, search != INVALID_HANDLE_VALUE else { return false }
+        FindClose(search)
+        return found.dwFileAttributes & DWORD(FILE_ATTRIBUTE_REPARSE_POINT) != 0
+            && (found.dwReserved0 == 0xA000_000C || found.dwReserved0 == 0xA000_0003)
+    }
+
+    static func attributes(of url: URL) -> DWORD? {
+        let attributes = WindowsPaths.extended(url.path).withCString(encodedAs: UTF16.self) { GetFileAttributesW($0) }
+        return attributes == DWORD(INVALID_FILE_ATTRIBUTES) ? nil : attributes
+    }
+
+    static func isDirectory(_ url: URL) -> Bool {
+        attributes(of: url).map { $0 & DWORD(FILE_ATTRIBUTE_DIRECTORY) != 0 } ?? false
+    }
     #endif
 
     /// git on PATH; none → everything in a folder counts, as on a Mac without it.
@@ -157,12 +180,12 @@ enum FileSystem {
 /// exactly the folder just returned. Hidden files (the attribute, or a name starting with a dot, as on a Mac) are left
 /// out, and folders that can't be read are passed over.
 final class DirectoryWalk {
-    private let keys: [URLResourceKey]
+    private let onError: (URL) -> Void
     private var pending: [URL]   // what's next, last first
     private var opened: URL?     // the folder just returned: its contents come next, unless skipped
 
-    init(_ root: URL, keys: [URLResourceKey]) {
-        self.keys = keys
+    init(_ root: URL, keys: [URLResourceKey], onError: @escaping (URL) -> Void) {
+        self.onError = onError
         pending = []
         pending = contents(of: root).reversed()
     }
@@ -173,16 +196,30 @@ final class DirectoryWalk {
             opened = nil
         }
         guard let next = pending.popLast() else { return nil }
-        if (try? next.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { opened = next }
+        if FileSystem.isDirectory(next),
+           !FileSystem.isDirectoryLink(next) { opened = next }
         return next
     }
 
     func skipDescendants() { opened = nil }
 
     private func contents(of folder: URL) -> [URL] {
-        let found = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: keys,
-                                                                  options: [.skipsHiddenFiles])) ?? []
-        return found.filter { !$0.lastPathComponent.hasPrefix(".") }
+        guard FileSystem.isDirectory(folder) else { onError(folder); return [] }
+        do {
+            let names = try FileManager.default.contentsOfDirectory(atPath: WindowsPaths.extended(folder.path))
+            return names.compactMap { name in
+                guard !name.hasPrefix(".") else { return nil }
+                guard let attributes = FileSystem.attributes(of: folder.appendingPathComponent(name)) else {
+                    onError(folder.appendingPathComponent(name))
+                    return nil
+                }
+                guard attributes & DWORD(FILE_ATTRIBUTE_HIDDEN) == 0 else { return nil }
+                return folder.appendingPathComponent(name, isDirectory: attributes & DWORD(FILE_ATTRIBUTE_DIRECTORY) != 0)
+            }
+        } catch {
+            onError(folder)
+            return []
+        }
     }
 }
 #endif

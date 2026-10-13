@@ -49,13 +49,18 @@ public final class LlamaEmbedder: Embedder {
         let started = Date()
         LlamaLog.shared.send(to: log)
         _ = Self.backend
+        #if !os(macOS)
+        guard ggml_backend_dev_count() > 0 else {
+            throw WorkerError.failed("no llama.cpp backend loaded; reinstall DigUp with its CPU runtime libraries")
+        }
+        #endif
         guard textOnly || models.media != nil else {
             throw WorkerError.notFound("\(LlamaModels.mediaFile) (images and audio) isn't downloaded yet")
         }
         var modelParams = llama_model_default_params()
-        modelParams.n_gpu_layers = 999
+        modelParams.n_gpu_layers = Self.cpuOnly ? 0 : 999
         guard let model = llama_model_load_from_file(models.text.path, modelParams) else {
-            throw WorkerError.failed("can't load \(models.text.path)")
+            throw WorkerError.failed("can't load the text model; run digup download-model to verify or repair it")
         }
         // One input must fit one micro-batch: 2048 tokens (the reference's cut), which also holds a 1120-token image or
         // a 750-token 30 s clip. Queries are short, so the query encoder reserves less and cuts at 512.
@@ -79,7 +84,7 @@ public final class LlamaEmbedder: Embedder {
         var media: OpaquePointer?
         if let mediaFile = models.media, !textOnly {
             var mediaParams = mtmd_context_params_default()
-            mediaParams.use_gpu = true
+            mediaParams.use_gpu = !Self.cpuOnly
             mediaParams.print_timings = false
             mediaParams.warmup = true
             mediaParams.image_min_tokens = 1      // never rescale: images arrive at their final size (ImageSizing)
@@ -91,7 +96,7 @@ public final class LlamaEmbedder: Embedder {
             if media == nil {
                 llama_free(context)
                 llama_model_free(model)
-                throw WorkerError.failed("can't load \(mediaFile.path)")
+                throw WorkerError.failed("can't load the media model; run digup download-model to verify or repair it")
             }
         }
         self.model = model
@@ -130,6 +135,9 @@ public final class LlamaEmbedder: Embedder {
     }
 
     // MARK: Embedder
+
+    /// A reproducible CPU-only mode for baseline release checks, even on a machine with GPU backends installed.
+    static var cpuOnly: Bool { ProcessInfo.processInfo.environment["DIGUP_CPU_ONLY"] == "1" }
 
     public func embedTexts(_ texts: [String]) throws -> [[Float]] {
         reset()
@@ -344,7 +352,9 @@ public final class LlamaEmbedder: Embedder {
         for folder in folders where ggml_backend_dev_count() == 0 {
             ggml_backend_load_all_from_path(folder)
         }
+        #if !os(Windows)
         if ggml_backend_dev_count() == 0 { ggml_backend_load_all() }
+        #endif
         LlamaLog.shared.line("backends: " + (0..<ggml_backend_reg_count()).map {
             String(cString: ggml_backend_reg_name(ggml_backend_reg_get($0)))
         }.joined(separator: ", "))

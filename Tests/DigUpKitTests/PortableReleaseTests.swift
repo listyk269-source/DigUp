@@ -1,0 +1,164 @@
+import Foundation
+import Testing
+@testable import DigUpKit
+#if os(Windows)
+import WinSDK
+#endif
+
+/// Real filesystem, extraction, SQLite/FTS5 and reconciliation checks; they deliberately need no embedding model.
+@Suite struct PortableReleaseTests {
+    @Test func unicodeFolderLifecycleKeepsOneSearchableRow() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-release-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let documents = base.appendingPathComponent("Документы с пробелами 日本語 🦀")
+        let nested = documents.appendingPathComponent("вложенный каталог")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let original = nested.appendingPathComponent("квитанция 2026.txt")
+        // Numeric documents genuinely use keyword search only. Throw if the engine attempts to load any embedder.
+        try Data("111 222 333 444".utf8).write(to: original)
+        let store = try IndexStore(directory: base.appendingPathComponent("индекс SQLite"))
+        let indexer = try Indexer(store: store, options: IndexOptions(),
+                                  makeEmbedder: { throw WorkerError.notFound("numeric fixture needs no model") })
+        #expect(try indexer.sync([documents]).added == 1)
+        #expect(try indexer.run() == ["done": 1])
+        let first = try #require(store.files(under: [documents.path]).first)
+        #expect(try keywordCount("333", store: store) == 1)
+        #expect(try keywordCount("квитанция", store: store) == 1)
+        #expect(try indexer.sync([documents, nested]).unchanged == 1)
+        #expect(try indexer.run().isEmpty)
+
+        let renamed = nested.appendingPathComponent("новое имя 🦀.txt")
+        try FileManager.default.moveItem(at: original, to: renamed)
+        let moved = try indexer.sync([documents])
+        #expect(moved.moved == 1 && moved.added == 0 && moved.removed == 0)
+        #expect(try store.files(under: [documents.path]).first?.id == first.id)
+        #expect(try keywordCount("333", store: store) == 1)
+
+        try Data("555 666 777 888 999".utf8).write(to: renamed)
+        #expect(try indexer.sync([documents]).changed == 1)
+        #expect(try indexer.run() == ["done": 1])
+        #expect(try keywordCount("333", store: store) == 0)
+        #expect(try keywordCount("777", store: store) == 1)
+        #expect(try store.files(under: [documents.path]).count == 1)
+
+        try FileManager.default.removeItem(at: renamed)
+        #expect(try indexer.sync([documents]).removed == 1)
+        #expect(try keywordCount("777", store: store) == 0)
+        #expect(try store.files(under: [documents.path]).isEmpty)
+    }
+
+    @Test func failedTraversalDoesNotDeleteExistingRows() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-unreadable-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let root = base.appendingPathComponent("volume")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("123 456".utf8).write(to: root.appendingPathComponent("notes.txt"))
+        let store = try IndexStore(directory: base.appendingPathComponent("index"))
+        let indexer = try Indexer(store: store, options: IndexOptions(),
+                                  makeEmbedder: { throw WorkerError.notFound("sync does not load a model") })
+        #expect(try indexer.sync([root]).added == 1)
+        // A file in place of the mount is a deterministic listing error on all OSes, without admin/ACL changes.
+        try FileManager.default.moveItem(at: root, to: base.appendingPathComponent("disconnected"))
+        try Data().write(to: root)
+        let result = try indexer.sync([root])
+        #expect(result.removed == 0)
+        #expect(!result.crawl.unreadableFolders.isEmpty)
+        #expect(try store.files(under: [root.path]).count == 1)
+    }
+
+    @Test func supportDirectoryUsesExplicitEnvironment() {
+        let home = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("test-home")
+        let data = home.appendingPathComponent("Данные пользователя")
+        #if os(Windows)
+        #expect(AppPaths.applicationSupport(environment: ["LOCALAPPDATA": data.path], home: home)
+            == data.appendingPathComponent("DigUp"))
+        #expect(AppPaths.applicationSupport(environment: [:], home: home)
+            == home.appendingPathComponent("AppData/Local/DigUp"))
+        #elseif os(Linux)
+        #expect(AppPaths.applicationSupport(environment: ["XDG_DATA_HOME": data.path], home: home)
+            == data.appendingPathComponent("digup"))
+        #expect(AppPaths.applicationSupport(environment: [:], home: home)
+            == home.appendingPathComponent(".local/share/digup"))
+        #else
+        #expect(AppPaths.applicationSupport(environment: [:], home: home)
+            == home.appendingPathComponent("Library/Application Support/DigUp"))
+        #endif
+    }
+
+    @Test func resumedModelRangeMustMatchPinnedFile() {
+        #expect(FileFetcher.acceptsContentRange("bytes 5-9/10", offset: 5, total: 10))
+        #expect(FileFetcher.acceptsContentRange("bytes 5-7/10", offset: 5, total: 10))
+        #expect(!FileFetcher.acceptsContentRange("bytes 4-9/10", offset: 5, total: 10))
+        #expect(!FileFetcher.acceptsContentRange("bytes 5-9/11", offset: 5, total: 10))
+        #expect(!FileFetcher.acceptsContentRange("bytes 5-10/10", offset: 5, total: 10))
+        #expect(!FileFetcher.acceptsContentRange("bytes 5-4/10", offset: 5, total: 10))
+        #expect(!FileFetcher.acceptsContentRange("bytes 5-9/*", offset: 5, total: 10))
+        #expect(!FileFetcher.acceptsContentRange("bytes 5-garbage", offset: 5, total: 10))
+    }
+
+    #if os(Windows)
+    @Test func widePathsSupportDrivesUNCUnicodeAndLongNames() {
+        #expect(WindowsPaths.extended("C:/Документы/имя с пробелами.txt") == "\\\\?\\C:\\Документы\\имя с пробелами.txt")
+        #expect(WindowsPaths.extended("//server/share/日本語.txt") == "\\\\?\\UNC\\server\\share\\日本語.txt")
+        #expect(WindowsPaths.extended("\\\\?\\C:\\already.txt") == "\\\\?\\C:\\already.txt")
+        #expect(WindowsPaths.extended("relative/file.txt") == "relative\\file.txt")
+        let long = "C:/" + String(repeating: "folder/", count: 50) + "файл.txt"
+        #expect(WindowsPaths.extended(long).hasPrefix("\\\\?\\C:\\"))
+        #expect(WindowsPaths.extended(long).count > 260)
+    }
+
+    @Test func longUnicodeFileIsCrawledThroughWideAPIs() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-long-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(atPath: WindowsPaths.extended(base.path)) }
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        var deep = base
+        for _ in 0..<8 {
+            deep.appendPathComponent("Каталог с пробелами 1234567890")
+            // Fixture setup uses the native API, so the test doesn't require a machine-wide LongPathsEnabled policy.
+            let created = WindowsPaths.extended(deep.path).withCString(encodedAs: UTF16.self) { CreateDirectoryW($0, nil) }
+            try #require(created)
+        }
+        let file = deep.appendingPathComponent("документ 日本語.txt")
+        #expect(file.path.utf16.count > 260)
+        try Data("123 456".utf8).write(to: FileAccess.url(file))
+        #expect(FileSystem.info(of: file.path)?.isRegular == true)
+        #expect(Crawler.crawl([base], options: IndexOptions()).candidates.map(\.path) == [file.path])
+        #expect(try DocExtractor.text(of: file) == "123 456")
+    }
+    #endif
+
+    #if !canImport(AVFoundation)
+    @Test func mediaToolsAreResolvedBesideExecutableOrFromExplicitFolder() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-resources-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let installed = base.appendingPathComponent("Программа с пробелами")
+        let override = base.appendingPathComponent("chosen")
+        for directory in [installed, override] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let tool = directory.appendingPathComponent(FileSystem.program("ffmpeg"))
+            #if os(Windows)
+            // Windows checks the PE header, not just the suffix. Copy a real test executable without running it.
+            try FileManager.default.copyItem(at: #require(Bundle.main.executableURL), to: tool)
+            #else
+            _ = FileManager.default.createFile(atPath: tool.path, contents: Data(), attributes: [.posixPermissions: 0o700])
+            #endif
+        }
+        let helper = installed.appendingPathComponent(FileSystem.program("digup"))
+        #expect(FFmpeg.find("ffmpeg", environment: [:], executable: helper)
+            == installed.appendingPathComponent(FileSystem.program("ffmpeg")).path)
+        #expect(FFmpeg.find("ffmpeg", environment: ["DIGUP_FFMPEG": override.path], executable: helper)
+            == override.appendingPathComponent(FileSystem.program("ffmpeg")).path)
+        #if os(Windows)
+        #expect(FFmpeg.find("ffprobe", environment: ["PATH": installed.path], executable: nil) == nil)
+        #endif
+    }
+    #endif
+
+    private func keywordCount(_ term: String, store: IndexStore) throws -> Int {
+        var count = 0
+        try store.db.query("SELECT COUNT(*) FROM fts WHERE fts MATCH ?", [.text("\"\(term)\"")]) {
+            count = Int($0.int(0))
+        }
+        return count
+    }
+}
