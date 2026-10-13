@@ -46,6 +46,7 @@ impl Launch {
         command
             .args(&self.args)
             .envs(self.env.iter().map(|(key, value)| (key, value)))
+            .env_remove("GGML_BACKEND_PATH")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(
@@ -72,7 +73,6 @@ impl Launch {
                 command
                     .env("DIGUP_FFMPEG", runtime)
                     .env("DIGUP_BACKENDS", runtime)
-                    .env("DIGUP_CPU_ONLY", "1")
                     .env_remove("DIGUP_WORKER_DIR");
                 let mut paths = vec![runtime.to_path_buf()];
                 if let Some(windows) = std::env::var_os("SystemRoot") {
@@ -166,9 +166,27 @@ impl SearchService {
         }
     }
 
-    /// Keep restart arguments in step with a changed folder selection, even if the current helper crashes.
-    pub fn configure(&self, arguments: Vec<String>) {
-        self.launch.lock().unwrap().args = arguments;
+    /// Keep restart arguments current; a changed device environment needs a fresh model process.
+    /// May wait for the old helper to stop: call outside the UI thread.
+    pub fn configure(&self, arguments: Vec<String>, environment: Vec<(String, String)>) {
+        // Match send's lock order. No request can start the old configuration during replacement.
+        let mut running = self.running.lock().unwrap();
+        let mut launch = self.launch.lock().unwrap();
+        let restart = launch.env != environment;
+        launch.args = arguments;
+        launch.env = environment;
+        if restart {
+            if let Some(searching) = running.take() {
+                for (_, sender) in searching.pending.lock().unwrap().drain() {
+                    let _ = sender.send(json!({"ok": false, "error": "The processing device changed. Please search again."}));
+                }
+                stop(
+                    searching.child,
+                    searching.stdin,
+                    &json!({"op": "quit"}).to_string(),
+                );
+            }
+        }
     }
 
     /// Sends a request and waits for its reply.
@@ -278,9 +296,15 @@ impl Drop for SearchService {
 /// `digup index-service`: syncs the index with the folders, indexes what's new, and exits once it's done. `run` starts
 /// it, asks the running one to sync again, or, when the folders changed (another launch), starts it over with them.
 pub struct IndexService {
-    running: Mutex<Option<(HelperProcess, ChildStdin, Vec<String>)>>,
+    running: Mutex<Option<Indexing>>,
     closed: AtomicBool,
     on_event: EventSink,
+}
+
+struct Indexing {
+    child: HelperProcess,
+    stdin: ChildStdin,
+    launch: Launch,
 }
 
 impl Drop for IndexService {
@@ -303,15 +327,15 @@ impl IndexService {
         if self.closed.load(Ordering::SeqCst) {
             return Err("DigUp is shutting down".into());
         }
-        if let Some((child, stdin, args)) = running.as_mut() {
-            if matches!(child.try_wait(), Ok(None)) {
-                if *args == launch.args {
-                    return writeln!(stdin, "sync")
-                        .and_then(|_| stdin.flush())
+        if let Some(indexing) = running.as_mut() {
+            if matches!(indexing.child.try_wait(), Ok(None)) {
+                if indexing.launch.args == launch.args && indexing.launch.env == launch.env {
+                    return writeln!(indexing.stdin, "sync")
+                        .and_then(|_| indexing.stdin.flush())
                         .map_err(|error| error.to_string());
                 }
-                let (child, stdin, _) = running.take().unwrap();
-                stop(child, stdin, "stop");
+                let indexing = running.take().unwrap();
+                stop(indexing.child, indexing.stdin, "stop");
             }
         }
         let (child, stdin, stdout) = launch.spawn()?;
@@ -325,13 +349,17 @@ impl IndexService {
             }
             on_event(json!({"event": "exit"}));
         });
-        *running = Some((child, stdin, launch.args.clone()));
+        *running = Some(Indexing {
+            child,
+            stdin,
+            launch: launch.clone(),
+        });
         Ok(())
     }
 
     pub fn stop(&self) {
-        if let Some((child, stdin, _)) = self.running.lock().unwrap().take() {
-            stop(child, stdin, "stop");
+        if let Some(indexing) = self.running.lock().unwrap().take() {
+            stop(indexing.child, indexing.stdin, "stop");
         }
     }
 
@@ -433,6 +461,131 @@ mod tests {
             .command()
             .unwrap_err()
             .contains("GUI"));
+    }
+
+    #[test]
+    fn helper_device_environment_never_loads_an_injected_backend() {
+        let directory =
+            std::env::temp_dir().join(format!("digup-device-env-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let program = directory.join("test-helper.exe");
+        std::fs::write(&program, []).unwrap();
+        let mut configured = launch(program);
+        configured.env = vec![
+            ("DIGUP_DEVICE".into(), "gpu".into()),
+            ("GGML_BACKEND_PATH".into(), "unexpected-backend.dll".into()),
+        ];
+        let command = configured.command().unwrap();
+        let env: HashMap<_, _> = command.get_envs().collect();
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("DIGUP_DEVICE")),
+            Some(&Some(std::ffi::OsStr::new("gpu")))
+        );
+        assert_eq!(
+            env.get(std::ffi::OsStr::new("GGML_BACKEND_PATH")),
+            Some(&None)
+        );
+        // No assignment/removal: the parent's CPU-only override remains inherited.
+        assert!(!env.contains_key(std::ffi::OsStr::new("DIGUP_CPU_ONLY")));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    // A real child process speaking the helper protocol, for lifecycle tests only.
+    #[test]
+    fn device_test_process() {
+        if std::env::var("DIGUP_TEST_DEVICE_PROCESS").as_deref() != Ok("1") {
+            return;
+        }
+        let device = std::env::var("DIGUP_DEVICE").unwrap();
+        let pid = std::process::id();
+        println!(
+            "{}",
+            json!({"event": "device", "device": device, "pid": pid})
+        );
+        for line in std::io::stdin().lock().lines() {
+            let line = line.unwrap();
+            if line == "stop" {
+                break;
+            }
+            if line == "sync" {
+                println!(
+                    "{}",
+                    json!({"event": "device", "device": device, "pid": pid})
+                );
+                continue;
+            }
+            let request: Value = serde_json::from_str(&line).unwrap();
+            if request["op"] == "quit" {
+                break;
+            }
+            println!(
+                "{}",
+                json!({"id": request["id"], "device": device, "pid": pid})
+            );
+        }
+    }
+
+    fn device_process(test: &str) -> (PathBuf, Launch) {
+        let directory =
+            std::env::temp_dir().join(format!("digup-device-{test}-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let program = directory.join(if cfg!(windows) { "child.exe" } else { "child" });
+        std::fs::copy(std::env::current_exe().unwrap(), &program).unwrap();
+        let mut configured = launch(program);
+        configured.args = [
+            "--exact",
+            "helper::tests::device_test_process",
+            "--nocapture",
+        ]
+        .map(str::to_string)
+        .into();
+        configured.env = vec![
+            ("DIGUP_TEST_DEVICE_PROCESS".into(), "1".into()),
+            ("DIGUP_DEVICE".into(), "cpu".into()),
+        ];
+        (directory, configured)
+    }
+
+    #[test]
+    fn changing_device_restarts_search_without_closing_the_service() {
+        let (directory, mut launch) = device_process("search");
+        let service = SearchService::new(launch.clone(), |_| {});
+        let cpu = tauri::async_runtime::block_on(service.ask(json!({"op": "status"}))).unwrap();
+        assert_eq!(cpu["device"], "cpu");
+        service.configure(launch.args.clone(), launch.env.clone());
+        let same = tauri::async_runtime::block_on(service.ask(json!({"op": "status"}))).unwrap();
+        assert_eq!(cpu["pid"], same["pid"]);
+        launch.env[1].1 = "gpu".into();
+        service.configure(launch.args.clone(), launch.env);
+        let gpu = tauri::async_runtime::block_on(service.ask(json!({"op": "status"}))).unwrap();
+        assert_eq!(gpu["device"], "gpu");
+        assert_ne!(cpu["pid"], gpu["pid"]);
+        service.stop();
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn changing_device_restarts_indexer_even_when_folders_are_unchanged() {
+        let (directory, mut launch) = device_process("index");
+        let (events, received) = std::sync::mpsc::channel();
+        let service = IndexService::new(move |event| {
+            if event["event"] == "device" {
+                let _ = events.send(event);
+            }
+        });
+        service.run(&launch).unwrap();
+        let cpu = received.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(cpu["device"], "cpu");
+        service.run(&launch).unwrap();
+        let same = received.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(cpu["pid"], same["pid"]);
+        launch.env[1].1 = "gpu".into();
+        service.run(&launch).unwrap();
+        let gpu = received.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(gpu["device"], "gpu");
+        assert_ne!(cpu["pid"], gpu["pid"]);
+        service.stop();
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

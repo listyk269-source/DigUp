@@ -3,10 +3,14 @@ param(
     [Parameter(Mandatory)][string]$Installer,
     [Parameter(Mandatory)][string]$Models,
     [int]$TimeoutSeconds = 600,
+    [ValidateSet('cpu', 'gpu')][string]$Device = 'cpu',
     [string]$OutputDirectory
 )
 . "$PSScriptRoot/Common.ps1"
 if (!$OutputDirectory) { $OutputDirectory = "$script:Repo/build.noindex/windows/smoke-$([Guid]::NewGuid().ToString('N'))" }
+if ((Test-Path -LiteralPath $OutputDirectory) -and (Get-ChildItem -LiteralPath $OutputDirectory -Force | Select-Object -First 1)) {
+    throw 'Smoke evidence requires a new or empty output directory; previous evidence will not be overwritten.'
+}
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
 $testRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $install = Join-Path $testRoot 'Installed DigUp'
@@ -29,8 +33,38 @@ $sample = Join-Path $fixture $name
 'The compiler reports a syntax error. The retry function waits with exponential backoff after an HTTP timeout.' |
     Set-Content -LiteralPath (Join-Path $fixture 'software.txt') -Encoding utf8NoBOM
 
+function Set-SmokeEnvironment {
+    param([Diagnostics.ProcessStartInfo]$Start, [switch]$GuiProcess)
+    $Start.Environment['PATH'] = "$env:SystemRoot/System32;$env:SystemRoot"
+    $Start.Environment['DIGUP_MODELS'] = [IO.Path]::GetFullPath($Models)
+    foreach ($variable in @('DIGUP_WORKER_DIR', 'DIGUP_BACKENDS', 'DIGUP_FFMPEG', 'GGML_BACKEND_PATH', 'DIGUP_DEVICE', 'DIGUP_CPU_ONLY')) {
+        $Start.Environment.Remove($variable) | Out-Null
+    }
+    if ($Device -eq 'cpu') { $Start.Environment['DIGUP_CPU_ONLY'] = '1' }
+    elseif (!$GuiProcess) { $Start.Environment['DIGUP_DEVICE'] = $Device }
+    # GPU GUI runs must obtain their mode only from the real setup form and persisted settings.
+}
+
+function Assert-WorkerDevice {
+    param([string]$LogName, [string]$EvidenceName)
+    $path = Join-Path $index $LogName
+    if (!(Test-Path -LiteralPath $path)) { throw "The actual GUI did not produce $LogName." }
+    $log = Get-Content -LiteralPath $path -Raw
+    $selected = if ($Device -eq 'gpu') { 'Vulkan[0-9]+' } else { 'CPU' }
+    if ($log -notmatch "ready in .*device $selected\)") { throw "$LogName did not confirm a ready $Device worker." }
+    if ($Device -eq 'gpu' -and $log -notmatch 'offloaded [1-9][0-9]*/[1-9][0-9]* layers to GPU') {
+        throw "$LogName did not confirm model layers actually offloaded to the GPU."
+    }
+    if ($Device -eq 'gpu' -and $log -match 'ready in .*device CPU\)') { throw "$LogName silently used CPU in required GPU mode." }
+    if ($Device -eq 'cpu' -and ($log -match 'ready in .*device Vulkan[0-9]+\)' -or
+            $log -match 'offloaded [1-9][0-9]*/[1-9][0-9]* layers to GPU')) {
+        throw "$LogName used GPU despite the CPU-only baseline override."
+    }
+    Copy-Item -LiteralPath $path -Destination (Join-Path $testRoot $EvidenceName)
+}
+
 function Invoke-SmokeProcess {
-    param([string]$Program, [string[]]$Arguments, [string]$Label, [string]$InputText, [string]$NsisDirectory)
+    param([string]$Program, [string[]]$Arguments, [string]$Label, [string]$InputText, [string]$NsisDirectory, [switch]$GuiProcess)
     $start = [Diagnostics.ProcessStartInfo]::new($Program)
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
@@ -44,10 +78,7 @@ function Invoke-SmokeProcess {
         if ($NsisDirectory.Contains('"')) { throw 'Invalid installation directory.' }
         $start.Arguments = "/S /D=$NsisDirectory"
     } else { foreach ($arg in $Arguments) { $start.ArgumentList.Add($arg) } }
-    $start.Environment['PATH'] = "$env:SystemRoot/System32;$env:SystemRoot"
-    $start.Environment['DIGUP_MODELS'] = [IO.Path]::GetFullPath($Models)
-    $start.Environment['DIGUP_CPU_ONLY'] = '1'
-    foreach ($variable in @('DIGUP_WORKER_DIR', 'DIGUP_BACKENDS', 'DIGUP_FFMPEG')) { $start.Environment.Remove($variable) | Out-Null }
+    Set-SmokeEnvironment $start -GuiProcess:$GuiProcess
     $process = [Diagnostics.Process]::Start($start)
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
@@ -110,8 +141,16 @@ try {
     if (!$after.Contains($counts)) { throw 'Reindexing unchanged inputs changed vector/segment counts.' }
     $report = Join-Path $testRoot 'gui-report.json'
     $settings = Join-Path $testRoot 'settings.json'
-    Invoke-SmokeProcess $gui @('--index', $index, '--models', $Models, '--settings', $settings,
-        '--debug-setup', '--offer', $fixture, '--debug-query', 'ORBITGREEN742', '--debug-report', $report, '--debug-quit') 'gui' | Out-Null
+    # Separate CLI inference evidence from the GUI's subsequent real worker loads.
+    foreach ($log in @('worker.log', 'worker-query.log')) {
+        if (Test-Path -LiteralPath "$index/$log") { Move-Item -LiteralPath "$index/$log" -Destination "$testRoot/cli-$log" }
+    }
+    'A telescope observes distant galaxies. This file is indexed only by the installed GUI. GUIINDEX643.' |
+        Set-Content -LiteralPath (Join-Path $fixture 'gui-only.txt') -Encoding utf8NoBOM
+    $deviceChoice = if ($Device -eq 'gpu') { @('--debug-device', 'gpu') } else { @() }
+    $guiArguments = @('--index', $index, '--models', $Models, '--settings', $settings,
+        '--debug-setup', '--offer', $fixture, '--debug-query', 'ORBITGREEN742', '--debug-report', $report, '--debug-quit') + $deviceChoice
+    Invoke-SmokeProcess $gui $guiArguments 'gui' -GuiProcess | Out-Null
     if (!(Test-Path $report)) { throw 'The actual installed WebView never reported a result.' }
     $ui = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
     if ($ui.phase -ne 'meaning' -or !(($ui.groups.rows | ForEach-Object { $_ }) -contains $name)) {
@@ -119,12 +158,23 @@ try {
     }
     $saved = Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json
     if (!$saved.setUp -or $saved.folders -notcontains $fixture) { throw 'Setup choices did not persist.' }
+    if ($ui.devicePreference -ne $Device) { throw 'The GUI used a different processing device preference.' }
+    if ($Device -eq 'gpu' -and ($saved.device -ne 'gpu' -or $ui.savedDevice -ne 'gpu' -or $ui.deviceOverridden)) {
+        throw 'GPU selection did not persist through the actual setup form, or a launch override bypassed it.'
+    }
+    Assert-WorkerDevice 'worker.log' 'gui-worker.log'
+    Assert-WorkerDevice 'worker-query.log' 'gui-worker-query.log'
+    Move-Item -LiteralPath "$index/worker-query.log" -Destination "$testRoot/gui-first-query-original.log"
     Invoke-SmokeProcess $gui @('--index', $index, '--models', $Models, '--settings', $settings,
-        '--debug-query', 'ORBITGREEN742', '--debug-report', "$testRoot/gui-restart.json", '--debug-quit') 'gui-restart' | Out-Null
+        '--debug-query', 'ORBITGREEN742', '--debug-report', "$testRoot/gui-restart.json", '--debug-quit') 'gui-restart' -GuiProcess | Out-Null
     $restart = Get-Content "$testRoot/gui-restart.json" -Raw | ConvertFrom-Json
     if ($restart.phase -ne 'meaning' -or !(($restart.groups.rows | ForEach-Object { $_ }) -contains $name)) {
         throw 'Restart did not preserve the working index and settings.'
     }
+    if ($restart.devicePreference -ne $Device -or ($Device -eq 'gpu' -and ($restart.savedDevice -ne 'gpu' -or $restart.deviceOverridden))) {
+        throw 'Restart did not load the saved processing device.'
+    }
+    Assert-WorkerDevice 'worker-query.log' 'gui-restart-worker-query.log'
     # Keep the installed GUI alive; only its real notify watcher may update the index.
     $watchStart = [Diagnostics.ProcessStartInfo]::new($gui)
     $watchStart.UseShellExecute = $false
@@ -132,10 +182,7 @@ try {
     $watchStart.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
     foreach ($arg in @('--index', $index, '--models', $Models, '--settings', $settings,
         '--debug-query', 'ORBITGREEN742', '--debug-report', "$testRoot/watch-ready.json")) { $watchStart.ArgumentList.Add($arg) }
-    $watchStart.Environment['PATH'] = "$env:SystemRoot/System32;$env:SystemRoot"
-    $watchStart.Environment['DIGUP_MODELS'] = [IO.Path]::GetFullPath($Models)
-    $watchStart.Environment['DIGUP_CPU_ONLY'] = '1'
-    foreach ($variable in @('DIGUP_WORKER_DIR', 'DIGUP_BACKENDS', 'DIGUP_FFMPEG')) { $watchStart.Environment.Remove($variable) | Out-Null }
+    Set-SmokeEnvironment $watchStart -GuiProcess
     $watcherProcess = [Diagnostics.Process]::Start($watchStart)
     try {
         $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
@@ -171,8 +218,8 @@ try {
     Invoke-SmokeProcess $cli @('index', $fixture, '--index', $index) 'index-deleted' | Out-Null
     $deleted = Invoke-SmokeProcess $cli @('search', 'ORBITGREEN742', '--index', $index, '--json') 'search-deleted' | ConvertFrom-Json
     if (@($deleted) | Where-Object { [IO.Path]::GetFileName($_.path) -eq $name }) { throw 'Deleted fixture remains searchable.' }
-    $result = @{ result = 'passed'; os = [Environment]::OSVersion.VersionString; path = 'System32 and Windows only'; realModel = $true;
-       checks = @('CLI', 'installed GUI WebView', 'setup', 'Unicode paths', 'CPU embeddings', 'FTS', 'idempotence', 'restart',
+    $result = @{ result = 'passed'; device = $Device; os = [Environment]::OSVersion.VersionString; path = 'System32 and Windows only'; realModel = $true;
+       checks = @('CLI', 'installed GUI WebView', 'setup', 'Unicode paths', "$Device embeddings", 'actual GUI worker device logs', 'FTS', 'idempotence', 'restart',
            'live watcher add/change/rename/delete', 'delete', 'uninstall') }
 } finally {
     if ($installed) {

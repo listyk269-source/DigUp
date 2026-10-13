@@ -15,7 +15,7 @@ mod watcher;
 use helper::{IndexService, Launch, ModelDownload, SearchService};
 use options::{Options, DEFAULT_HOTKEY};
 use serde_json::{json, Value};
-use settings::Settings;
+use settings::{Device, Settings};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -38,6 +38,8 @@ const FIELD_HEIGHT: f64 = 56.0;
 struct Shell {
     options: Options,
     settings: Mutex<Settings>,
+    /// Serializes applying settings with watcher-triggered helper launches, outside the UI thread.
+    configuration: Mutex<()>,
     settings_path: PathBuf,
     search: SearchService,
     index: IndexService,
@@ -112,10 +114,7 @@ impl Shell {
             args,
             env: self
                 .options
-                .models
-                .iter()
-                .map(|models| ("DIGUP_MODELS".to_string(), models.display().to_string()))
-                .collect(),
+                .helper_environment(self.settings.lock().unwrap().device),
             log: Some(self.logs.join(log)),
             background: true,
         }
@@ -225,8 +224,11 @@ fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
         "hotkey": shortcut_text(&shell.hotkey()),
         "model": shell.model_state.lock().unwrap().clone(),
         "auto": shell.options.debug_setup,
+        "debugDevice": shell.options.debug_device,
         "autostart": autostart::enabled(),
         "autostartSupported": cfg!(windows),
+        "device": shell.options.effective_device(shell.settings.lock().unwrap().device),
+        "deviceOverridden": shell.options.device_is_overridden(),
     })
 }
 
@@ -250,24 +252,37 @@ async fn pick_folders(app: AppHandle) -> Vec<String> {
 
 /// Setup's last step: the folders are saved and indexing starts (once the model is in).
 #[tauri::command]
-fn finish_setup(
+async fn finish_setup(
     app: AppHandle,
     shell: State<'_, Arc<Shell>>,
     folders: Vec<String>,
     code_roots: Option<Vec<String>>,
     launch_at_login: Option<bool>,
+    device: Option<Device>,
 ) -> Result<(), String> {
-    let was_enabled = autostart::enabled();
-    if let Some(enabled) = launch_at_login {
-        autostart::set(enabled)?;
-    }
-    {
+    let shell = shell.inner().clone();
+    let apply = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _configuration = shell.configuration.lock().unwrap();
+        if shell.shutting_down.load(Ordering::SeqCst) {
+            return Err("DigUp is shutting down".to_string());
+        }
+        let was_enabled = autostart::enabled();
+        if let Some(enabled) = launch_at_login {
+            autostart::set(enabled)?;
+        }
         let mut settings = shell.settings.lock().unwrap();
         let mut updated = settings.clone();
         updated.folders = folders;
         if let Some(code_roots) = code_roots {
             updated.code_roots = code_roots;
         }
+        if !shell.options.device_is_overridden() {
+            if let Some(device) = device {
+                updated.device = device;
+            }
+        }
+        let device_changed = updated.device != settings.device;
         updated.set_up = true;
         if let Err(error) = updated.save(&shell.settings_path) {
             if launch_at_login.is_some() {
@@ -276,8 +291,15 @@ fn finish_setup(
             return Err(format!("Can't save the settings: {error}"));
         }
         *settings = updated;
-    }
-    apply_folders(&app);
+        drop(settings);
+        if device_changed {
+            shell.index.stop();
+        }
+        apply_folders(&apply);
+        Ok(())
+    })
+    .await
+    .map_err(|error| error.to_string())??;
     if let Some(window) = app.get_webview_window("setup") {
         let _ = window.close();
     }
@@ -336,7 +358,11 @@ fn debug_query(shell: State<'_, Arc<Shell>>) -> Option<String> {
 
 /// Debug runs: what the page showed for the debug query, printed (and the shell quits, if asked).
 #[tauri::command]
-fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, report: Value) {
+fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value) {
+    let saved_device = shell.settings.lock().unwrap().device;
+    report["savedDevice"] = json!(saved_device);
+    report["devicePreference"] = json!(shell.options.effective_device(saved_device));
+    report["deviceOverridden"] = json!(shell.options.device_is_overridden());
     println!("{report}");
     if let Some(path) = &shell.options.debug_report {
         if std::fs::write(path, report.to_string()).is_err() {
@@ -460,11 +486,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
         Launch {
             program: options.helper.clone(),
             args: search_args,
-            env: options
-                .models
-                .iter()
-                .map(|models| ("DIGUP_MODELS".to_string(), models.display().to_string()))
-                .collect(),
+            env: options.helper_environment(settings.device),
             log: Some(logs.join("search.log")),
             background: false, // it answers typing
         },
@@ -491,6 +513,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
     let shell = Arc::new(Shell {
         options,
         settings: Mutex::new(settings),
+        configuration: Mutex::new(()),
         settings_path,
         search,
         index,
@@ -575,7 +598,10 @@ fn apply_folders(app: &AppHandle) {
         search_args.extend(["--exclude-ext".to_string(), extension.clone()]);
     }
     search_args.extend(folders.clone());
-    shell.search.configure(search_args);
+    let environment = shell
+        .options
+        .helper_environment(shell.settings.lock().unwrap().device);
+    shell.search.configure(search_args, environment);
     for folder in folders.iter().chain(code_roots.iter()) {
         let _ = app.asset_protocol_scope().allow_directory(folder, true);
     }
@@ -622,6 +648,7 @@ fn run_index(app: &AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let _configuration = shell.configuration.lock().unwrap();
         if shell.indexing_paused.load(Ordering::SeqCst)
             || shell.shutting_down.load(Ordering::SeqCst)
         {

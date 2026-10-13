@@ -57,6 +57,15 @@
       </div>
       <p class="subtitle centered" id="ready-text">DigUp lives in the tray, which shows how indexing is going. Files are
         searchable by name at once, and by what's in them as they're indexed.</p>
+      <div class="device-option">
+        <label for="device">Processing device</label>
+        <select id="device" aria-describedby="device-help">
+          <option value="auto">Auto (recommended)</option>
+          <option value="cpu">CPU</option>
+          <option value="gpu">GPU</option>
+        </select>
+        <p class="note" id="device-help" aria-live="polite"></p>
+      </div>
       <label class="startup" id="startup-option" hidden><input type="checkbox" id="launch-at-login"> Start DigUp when I sign in to Windows</label>
     </section>
   </main>

@@ -5,6 +5,38 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Device {
+    #[default]
+    Auto,
+    Cpu,
+    Gpu,
+}
+
+impl Device {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Cpu => "cpu",
+            Self::Gpu => "gpu",
+        }
+    }
+}
+
+impl std::str::FromStr for Device {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "auto" => Ok(Self::Auto),
+            "cpu" => Ok(Self::Cpu),
+            "gpu" => Ok(Self::Gpu),
+            _ => Err("Device must be auto, cpu, or gpu".into()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
@@ -18,6 +50,8 @@ pub struct Settings {
     pub skip_types: Vec<String>,
     /// The panel's hotkey (Tauri's accelerator form); empty: the default.
     pub hotkey: String,
+    /// Inference device preference; Auto can fall back to CPU when a GPU cannot start.
+    pub device: Device,
     /// Onboarding is done: the shell starts in the tray.
     pub set_up: bool,
 }
@@ -66,11 +100,13 @@ mod tests {
         };
         settings.save(&path).unwrap();
         settings.set_up = true;
+        settings.device = Device::Gpu;
         settings.save(&path).unwrap();
         let loaded = Settings::load(&path);
         assert_eq!(loaded.folders, settings.folders);
         assert_eq!(loaded.code_roots, settings.code_roots);
         assert!(loaded.set_up);
+        assert_eq!(loaded.device, Device::Gpu);
         assert!(!path.with_extension("json.new").exists());
         std::fs::remove_dir_all(temporary).unwrap();
     }
@@ -83,5 +119,16 @@ mod tests {
         assert!(settings.skip_types.is_empty());
         assert!(settings.hotkey.is_empty());
         assert!(settings.code_roots.is_empty());
+        assert_eq!(settings.device, Device::Auto);
+    }
+
+    #[test]
+    fn device_values_round_trip() {
+        for device in [Device::Auto, Device::Cpu, Device::Gpu] {
+            let encoded = serde_json::to_string(&device).unwrap();
+            assert_eq!(encoded, format!("\"{}\"", device.as_str()));
+            assert_eq!(serde_json::from_str::<Device>(&encoded).unwrap(), device);
+        }
+        assert!("cuda".parse::<Device>().is_err());
     }
 }

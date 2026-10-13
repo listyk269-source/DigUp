@@ -110,3 +110,12 @@ footer {
 .startup { display: block; max-width: 470px; margin: 24px auto 0; }
 .startup[hidden] { display: none; }
 .startup input { accent-color: var(--moss); vertical-align: middle; }
+
+.device-option { max-width: 470px; margin: 20px auto 0; }
+.device-option label { display: block; font-weight: 600; margin-bottom: 6px; }
+.device-option select {
+  width: 100%; min-height: 36px; padding: 6px 10px; font: inherit;
+  color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 7px;
+}
+.device-option select:focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; }
+.device-option .note { font-size: 12px; margin: 8px 0 0; line-height: 1.45; }

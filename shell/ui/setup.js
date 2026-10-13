@@ -30,6 +30,9 @@ async function start() {
   showKeys(info.hotkey);
   $("startup-option").hidden = !info.autostartSupported;
   $("launch-at-login").checked = !!info.autostart;
+  $("device").value = info.device || "auto";
+  $("device").disabled = !!info.deviceOverridden;
+  showDevice();
   if (!firstTime) page = 1;   // Choose Folders…: straight to the folders
   const asked = PAGES.indexOf(new URLSearchParams(location.search).get("page"));   // dev snapshots: ?page=folders
   if (asked >= 0) page = asked;
@@ -53,15 +56,19 @@ $("next").addEventListener("click", async () => {
     return;
   }
   $("next").disabled = true;
+  $("next").textContent = "Applying…";
+  $("back").disabled = true;
   try {
     await invoke("finish_setup", {
       folders: chosenFolders(),
       codeRoots: chosenCodeFolders(),
       launchAtLogin: info.auto || !info.autostartSupported ? null : $("launch-at-login").checked,
+      device: info.deviceOverridden ? null : $("device").value,
     });
   } catch (error) {
     $("model").textContent = String(error);
-    $("next").disabled = false;
+    $("back").disabled = false;
+    render();
   }
 });
 
@@ -75,6 +82,12 @@ async function clickThrough() {
   while (page < PAGES.length - 1) {
     $("next").click();
     await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  // Exercise the same select and finish_setup path as a person using the installed WebView.
+  if (info.debugDevice) {
+    if ($("device").disabled) throw new Error("A launch override prevents the device selection smoke test");
+    $("device").value = info.debugDevice;
+    $("device").dispatchEvent(new Event("change", { bubbles: true }));
   }
   $("next").click();
 }
@@ -170,6 +183,19 @@ $("add-code-folder").addEventListener("click", async () => {
 });
 
 // MARK: The shortcut and the model
+
+function showDevice() {
+  const descriptions = {
+    auto: "Uses an available GPU and falls back to CPU if it cannot start.",
+    cpu: "Uses the processor. No compatible graphics driver is needed.",
+    gpu: "Requires a compatible GPU. If it cannot start, choose Auto or CPU.",
+  };
+  $("device-help").textContent = info.deviceOverridden
+    ? "The processing device is fixed for this launch. Restart without the device override to change it."
+    : `${descriptions[$("device").value]} Changing this restarts processing and keeps your index.`;
+}
+
+$("device").addEventListener("change", showDevice);
 
 function showKeys(hotkey) {
   const keys = isMac ? [...hotkey.replace(/[^⌃⌥⇧⌘]/g, "")].concat(hotkey.replace(/[⌃⌥⇧⌘]/g, "")) : hotkey.split("+");
