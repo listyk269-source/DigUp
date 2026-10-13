@@ -74,8 +74,8 @@ impl IndexStatus {
                 self.total = event["total"].as_u64();
                 if kind == "scanning" {
                     self.message = None;
-                    self.unavailable_by_index[usize::from(self.code)] = 0;
-                    self.unavailable = self.unavailable_by_index.iter().sum();
+                    // The helper reports availability separately, only when it changes after
+                    // its initial snapshot. A new scan does not imply that an offline root returned.
                 }
                 if event["state"] == "failed" {
                     self.message = Some(
@@ -205,5 +205,38 @@ mod tests {
         status.phase("starting", None);
         status.observe(&json!({"event":"exit"}));
         assert_eq!(status.stage, "stopped");
+    }
+
+    #[test]
+    fn repeated_scans_keep_unavailable_roots_until_availability_changes() {
+        let mut status = IndexStatus::default();
+        status.observe(&json!({"event":"scanning"}));
+        status.observe(&json!({"event":"missing", "folders":["D:/offline"], "unreadable":[]}));
+        status.observe(&json!({"event":"idle", "searchable":2}));
+        assert_eq!(status.unavailable, 1);
+        status.observe(&json!({"event":"scanning"}));
+        status.observe(&json!({"event":"sync", "searchable":2}));
+        status.observe(&json!({"event":"idle", "searchable":2}));
+        assert_eq!(status.unavailable, 1);
+        // Reconnection, removing that root, or a new helper's initial snapshot clears it.
+        status.observe(&json!({"event":"missing", "folders":[], "unreadable":[]}));
+        assert_eq!(status.unavailable, 0);
+    }
+
+    #[test]
+    fn replacement_helper_clears_missing_roots_in_both_indexes() {
+        let mut status = IndexStatus::default();
+        status.observe(&json!({"event":"missing", "folders":["D:/offline"], "unreadable":[]}));
+        status.observe(&json!({"event":"missing", "code":true, "folders":["E:/offline-code"], "unreadable":[]}));
+        status.observe(&json!({"event":"idle", "searchable":2}));
+        assert_eq!(status.unavailable, 2);
+        // A replacement helper has no code roots, then scans a readable main root.
+        status.observe(&json!({"event":"missing", "code":true, "folders":[], "unreadable":[]}));
+        assert_eq!(status.unavailable, 1);
+        status.observe(&json!({"event":"scanning"}));
+        assert_eq!(status.unavailable, 1);
+        status.observe(&json!({"event":"missing", "folders":[], "unreadable":[]}));
+        status.observe(&json!({"event":"idle", "searchable":2}));
+        assert_eq!(status.unavailable, 0);
     }
 }

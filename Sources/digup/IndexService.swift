@@ -101,6 +101,8 @@ final class IndexService: @unchecked Sendable {
             finish()
             return 1
         }
+        // A replacement helper may no longer have code roots. Clear its previous availability snapshot too.
+        if code == nil { emit(["event": "missing", "folders": [String](), "unreadable": [String](), "code": true]) }
         Thread.detachNewThread { [self] in readCommands() }
         var newFiles = Set<Int64>(), newCode = Set<Int64>()
         var codeCounted = code == nil
@@ -202,7 +204,8 @@ final class IndexService: @unchecked Sendable {
         let missing = part.roots.filter { !Arguments.isFolder($0) }
         let unreadable = part.roots.filter { !missing.contains($0) && !Arguments.isReadable($0) }
         let report = (missing.map(\.path), unreadable.map(\.path))
-        if unavailable[part.code].map({ $0 != report }) ?? !(missing.isEmpty && unreadable.isEmpty) {
+        // Always send the initial snapshot, including an empty one after roots were removed/reconnected.
+        if unavailable[part.code].map({ $0 != report }) ?? true {
             emit(["event": "missing", "folders": report.0, "unreadable": report.1, "code": part.code])
         }
         unavailable[part.code] = report
