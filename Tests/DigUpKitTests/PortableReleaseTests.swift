@@ -7,6 +7,31 @@ import WinSDK
 
 /// Real filesystem, extraction, SQLite/FTS5 and reconciliation checks; they deliberately need no embedding model.
 @Suite struct PortableReleaseTests {
+    #if !canImport(ImageIO)
+    @Test func unsupportedRawStaysFailedWithoutBlockingOtherFiles() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-raw-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let documents = base.appendingPathComponent("Фото с пробелами")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        for name in ["camera.cr2", "broken.jpg", "numbers.txt"] {
+            try Data("111 222 333 444".utf8).write(to: documents.appendingPathComponent(name))
+        }
+        let store = try IndexStore(directory: base.appendingPathComponent("index"))
+        let indexer = try Indexer(store: store, options: IndexOptions(),
+                                  makeEmbedder: { throw WorkerError.notFound("these fixtures need no model") })
+        #expect(try indexer.sync([documents]).added == 3)
+        var events: [Indexer.Event] = []
+        #expect(try indexer.run(onEvent: { events.append($0) }) == ["failed": 2, "done": 1])
+        #expect(events.filter { UnsupportedRawImage.matchesFailure($0.note) }.map(\.state) == ["failed"])
+        #expect(try store.unsupportedRawCount() == 1)
+        #expect(try store.pendingCount() == 0)
+        #expect(try keywordCount("333", store: store) == 1)
+        #expect(try indexer.sync([documents]).unchanged == 3)
+        #expect(try indexer.run().isEmpty)
+        #expect(try store.unsupportedRawCount() == 1)
+    }
+    #endif
+
     @Test func progressStartsWithTheFilteredQueueBeforeReadingFiles() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-progress-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }

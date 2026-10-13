@@ -11,7 +11,8 @@ signal(SIGPIPE, SIG_IGN)   // a dead worker must surface as an error, not kill u
 let usage = """
     digup: search your files by meaning (DigUp developer CLI)
 
-      digup estimate <folder>... [--json]     what would be indexed, and how long the first pass takes
+      digup estimate <folder>... [--json] [--counts-only]
+                                              what would be indexed; --counts-only skips duration/page probing
       digup index <folder>... [--limit N]     sync the index with these folders, embed what's new, then the rest
                                               of long PDFs and documents
       digup search <words>... [--kind K,K] [-n 10] [--json]
@@ -227,10 +228,11 @@ func embedderSource() -> String? {
 func estimate(_ args: Arguments) throws {
     guard !args.positional.isEmpty else { throw CLIError("which folders? e.g. digup estimate ~/Documents") }
     let options = args.options
+    let countsOnly = args.flags.contains("--counts-only")
     // What indexing costs on this machine: as measured by indexing here, kind by kind, once there's enough of it;
     // until then the M4 Pro's fixed costs, scaled by a second's speed check (done once and kept beside the index).
-    var measured = MeasuredCosts.load(from: args.indexFolder)
-    if measured.speed == nil, let speed = MeasuredCosts.Speed.measure() {
+    var measured = countsOnly ? MeasuredCosts() : MeasuredCosts.load(from: args.indexFolder)
+    if !countsOnly, measured.speed == nil, let speed = MeasuredCosts.Speed.measure() {
         measured.speed = speed
         MeasuredCosts.setSpeed(speed, in: args.indexFolder)
     }
@@ -241,7 +243,7 @@ func estimate(_ args: Arguments) throws {
         guard Arguments.isFolder(folder), Arguments.isReadable(folder) else {
             if args.flags.contains("--json") {
                 emit(["folder": folder.path, "readable": false, "seconds": 0, "files": [String: Int](),
-                      "pdf_pages": 0, "audio_seconds": 0, "video_seconds": 0])
+                      "pdf_pages": 0, "audio_seconds": 0, "video_seconds": 0, "counts_only": countsOnly])
             } else {
                 print("\(tilde(folder.path))    can't read it (not there, or not allowed in macOS privacy settings)")
             }
@@ -249,7 +251,8 @@ func estimate(_ args: Arguments) throws {
         }
         let started = Date()
         let crawl = Crawler.crawl([folder], options: options)
-        let parts = Estimator.estimates(bySubfolder: crawl.candidates, of: folder.path, options: options, costs: costs)
+        let parts = Estimator.estimates(bySubfolder: crawl.candidates, of: folder.path, options: options, costs: costs,
+                                        countsOnly: countsOnly)
         let estimate = parts.values.reduce(Estimate(), +)
         // Biggest first; the app lists them under the folder, so that a long first pass can be cut down.
         let subfolders = parts.filter { $0.key != folder.path }.sorted {
@@ -262,6 +265,7 @@ func estimate(_ args: Arguments) throws {
             }
             // One line per folder, as soon as it's done (the app's onboarding shows them as they come).
             emit(["folder": folder.path, "seconds": estimate.seconds, "readable": true, "files": files(estimate),
+                  "counts_only": countsOnly,
                   "pdf_pages": estimate.pdfPages, "pdf_pages_total": estimate.pdfPagesTotal,
                   "audio_seconds": estimate.audioSeconds, "video_seconds": estimate.videoSeconds,
                   "long_files": estimate.longFiles, "later_seconds": estimate.laterSeconds,
@@ -278,6 +282,10 @@ func estimate(_ args: Arguments) throws {
         var kinds: [String] = []
         for kind in FileKind.allCases {
             guard let count = estimate.files[kind], count > 0 else { continue }
+            if countsOnly {
+                kinds.append("\(number(count)) \(kind.rawValue) \(count == 1 ? "file" : "files")")
+                continue
+            }
             switch kind {
             case .pdf: kinds.append("\(number(count)) PDFs (\(number(estimate.pdfPagesTotal)) pages; \(number(estimate.pdfPages)) in the first pass)")
             case .audio: kinds.append("\(number(count)) audio (\(duration(estimate.audioSeconds)))")
@@ -287,14 +295,18 @@ func estimate(_ args: Arguments) throws {
             default: kinds.append("\(number(count)) \(kind.rawValue)\(count == 1 ? "" : "s")")
             }
         }
-        print("\(tilde(folder.path))    first index ≈ \(duration(estimate.seconds))"
-              + (args.code ? ", index ≈ \(ByteCountFormatter.string(fromByteCount: Int64(estimate.bytes), countStyle: .file))" : ""))
+        if countsOnly {
+            print(tilde(folder.path))
+        } else {
+            print("\(tilde(folder.path))    first index ≈ \(duration(estimate.seconds))"
+                  + (args.code ? ", index ≈ \(ByteCountFormatter.string(fromByteCount: Int64(estimate.bytes), countStyle: .file))" : ""))
+        }
         print("  " + (kinds.isEmpty ? "nothing to index" : kinds.joined(separator: " · ")))
         if estimate.longFiles > 0 {
             print("  then the rest of \(number(estimate.longFiles)) long \(estimate.longFiles == 1 ? "file" : "files") "
                   + "≈ \(duration(estimate.laterSeconds))")
         }
-        if !subfolders.isEmpty {
+        if !countsOnly, !subfolders.isEmpty {
             print("  biggest subfolders: " + subfolders.prefix(5).map {
                 "\(($0.key as NSString).lastPathComponent) ≈ \(duration($0.value.seconds))"
             }.joined(separator: " · ") + (subfolders.count > 5 ? " · \(subfolders.count - 5) more" : ""))
@@ -306,7 +318,7 @@ func estimate(_ args: Arguments) throws {
         }
         print(String(format: "  (looked at it in %.2f s)", Date().timeIntervalSince(started)))
     }
-    if args.positional.count > 1, !args.flags.contains("--json") { print("all together ≈ \(duration(total))") }
+    if !countsOnly, args.positional.count > 1, !args.flags.contains("--json") { print("all together ≈ \(duration(total))") }
 }
 
 func index(_ args: Arguments) throws {

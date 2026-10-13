@@ -68,8 +68,7 @@ extension ImageExtractor {
 
     /// Why a picture of a kind neither stb nor ffmpeg decodes isn't readable, for the file's note.
     static func notReadYet(_ ext: String) -> String? {
-        let raw: Set<String> = ["cr2", "nef", "arw", "dng", "raf", "orf", "rw2"]
-        return raw.contains(ext) ? "RAW pictures (\(ext.uppercased())) aren't read on this system yet" : nil
+        UnsupportedRawImage.reason(for: ext)
     }
 }
 

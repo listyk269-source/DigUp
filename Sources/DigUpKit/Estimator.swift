@@ -115,8 +115,9 @@ public enum Estimator {
     /// Estimates for each subfolder one level down, and for the files right in `folder` (under its own path), from
     /// the same look at each file: the folder lists show where a big first pass comes from.
     /// Subfolders are named under `folder` as given, though the walk reports real paths (/private/var for /var).
+    /// `countsOnly` is for folder selection: metadata from the crawl is enough, without opening PDF/media headers.
     public static func estimates(bySubfolder candidates: [Candidate], of folder: String, options: IndexOptions,
-                                 costs: Costs = Costs()) -> [String: Estimate] {
+                                 costs: Costs = Costs(), countsOnly: Bool = false) -> [String: Estimate] {
         let prefix = folder.hasSuffix("/") ? folder : folder + "/"
         let real = FolderSelection.realPath(folder) + "/"
         var groups: [String: [Candidate]] = [:]
@@ -126,6 +127,13 @@ public enum Estimator {
             let key = rest.flatMap { rest in rest.firstIndex(of: "/").map { prefix + rest[..<$0] } } ?? folder
             groups[key, default: []].append(file)
         }
-        return groups.mapValues { estimate($0, options: options, costs: costs) }
+        return groups.mapValues { files in
+            if countsOnly {
+                var count = Estimate()
+                for file in files { count.files[file.kind, default: 0] += 1 }
+                return count
+            }
+            return estimate(files, options: options, costs: costs)
+        }
     }
 }

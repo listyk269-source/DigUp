@@ -1,5 +1,21 @@
 import Foundation
 
+/// Known unsupported RAW formats on the portable decoder. Match their persisted failure notes exactly so the UI
+/// can explain these separately from damaged files, without changing old index states or hiding other failures.
+public enum UnsupportedRawImage {
+    static let extensions: Set<String> = ["cr2", "nef", "arw", "dng", "raf", "orf", "rw2"]
+
+    static func reason(for ext: String) -> String? {
+        extensions.contains(ext) ? "RAW pictures (\(ext.uppercased())) aren't read on this system yet" : nil
+    }
+
+    static let failureNotes = extensions.sorted().compactMap { reason(for: $0).map { "unreadable: " + $0 } }
+
+    public static func matchesFailure(_ note: String?) -> Bool {
+        note.map(failureNotes.contains) ?? false
+    }
+}
+
 enum ExtractError: Error, CustomStringConvertible {
     case unreadable(String)
     case tooSmall(Int, Int)

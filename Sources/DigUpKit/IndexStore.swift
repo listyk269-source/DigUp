@@ -348,6 +348,17 @@ public final class IndexStore {
         return count
     }
 
+    /// A subset of failed rows whose exact notes identify unsupported RAW formats. Read-only and scoped like counts;
+    /// their state remains failed, so upgrading the UI never resets vectors or retries unsupported files.
+    public func unsupportedRawCount() throws -> Int {
+        var count = 0
+        let notes = UnsupportedRawImage.failureNotes
+        let placeholders = notes.map { _ in "?" }.joined(separator: ",")
+        try db.query("SELECT COUNT(*) FROM files WHERE state = 'failed' AND detail IN (\(placeholders))\(scopeSQL)",
+                     notes.map(SQLValue.text) + scopeValues) { count = Int($0.int(0)) }
+        return count
+    }
+
     /// Long files with pages or chunks still to read after their first step, in indexing order (`pending`'s).
     public func unfinished() throws -> [FileRecord] {
         var out: [FileRecord] = []

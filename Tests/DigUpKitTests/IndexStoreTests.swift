@@ -48,6 +48,41 @@ import WinSDK
         #expect(try store.pendingCount() == 2)
     }
 
+    @Test func unsupportedRawCountIsExactScopedAndReadOnly() throws {
+        let store = try IndexStore(directory: folder)
+        for (offset, ext) in UnsupportedRawImage.extensions.sorted().enumerated() {
+            let id = try store.insert(file("/chosen/picture.\(ext)", inode: UInt64(offset + 1)))
+            let note = "unreadable: RAW pictures (\(ext.uppercased())) aren't read on this system yet"
+            #expect(UnsupportedRawImage.matchesFailure(note))
+            try store.finish(id, state: "failed", detail: note)
+        }
+        let note = "unreadable: RAW pictures (CR2) aren't read on this system yet"
+        let elsewhere = try store.insert(file("/elsewhere/picture.cr2", inode: 8))
+        try store.finish(elsewhere, state: "failed", detail: note)
+        for (offset, detail) in ["unreadable: can't decode image", note + " (another error)",
+                                 "unreadable: RAW pictures (UNKNOWN) aren't read on this system yet"].enumerated() {
+            #expect(!UnsupportedRawImage.matchesFailure(detail))
+            let id = try store.insert(file("/chosen/broken-\(offset).jpg", inode: UInt64(offset + 9)))
+            try store.finish(id, state: "failed", detail: detail)
+        }
+        for (offset, state) in ["done", "skipped", "pending"].enumerated() {
+            let id = try store.insert(file("/chosen/other-state-\(offset).cr2", inode: UInt64(offset + 12)))
+            try store.finish(id, state: state, detail: note)
+        }
+        #expect(!UnsupportedRawImage.matchesFailure(nil))
+        let before = try store.files(under: ["/chosen", "/elsewhere"]).map { "\($0.id):\($0.state)" }.sorted()
+        let beforeCounts = try store.counts()
+        #expect(try store.unsupportedRawCount() == 8)
+        store.scope = ["/chosen"]
+        #expect(try store.unsupportedRawCount() == 7)
+        store.scope = []
+        #expect(try store.unsupportedRawCount() == 0)
+        store.scope = nil
+        #expect(try store.files(under: ["/chosen", "/elsewhere"]).map { "\($0.id):\($0.state)" }.sorted() == before)
+        #expect(try store.counts().byKindAndState == beforeCounts.byKindAndState)
+        #expect(try store.counts().vectors == beforeCounts.vectors)
+    }
+
     @Test func aFileTheHelperStoppedOnIsNotReadAgain() throws {
         let store = try IndexStore(directory: folder)
         try store.insert(file("/a/stuck.pdf", inode: 1))

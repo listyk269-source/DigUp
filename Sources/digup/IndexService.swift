@@ -253,7 +253,8 @@ final class IndexService: @unchecked Sendable {
             }, onEvent: { event in
                 emit(["event": "file", "new": isNew, "done": event.done, "total": event.total, "path": event.path,
                       "kind": event.kind.rawValue, "state": event.state, "seconds": event.seconds,
-                      "note": event.note ?? "", "code": part.code])
+                      "note": event.note ?? "", "code": part.code,
+                      "unsupported_raw": event.state == "failed" && UnsupportedRawImage.matchesFailure(event.note)])
             })
             if !states.isEmpty {
                 emit(["event": "summary", "new": isNew, "states": states, "code": part.code,
@@ -350,6 +351,7 @@ final class IndexService: @unchecked Sendable {
             fields[prefix + "pending"] = pending
             fields[prefix + "failed"] = failed
             fields[prefix + "skipped"] = skipped
+            fields[prefix + "unsupported_raw"] = (try? part.store.unsupportedRawCount()) ?? 0
             fields[prefix + "vectors"] = counts.vectors
             if !part.code { fields["unfinished"] = counts.unfinished }   // long files with pages or chunks left to read
         }
