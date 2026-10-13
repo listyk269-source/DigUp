@@ -94,7 +94,23 @@ public struct MeasuredCosts: Codable, Sendable, Equatable {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try? encoder.encode(self).write(to: Self.file(in: folder), options: .atomic)
+        guard let data = try? encoder.encode(self) else { return }
+        #if os(Windows)
+        // Foundation reports Win32 ERROR_SHARING_VIOLATION as fileWriteNoPermission; its underlying Win32Error
+        // type is private. A briefly held reader (including a virus scanner) must not silently drop an update.
+        // Keep atomic replacement and bound retries to 150 ms; persistent denial leaves the previous file intact.
+        for attempt in 0..<5 {
+            do {
+                try data.write(to: Self.file(in: folder), options: .atomic)
+                return
+            } catch {
+                guard (error as? CocoaError)?.code == .fileWriteNoPermission, attempt < 4 else { return }
+                Thread.sleep(forTimeInterval: 0.01 * Double(1 << attempt))
+            }
+        }
+        #else
+        try? data.write(to: Self.file(in: folder), options: .atomic)
+        #endif
     }
 
     private static let lock = NSLock()

@@ -61,4 +61,18 @@ import Testing
         #expect(saved.speed == MeasuredCosts.Speed(embedding: 1.5, ocr: 1))
         #expect(saved.tallies["docChunk"]?.units == 2)   // the speed joined what was there
     }
+
+    @Test func repeatedAtomicUpdatesKeepTheLatestSpeedAndMeasurements() {
+        var measured = MeasuredCosts()
+        measured.add("docChunk", units: 20, seconds: 2)
+        measured.save(to: folder)
+        // These real atomic replacements exposed intermittent Windows sharing violations under the full suite.
+        for i in 1...100 {
+            let speed = MeasuredCosts.Speed(embedding: Double(i) / 10 + 1, ocr: 1)
+            MeasuredCosts.setSpeed(speed, in: folder)
+            let saved = MeasuredCosts.load(from: folder)
+            #expect(saved.speed == speed)
+            #expect(saved.tallies == measured.tallies)
+        }
+    }
 }
