@@ -66,7 +66,16 @@ import Testing
         #expect(try found(store, "quokka").isEmpty)
 
         var steps: [Indexer.Step] = []
-        #expect(try indexer.finishLongFiles(onStep: { steps.append($0) }) == ["done": 1])
+        var starts: [Int] = []
+        let rest = try indexer.finishLongFiles(onStart: { total in
+            starts.append(total)
+            #expect(steps.isEmpty && embedder.texts == 30)
+        }, onStep: { step in
+            #expect(starts == [90])
+            steps.append(step)
+        })
+        #expect(rest == ["done": 1])
+        #expect(starts == [90])
         #expect(steps.map(\.done) == [30, 60, 90])
         #expect(steps.map(\.total) == [90, 90, 90])
         #expect(steps.map(\.state) == ["partial", "partial", "done"])

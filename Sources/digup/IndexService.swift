@@ -12,7 +12,8 @@ import WinSDK
 ///
 /// Protocol: one command per line on stdin, one JSON event per line on stdout.
 ///   stdin:  sync | sync code | stop | backfill on | backfill off      (EOF = stop)
-///   stdout: {"event": "missing" | "pruned" | "sync" | "file" | "rest" | "summary" | "waiting" | "idle" | "error" |
+///   stdout: {"event": "missing" | "pruned" | "scanning" | "sync" | "indexing" | "file" | "reading-rest" | "rest" |
+///            "summary" | "waiting" | "idle" | "error" |
 ///            "exit", ...}; events about the code index say "code": true
 ///
 /// The loop: sync, index what the sync just queued (if it's a few files: new files go first, on any power source),
@@ -217,6 +218,7 @@ final class IndexService: @unchecked Sendable {
             lock.withLock { yieldAt = Date() + max(took, 2) }
         }
         do {
+            emit(["event": "scanning", "code": part.code])
             let summary = try part.indexer.sync(availableRoots(part))
             if summary.queued.count <= newFilesLimit { newFiles.formUnion(summary.queued) }
             emitCounts("sync", [
@@ -243,6 +245,8 @@ final class IndexService: @unchecked Sendable {
                     stopRequested || (!isNew && !backfillAllowed)
                         || Date() >= yieldAt && (syncRequested || part.code && codeSyncRequested)
                 }
+            }, onStart: { total in
+                emit(["event": "indexing", "new": isNew, "done": 0, "total": total, "code": part.code])
             }, onEvent: { event in
                 emit(["event": "file", "new": isNew, "done": event.done, "total": event.total, "path": event.path,
                       "kind": event.kind.rawValue, "state": event.state, "seconds": event.seconds,
@@ -269,6 +273,8 @@ final class IndexService: @unchecked Sendable {
                     stopRequested || !backfillAllowed
                         || Date() >= yieldAt && (syncRequested || codeSyncRequested && code != nil)
                 }
+            }, onStart: { total in
+                emit(["event": "reading-rest", "done": 0, "total": total, "code": false])
             }, onStep: { step in
                 emit(["event": "rest", "done": step.done, "total": step.total, "files": step.files, "path": step.path,
                       "kind": step.kind.rawValue, "state": step.state, "seconds": step.seconds, "note": step.note ?? ""])
@@ -326,17 +332,21 @@ final class IndexService: @unchecked Sendable {
         for part in parts {
             guard let counts = try? part.store.counts() else { continue }
             let prefix = part.code ? "code_" : ""
-            var files = 0, searchable = 0, pending = 0
+            var files = 0, searchable = 0, pending = 0, failed = 0, skipped = 0
             for states in counts.byKindAndState.values {
                 for (state, count) in states {
                     files += count
                     if state == "done" || state == "partial" { searchable += count }
                     if state == "pending" { pending += count }
+                    if state == "failed" { failed += count }
+                    if state == "skipped" { skipped += count }
                 }
             }
             fields[prefix + "files"] = files
             fields[prefix + "searchable"] = searchable
             fields[prefix + "pending"] = pending
+            fields[prefix + "failed"] = failed
+            fields[prefix + "skipped"] = skipped
             fields[prefix + "vectors"] = counts.vectors
             if !part.code { fields["unfinished"] = counts.unfinished }   // long files with pages or chunks left to read
         }

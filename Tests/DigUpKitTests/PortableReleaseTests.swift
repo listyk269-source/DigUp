@@ -7,6 +7,39 @@ import WinSDK
 
 /// Real filesystem, extraction, SQLite/FTS5 and reconciliation checks; they deliberately need no embedding model.
 @Suite struct PortableReleaseTests {
+    @Test func progressStartsWithTheFilteredQueueBeforeReadingFiles() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-progress-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let documents = base.appendingPathComponent("Документы с пробелами")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        for name in ["один", "два", "три"] {
+            try Data("111 222 333 444".utf8).write(to: documents.appendingPathComponent(name + ".txt"))
+        }
+        let store = try IndexStore(directory: base.appendingPathComponent("index"))
+        let indexer = try Indexer(store: store, options: IndexOptions(),
+                                  makeEmbedder: { throw WorkerError.notFound("numeric fixture needs no model") })
+        let added = try indexer.sync([documents])
+        #expect(added.queued.count == 3)
+        var starts: [Int] = []
+        var events: [Indexer.Event] = []
+        let states = try indexer.run(limit: 1, only: Set(added.queued.prefix(2)), onStart: { total in
+            starts.append(total)
+            #expect(events.isEmpty)
+            #expect((try? store.pendingCount()) == 3)
+        }, onEvent: { event in
+            #expect(starts == [1])
+            events.append(event)
+        })
+        #expect(states == ["done": 1])
+        #expect(starts == [1])
+        #expect(events.map(\.done) == [1] && events.map(\.total) == [1])
+        #expect(try store.pendingCount() == 2)
+        #expect(try indexer.run(only: [], onStart: { starts.append($0) }, onEvent: { _ in
+            Issue.record("an empty queue must not process a file")
+        }).isEmpty)
+        #expect(starts == [1, 0])
+    }
+
     @Test func unicodeFolderLifecycleKeepsOneSearchableRow() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-release-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }
@@ -97,6 +130,55 @@ import WinSDK
     }
 
     #if os(Windows)
+    @Test func largeSparseFilesUse64BitMetadataBeforeTypeFiltering() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-large-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        for name in ["ASCII", "Кириллица с пробелами"] {
+            let folder = base.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            var paths: [String] = []
+            defer {
+                // Foundation's stat can itself trap when deleting these fixtures. Use the wide native API.
+                for path in paths { _ = path.withCString(encodedAs: UTF16.self) { DeleteFileW($0) } }
+            }
+            let sizes: [Int64] = [(1 << 31) - 1, 1 << 31, 3 << 30, 5 << 30]
+            for (i, size) in sizes.enumerated() {
+                let path = WindowsPaths.extended(folder.appendingPathComponent("file\(i).jpg", isDirectory: false).path)
+                paths.append(path)
+                try makeSparseFile(path, size: size)
+            }
+            // A large unsupported file must not crash a scan before extension filtering runs.
+            let ignored = WindowsPaths.extended(folder.appendingPathComponent("ignored.bin", isDirectory: false).path)
+            paths.append(ignored)
+            try makeSparseFile(ignored, size: 3 << 30)
+            let crawl = Crawler.crawl([folder], options: IndexOptions())
+            #expect(crawl.unreadableFolders.isEmpty)
+            #expect(crawl.candidates.map(\.size).sorted() == sizes)
+            #expect(crawl.skipped["other type"] == 1)
+            let estimate = Estimator.estimate(crawl.candidates, options: IndexOptions())
+            #expect(estimate.files == [.image: 4])
+        }
+    }
+
+    private func makeSparseFile(_ path: String, size: Int64) throws {
+        let handle = path.withCString(encodedAs: UTF16.self) {
+            CreateFileW($0, DWORD(GENERIC_WRITE), DWORD(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE),
+                        nil, DWORD(CREATE_NEW), DWORD(FILE_ATTRIBUTE_NORMAL), nil)
+        }
+        try #require(handle != nil && handle != INVALID_HANDLE_VALUE)
+        defer { CloseHandle(handle) }
+        var returned: DWORD = 0
+        // Mark sparse before extending: these multi-GiB logical files allocate no data blocks.
+        try #require(DeviceIoControl(handle, 0x0009_00C4, nil, 0, nil, 0, &returned, nil)) // FSCTL_SET_SPARSE
+        var end = LARGE_INTEGER()
+        end.QuadPart = size
+        try #require(SetFilePointerEx(handle, end, nil, DWORD(FILE_BEGIN)))
+        try #require(SetEndOfFile(handle))
+        var high: DWORD = 0
+        let low = path.withCString(encodedAs: UTF16.self) { GetCompressedFileSizeW($0, &high) }
+        #expect(high == 0 && low < 65_536)
+    }
+
     @Test func legacyRootCasingKeepsExistingRowAndVectorsWithoutMergingHardLinks() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-legacy-case-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }

@@ -161,11 +161,13 @@ public final class Indexer {
     /// their first step (`IndexOptions.pdfStep` pages, `docStep` chunks) and stay `partial` for `finishLongFiles`.
     /// Per-file problems are recorded on the file; a dead worker or a settings mismatch stops the run (pending files stay
     /// pending, so the next run resumes). `shouldStop` is asked between batches: pausing, or new files that should go
-    /// first.
+    /// first. `onStart` reports the actual queue size before extraction or model preparation begins.
     @discardableResult
     public func run(limit: Int? = nil, only ids: Set<Int64>? = nil, shouldStop: () -> Bool = { false },
+                    onStart: (Int) -> Void = { _ in },
                     onEvent: (Event) -> Void = { _ in }) throws -> [String: Int] {
         let queue = try store.pending(limit: limit, only: ids)
+        onStart(queue.count)
         var states: [String: Int] = [:]
         var done = 0
         try process(Self.batches(queue).map { Job(files: $0) }, shouldStop: shouldStop) { _, job, results, seconds in
@@ -197,8 +199,10 @@ public final class Indexer {
     /// a step at a time. Each step is saved as one transaction, so stopping between steps (pausing, new files going
     /// first) loses nothing, and the next pass goes on from there. It runs once nothing is pending: a book's last
     /// pages matter less than everything else's first ones, and they take a while (0.04–0.2 s a page, 2026-10-09).
+    /// `onStart` reports the planned pages/chunks before the first step is read, in the same units as `Step.total`.
     @discardableResult
-    public func finishLongFiles(shouldStop: () -> Bool = { false }, onStep: (Step) -> Void = { _ in }) throws
+    public func finishLongFiles(shouldStop: () -> Bool = { false }, onStart: (Int) -> Void = { _ in },
+                                onStep: (Step) -> Void = { _ in }) throws
         -> [String: Int] {
         var jobs: [Job] = []
         for file in try store.unfinished() {
@@ -216,6 +220,7 @@ public final class Indexer {
         // Progress counts pages and chunks: what's read once each job is through.
         var through: [Int] = []
         for job in jobs { through.append((through.last ?? 0) + (job.step?.count ?? 0)) }
+        onStart(through.last ?? 0)
         var files = Set(jobs.map { $0.files[0].id }).count
         var states: [String: Int] = [:]
         var finished = Set<Int64>()

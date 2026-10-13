@@ -72,7 +72,13 @@ public enum Crawler {
             }
             #endif
             func visit(_ url: URL) {
+                #if os(Windows)
+                // Foundation's Windows stat can trap converting file sizes >= 2 GiB to Int32.
+                // The Windows walker and FileSystem.info already provide native 64-bit metadata.
+                let values: URLResourceValues? = nil
+                #else
                 let values = try? url.resourceValues(forKeys: Set(keys))
+                #endif
                 let isPackage = FileSystem.isPackage(url, values)
                 #if os(Windows)
                 let isDirectory = FileSystem.isDirectory(url)
