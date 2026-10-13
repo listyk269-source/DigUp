@@ -6,3 +6,4 @@
 *.toml text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+Resources/WindowsNotices/*.txt -text
