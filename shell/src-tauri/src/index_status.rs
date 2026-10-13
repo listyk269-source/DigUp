@@ -12,7 +12,10 @@ pub struct IndexStatus {
     pub unit: &'static str,
     pub code: bool,
     pub searchable: Option<u64>,
+    pub pending: Option<u64>,
     pub failed: Option<u64>,
+    /// A subset of failed rows with the extractor's explicit unsupported RAW reason.
+    pub unsupported_raw: Option<u64>,
     pub skipped: Option<u64>,
     pub unavailable: u64,
     pub message: Option<String>,
@@ -30,7 +33,9 @@ impl Default for IndexStatus {
             unit: "files",
             code: false,
             searchable: None,
+            pending: None,
             failed: None,
+            unsupported_raw: None,
             skipped: None,
             unavailable: 0,
             message: None,
@@ -77,9 +82,12 @@ impl IndexStatus {
                     // The helper reports availability separately, only when it changes after
                     // its initial snapshot. A new scan does not imply that an offline root returned.
                 }
-                if event["state"] == "failed" {
+                if kind == "file" {
+                    self.completed_file(event);
+                }
+                if event["state"] == "failed" && event["unsupported_raw"] != true {
                     self.message = Some(
-                        "A file couldn't be indexed. Other files can still be searched.".into(),
+                        "Some files could not be read. Indexing continues for other files.".into(),
                     );
                 }
             }
@@ -140,8 +148,39 @@ impl IndexStatus {
             (main.is_some() || code.is_some()).then(|| main.unwrap_or(0) + code.unwrap_or(0))
         };
         self.searchable = combined("searchable");
+        self.pending = combined("pending");
         self.failed = combined("failed");
+        self.unsupported_raw = combined("unsupported_raw");
         self.skipped = combined("skipped");
+    }
+
+    /// File events follow a committed pending row. Keep overall counts moving while a
+    /// long pass is running; sync/idle replaces them with the authoritative DB snapshot.
+    /// Rest events are parts of an already searchable file and must not count it twice.
+    fn completed_file(&mut self, event: &Value) {
+        let state = event["state"].as_str().unwrap_or_default();
+        if !matches!(state, "done" | "partial" | "failed" | "skipped") {
+            return;
+        }
+        if let Some(pending) = &mut self.pending {
+            *pending = pending.saturating_sub(1);
+        }
+        let increment = |count: &mut Option<u64>| {
+            if let Some(value) = count {
+                *value = value.saturating_add(1);
+            }
+        };
+        match state {
+            "done" | "partial" => increment(&mut self.searchable),
+            "skipped" => increment(&mut self.skipped),
+            "failed" => {
+                increment(&mut self.failed);
+                if event["unsupported_raw"] == true {
+                    increment(&mut self.unsupported_raw);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -149,6 +188,47 @@ impl IndexStatus {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn overall_queue_advances_across_rescans_and_long_parts_without_hiding_raw_errors() {
+        let mut status = IndexStatus::default();
+        status.observe(
+            &json!({"event":"sync", "searchable":10, "code_searchable":2,
+            "pending":4, "code_pending":1, "failed":84, "unsupported_raw":84, "skipped":0}),
+        );
+        assert_eq!((status.searchable, status.pending), (Some(12), Some(5)));
+        status.observe(&json!({"event":"file", "state":"done", "done":1, "total":4}));
+        status.observe(&json!({"event":"file", "state":"partial", "done":2, "total":4}));
+        status.observe(&json!({"event":"scanning"}));
+        assert_eq!(
+            (status.searchable, status.pending, status.failed),
+            (Some(14), Some(3), Some(84))
+        );
+        status.observe(&json!({"event":"file", "state":"failed", "unsupported_raw":true}));
+        assert_eq!(
+            (
+                status.failed,
+                status.unsupported_raw,
+                status.message.clone()
+            ),
+            (Some(85), Some(85), None)
+        );
+        status.observe(&json!({"event":"file", "state":"failed"}));
+        assert_eq!(
+            (status.failed, status.unsupported_raw),
+            (Some(86), Some(85))
+        );
+        assert!(status.message.is_some());
+        status.observe(&json!({"event":"file", "state":"skipped", "code":true}));
+        assert_eq!((status.pending, status.skipped), (Some(0), Some(1)));
+        status.observe(&json!({"event":"rest", "state":"done", "done":1, "total":2}));
+        assert_eq!((status.searchable, status.pending), (Some(14), Some(0)));
+        status.observe(
+            &json!({"event":"idle", "searchable":15, "pending":0, "failed":86,
+            "unsupported_raw":85, "skipped":1}),
+        );
+        assert_eq!(status.searchable, Some(15));
+    }
 
     #[test]
     fn progress_preserves_real_units_and_unknown_totals() {

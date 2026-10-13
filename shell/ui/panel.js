@@ -603,7 +603,7 @@ function renderIndexStatus() {
   };
   const details = {
     starting: "Preparing the local index. Files already indexed remain searchable.",
-    scanning: "Looking for new, changed and deleted files. The total is not known yet.",
+    scanning: "Checking for new, changed and deleted files. Earlier results stay searchable.",
     indexing: "Files become searchable as they are indexed. Counts are for this pass.",
     rest: "Long files are read in parts. Counts are for the remaining parts in this pass.",
     idle: "Watching the selected folders for changes.",
@@ -615,13 +615,19 @@ function renderIndexStatus() {
   };
   const number = (n) => n.toLocaleString();
   const counted = Number.isFinite(s.done) && Number.isFinite(s.total);
+  const overall = [s.searchable != null ? `${number(s.searchable)} files searchable` : "",
+    s.pending != null ? `${number(s.pending)} remaining` : ""].filter(Boolean).join(" · ");
+  const raw = Math.min(s.failed || 0, s.unsupported_raw || 0);
+  const failedFiles = Math.max(0, (s.failed || 0) - raw);
   $indexStatus.dataset.stage = s.stage;
   $indexTitle.textContent = titles[s.stage] || "Indexing";
-  $indexCount.textContent = counted ? `${number(s.done)} of ${number(s.total)} ${s.unit} processed`
-    : s.stage === "idle" && s.searchable != null ? `${number(s.searchable)} files searchable` : "";
-  const problems = [s.failed ? `${number(s.failed)} failed` : "", s.skipped ? `${number(s.skipped)} skipped` : "",
+  $indexCount.textContent = counted ? `${number(s.done)} of ${number(s.total)} ${s.unit} processed this pass` : overall;
+  const problems = [failedFiles ? `${number(failedFiles)} ${failedFiles === 1 ? "file" : "files"} couldn't be indexed` : "",
+    raw ? `${number(raw)} RAW ${raw === 1 ? "file" : "files"} not supported` : "",
+    s.skipped ? `${number(s.skipped)} files skipped` : "",
     s.unavailable ? `${number(s.unavailable)} folders unavailable` : ""].filter(Boolean).join(" · ");
-  $indexDetail.textContent = [s.message || details[s.stage], problems].filter(Boolean).join(" · ");
+  $indexDetail.textContent = [problems, s.message, counted ? overall : "", s.message ? "" : details[s.stage]]
+    .filter(Boolean).join(" · ");
   $indexDetail.title = $indexDetail.textContent;
   $indexProgress.hidden = !counted || s.total === 0 || s.done > s.total || !["indexing", "rest"].includes(s.stage);
   if (!$indexProgress.hidden) {
@@ -669,7 +675,7 @@ function report() {
         facts: [...$preview.querySelectorAll(".facts .title, .facts .line, .reason span")].map((node) => node.textContent),
         footer: [$summary.textContent, $keys.textContent],
         indexing: { current: state.indexStatus, history: progressHistory, visible: !$indexStatus.hidden,
-          title: $indexTitle.textContent, detail: $indexDetail.textContent },
+          title: $indexTitle.textContent, count: $indexCount.textContent, detail: $indexDetail.textContent },
       },
     }).catch(() => {});
   }, 1500);

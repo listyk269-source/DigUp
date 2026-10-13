@@ -109,16 +109,95 @@ impl Launch {
         let stdout = child.stdout.take().ok_or("no stdout")?;
         Ok((child, stdin, stdout))
     }
+}
 
-    pub fn output(&self) -> Result<(std::process::ExitStatus, Vec<u8>), String> {
-        let (mut child, stdin, mut stdout) = self.spawn()?;
-        drop(stdin);
+/// Setup needs only its latest folder count. Keep ownership while stdout is read so closing the window can
+/// terminate the helper (and its Windows job), even when a folder or decoder stops responding.
+#[derive(Default)]
+pub struct Estimates {
+    generation: AtomicU64,
+    running: Mutex<Option<Estimating>>,
+    closed: AtomicBool,
+}
+
+struct Estimating {
+    generation: u64,
+    child: HelperProcess,
+}
+
+type EstimateOutput = Option<(std::process::ExitStatus, Vec<u8>)>;
+
+impl Estimates {
+    /// Reserve before dispatching blocking work: thread-pool scheduling must not reorder requests.
+    pub fn request(&self) -> u64 {
+        self.generation.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    fn current(&self, generation: u64) -> bool {
+        !self.closed.load(Ordering::SeqCst) && self.generation.load(Ordering::SeqCst) == generation
+    }
+
+    /// Safe to schedule after a window closes: a newly opened window may already own a newer request.
+    pub fn cancel_before(&self, generation: u64) {
+        let mut running = self.running.lock().unwrap();
+        if running
+            .as_ref()
+            .is_some_and(|child| child.generation < generation)
+        {
+            running.take();
+        }
+    }
+
+    pub fn cancel(&self) {
+        self.cancel_before(self.request());
+    }
+
+    pub fn close(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+        self.cancel();
+    }
+
+    /// None means superseded/cancelled, not a folder error. Run outside the UI thread.
+    pub fn output(&self, generation: u64, launch: &Launch) -> Result<EstimateOutput, String> {
+        let mut stdout = {
+            let mut running = self.running.lock().unwrap();
+            if !self.current(generation) {
+                return Ok(None);
+            }
+            running.take();
+            let (child, stdin, stdout) = launch.spawn()?;
+            drop(stdin);
+            *running = Some(Estimating { generation, child });
+            stdout
+        };
         let mut output = Vec::new();
-        stdout
-            .read_to_end(&mut output)
-            .map_err(|error| error.to_string())?;
-        let status = child.wait().map_err(|error| error.to_string())?;
-        Ok((status, output))
+        let read = stdout.read_to_end(&mut output);
+        loop {
+            let mut running = self.running.lock().unwrap();
+            if !self.current(generation) {
+                return Ok(None);
+            }
+            if let Err(error) = &read {
+                running.take();
+                return Err(error.to_string());
+            }
+            let child = running.as_mut().expect("current estimate owns its helper");
+            match child.child.try_wait() {
+                Ok(Some(status)) => {
+                    running.take();
+                    return Ok(Some((status, output)));
+                }
+                Err(error) => {
+                    running.take();
+                    return Err(error.to_string());
+                }
+                Ok(None) => {}
+            }
+            // A process can close stdout before exiting. Never wait with its ownership locked: cancel must
+            // still be able to stop it, and unrelated setup work must stay responsive.
+            drop(running);
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 }
 
@@ -583,6 +662,133 @@ mod tests {
             ("DIGUP_DEVICE".into(), "cpu".into()),
         ];
         (directory, configured)
+    }
+
+    #[test]
+    fn estimate_test_process() {
+        let Ok(ready) = std::env::var("DIGUP_TEST_ESTIMATE_READY") else {
+            return;
+        };
+        std::fs::write(ready, std::process::id().to_string()).unwrap();
+        let release = PathBuf::from(std::env::var("DIGUP_TEST_ESTIMATE_RELEASE").unwrap());
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        while !release.exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        println!("{}", json!({"files": {"doc": 2}}));
+    }
+
+    fn estimate_process(test: &str) -> (PathBuf, Launch) {
+        let (directory, mut launch) = device_process(test);
+        launch.args = [
+            "--exact",
+            "helper::tests::estimate_test_process",
+            "--nocapture",
+        ]
+        .map(str::to_string)
+        .into();
+        launch.env = vec![
+            (
+                "DIGUP_TEST_ESTIMATE_READY".into(),
+                directory.join("ready").display().to_string(),
+            ),
+            (
+                "DIGUP_TEST_ESTIMATE_RELEASE".into(),
+                directory.join("release").display().to_string(),
+            ),
+        ];
+        (directory, launch)
+    }
+
+    fn wait_for_estimate(directory: &std::path::Path) {
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !directory.join("ready").exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "estimate helper didn't start"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn estimate_thread(
+        service: &Arc<Estimates>,
+        generation: u64,
+        launch: Launch,
+    ) -> std::sync::mpsc::Receiver<Result<EstimateOutput, String>> {
+        let service = service.clone();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(service.output(generation, &launch));
+        });
+        receiver
+    }
+
+    #[test]
+    fn closing_estimates_cancels_a_real_blocked_helper_and_prevents_new_launches() {
+        let service = Arc::new(Estimates::default());
+        let (directory, launch) = estimate_process("estimate-close");
+        let result = estimate_thread(&service, service.request(), launch.clone());
+        wait_for_estimate(&directory);
+        service.close();
+        assert!(result
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap()
+            .is_none());
+        assert!(service.running.lock().unwrap().is_none());
+        assert!(service
+            .output(service.request(), &launch)
+            .unwrap()
+            .is_none());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn latest_estimate_replaces_real_helper_and_ignores_delayed_window_cancellation() {
+        let service = Arc::new(Estimates::default());
+        let (old_directory, old_launch) = estimate_process("estimate-old");
+        let old_generation = service.request();
+        let old = estimate_thread(&service, old_generation, old_launch.clone());
+        wait_for_estimate(&old_directory);
+        let closing_window = service.request();
+        let (directory, launch) = estimate_process("estimate-new");
+        let generation = service.request();
+        let latest = estimate_thread(&service, generation, launch);
+        wait_for_estimate(&directory);
+        assert!(old
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap()
+            .is_none());
+        service.cancel_before(closing_window);
+        // The asynchronous close callback from the old window cannot kill the reopened window's helper.
+        assert!(service
+            .running
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .child
+            .try_wait()
+            .unwrap()
+            .is_none());
+        // Nor can an older blocking task that started late replace it.
+        assert!(service
+            .output(old_generation, &old_launch)
+            .unwrap()
+            .is_none());
+        std::fs::write(directory.join("release"), []).unwrap();
+        let (status, output) = latest
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert!(status.success());
+        assert!(String::from_utf8(output).unwrap().contains("\"doc\":2"));
+        service.close();
+        std::fs::remove_dir_all(old_directory).unwrap();
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

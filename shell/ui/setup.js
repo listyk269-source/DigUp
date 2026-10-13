@@ -13,6 +13,8 @@ const $ = (id) => document.getElementById(id);
 const folders = new Map();   // path → {checked, row, counts}
 const codeFolders = new Map();
 let page = 0;
+let estimateGeneration = 0;
+let applying = false;
 let info = { offered: [], chosen: [], hotkey: "", model: { state: "checking" }, auto: false };
 
 async function start() {
@@ -24,7 +26,7 @@ async function start() {
   for (const path of info.offered) addFolder(path, firstTime ? !/[\\/]Downloads$/i.test(path) || info.auto : chosen.has(path));
   for (const path of info.chosen) if (!folders.has(path)) addFolder(path, true);
   for (const path of info.codeRoots || []) addFolder(path, true, true);
-  const estimating = estimate([...folders.keys()]);
+  const estimating = estimate();
   showModel(info.model);
   tauri.event.listen("model", ({ payload }) => showModel(payload));
   showKeys(info.hotkey);
@@ -61,6 +63,8 @@ $("next").addEventListener("click", async () => {
   $("next").disabled = true;
   $("next").textContent = "Applying…";
   $("back").disabled = true;
+  applying = true;
+  ++estimateGeneration;
   try {
     if (info.auto) {
       await invoke("debug_setup_snapshot", { report: {
@@ -77,8 +81,10 @@ $("next").addEventListener("click", async () => {
       device: info.deviceOverridden ? null : $("device").value,
     });
   } catch (error) {
+    applying = false;
     $("model").textContent = String(error);
     $("back").disabled = false;
+    estimate();
     render();
   }
 });
@@ -149,16 +155,22 @@ function chosenCodeFolders() {
   return [...codeFolders].filter(([, folder]) => folder.checked).map(([path]) => path);
 }
 
-async function estimate(paths) {
+async function estimate() {
+  if (applying) return;
+  // A new request cancels the previous helper. Include its unfinished rows so none stay at "Counting…".
+  const paths = [...folders].filter(([, folder]) => !folder.estimate).map(([path]) => path);
   if (!paths.length) return;
+  const generation = ++estimateGeneration;
   let answers = [];
   try {
     answers = await invoke("estimate", { folders: paths });
   } catch (error) {
+    if (generation !== estimateGeneration || applying) return;
     for (const path of paths) folders.get(path).counts.textContent = "Couldn't read folder";
     $("model").textContent = String(error);
     return;
   }
+  if (answers === null || generation !== estimateGeneration || applying) return;
   for (const path of paths) {
     const answer = answers.find((item) => item.requestedFolder === path);
     folders.get(path).estimate = answer;
@@ -185,10 +197,13 @@ $("add-folder").addEventListener("click", async () => {
   try {
     const picked = (await invoke("pick_folders")).filter((path) => !folders.has(path));
     for (const path of picked) addFolder(path, true);
-    estimate(picked);
+    if (picked.length) estimate();
     render();
   } catch (error) { $("model").textContent = String(error); }
 });
+
+// Native window destruction owns cancellation; this prevents a late IPC response touching a departing document.
+window.addEventListener("pagehide", () => { ++estimateGeneration; });
 
 $("add-code-folder").addEventListener("click", async () => {
   try {

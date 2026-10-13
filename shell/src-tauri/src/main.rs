@@ -13,7 +13,7 @@ mod resources;
 mod settings;
 mod watcher;
 
-use helper::{IndexService, Launch, ModelDownload, SearchService};
+use helper::{Estimates, IndexService, Launch, ModelDownload, SearchService};
 use index_status::IndexStatus;
 use options::{Options, DEFAULT_HOTKEY};
 use serde_json::{json, Value};
@@ -46,6 +46,7 @@ struct Shell {
     search: SearchService,
     index: IndexService,
     model: ModelDownload,
+    estimates: Estimates,
     /// The model for the setup window and the tray: {"state": "checking|downloading|waiting|ready|failed", …}.
     model_state: Mutex<Value>,
     watcher: Mutex<Option<FolderWatcher>>,
@@ -189,23 +190,30 @@ fn index_status(shell: State<'_, Arc<Shell>>) -> IndexStatus {
     shell.index_status.lock().unwrap().clone()
 }
 
-/// What indexing these folders would take, one answer per folder (`digup estimate --json`): files by kind, the first
-/// pass's seconds, the rest of long files, subfolders. For setup.
+/// Setup shows file counts only; detailed estimates also probe media durations and PDF pages unnecessarily.
 #[tauri::command]
 async fn estimate(
     shell: State<'_, Arc<Shell>>,
     folders: Vec<String>,
-) -> Result<Vec<Value>, String> {
-    let mut args = vec!["estimate".to_string(), "--json".to_string()];
+) -> Result<Option<Vec<Value>>, String> {
+    let mut args = vec![
+        "estimate".to_string(),
+        "--json".to_string(),
+        "--counts-only".to_string(),
+    ];
     args.extend(shell.index_arguments());
     args.extend(folders.clone());
     let launch = shell.launch(args, "estimate.log");
+    let shell = shell.inner().clone();
+    let generation = shell.estimates.request();
     tauri::async_runtime::spawn_blocking(move || {
-        let (status, output) = launch.output()?;
+        let Some((status, output)) = shell.estimates.output(generation, &launch)? else {
+            return Ok(None);
+        };
         if !status.success() {
             return Err(format!("DigUp couldn't count these folders ({status}). Check folder access and the installed runtime DLLs."));
         }
-        associate_estimates(&output, &folders)
+        associate_estimates(&output, &folders).map(Some)
     })
     .await
     .map_err(|error| error.to_string())?
@@ -306,6 +314,7 @@ async fn finish_setup(
         if shell.shutting_down.load(Ordering::SeqCst) {
             return Err("DigUp is shutting down".to_string());
         }
+        shell.estimates.cancel();
         let was_enabled = autostart::enabled();
         if let Some(enabled) = launch_at_login {
             autostart::set(enabled)?;
@@ -609,6 +618,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
         search,
         index,
         model,
+        estimates: Estimates::default(),
         model_state: Mutex::new(json!({"state": "checking"})),
         watcher: Mutex::new(None),
         status: Mutex::new(None),
@@ -776,6 +786,7 @@ fn stop_helpers(app: &AppHandle) {
     let shell = app.state::<Arc<Shell>>();
     shell.shutting_down.store(true, Ordering::SeqCst);
     shell.watcher.lock().unwrap().take();
+    shell.estimates.close();
     shell.model.stop();
     shell.index.close();
     shell.search.stop();
@@ -869,7 +880,7 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
     if shell.options.debug_isolated {
         builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
     }
-    builder
+    let window = builder
         .title("Set Up DigUp")
         .inner_size(720.0, 600.0)
         .resizable(false)
@@ -877,6 +888,14 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
         .center()
         .visible(!hidden)
         .build()?;
+    let shell = shell.inner().clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            let generation = shell.estimates.request();
+            let shell = shell.clone();
+            tauri::async_runtime::spawn_blocking(move || shell.estimates.cancel_before(generation));
+        }
+    });
     Ok(())
 }
 

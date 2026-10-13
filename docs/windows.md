@@ -227,6 +227,20 @@ Windows crawling must use 64-bit Win32 metadata before filtering extensions. Thi
 regresses a Foundation size-conversion crash at 2 GiB, independent of folder language.
 The native folder picker itself is still a manual check.
 
+Folder selection uses `digup estimate --json --counts-only`: it counts eligible files
+and subfolders without probing PDF page counts or media durations, or starting the
+model speed check. The regular CLI estimate remains detailed. Setup owns one estimate
+helper; a newer request, applying settings, closing Setup or quitting cancels it and
+its child processes. Ordinary crawling can still inspect a short MPEG-TS header to
+distinguish video from TypeScript.
+
+The progress panel retains the whole queue's searchable/remaining counts when a
+periodic rescan starts. Per-pass file counts and long-file part counts are separate.
+`failed` means files whose contents could not be indexed; it is not a count of process
+crashes. Unsupported RAW formats are labelled separately from other file errors.
+Their existing database rows and reasons remain intact: this status update does not
+add a RAW decoder, clear the index or retry an unsupported file on every scan.
+
 The smoke script uses synthetic documents only, clears child PATH to Windows system
 directories, removes any reference worker override, defaults to CPU inference and uses
 the actual installed CLI, actual model, SQLite/FTS and WebView. It checks:
