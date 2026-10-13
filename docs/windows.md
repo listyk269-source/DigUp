@@ -208,7 +208,7 @@ For direct `swift test`, DLLs must be available beside the test executable or in
 depend on that developer setup.
 
 The smoke script uses synthetic documents only, clears child PATH to Windows system
-directories, removes any reference worker override, forces CPU inference and uses
+directories, removes any reference worker override, defaults to CPU inference and uses
 the actual installed CLI, actual model, SQLite/FTS and WebView. It checks:
 
 - CLI launch; real semantic top ranking against three unrelated documents; an

@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-and-smoke:
     runs-on: windows-2022
-    timeout-minutes: 100
+    timeout-minutes: 150
     defaults:
       run:
         shell: pwsh
@@ -122,6 +122,7 @@ jobs:
             build.noindex/windows/artifacts/*
             build.noindex/windows/smoke/*.json
             build.noindex/windows/smoke/*.txt
+            build.noindex/windows/smoke/*.log
             build.noindex/windows/media-smoke/*.json
             build.noindex/windows/media-smoke/*.txt
             build.noindex/windows/portable-smoke/*.json

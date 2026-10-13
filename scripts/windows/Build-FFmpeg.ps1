@@ -105,7 +105,9 @@ $env:DIGUP_FFMPEG_JOBS = [string]$Jobs
 $env:DIGUP_FFMPEG_CC = "$Compiler.exe"
 $env:DIGUP_FFMPEG_LD = if ($Compiler -eq 'clang-cl') { 'lld-link.exe' } else { 'link.exe' }
 $buildScript = Join-Path $PSScriptRoot 'build-ffmpeg.sh'
-Invoke-BoundedChecked $bash @('--noprofile', '--norc', $buildScript) -TimeoutSeconds 1800 -Phase 'FFmpeg configure/build/install'
+# Hosted Windows runners can still be actively compiling codecs after 30 minutes.
+# Keep a finite deadline and process-tree diagnostics without truncating valid builds.
+Invoke-BoundedChecked $bash @('--noprofile', '--norc', $buildScript) -TimeoutSeconds 3600 -Phase 'FFmpeg configure/build/install'
 
 New-Item -ItemType Directory -Force -Path "$Destination/doc", "$Destination/source" | Out-Null
 Copy-Item -LiteralPath "$sourceRoot/COPYING.LGPLv2.1" -Destination "$Destination/LICENSE.txt"
