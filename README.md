@@ -140,12 +140,45 @@ There's also a command-line tool, `.build/release/digup`, that indexes, searches
 (`digup --help`). `scripts/make-testbed.sh` builds a folder of test files to try it on (it needs ffmpeg), and `evals/`
 holds the queries ranking changes are measured with.
 
+### Windows x64 builds
+
+The Windows build uses the existing portable Swift engine and CLI with the Rust/Tauri shell in `shell/`.
+It does not replace the macOS app or introduce a second indexing engine. See [Windows build and validation](docs/windows.md)
+for pinned prerequisites, installation, troubleshooting, removal, and the Windows 10/11 acceptance checklist.
+
+From PowerShell 7, after installing the documented build prerequisites:
+
+```powershell
+. ./scripts/windows/Enter-Environment.ps1
+cargo install tauri-cli --version 2.12.2 --locked
+./scripts/windows/Build.ps1
+```
+
+This builds the CLI, runs Swift and Rust tests, and produces a per-user NSIS installer, a portable archive,
+and SHA-256 checksums in `build.noindex/windows/artifacts/`. The plain HTML/JavaScript frontend has no Node.js,
+npm or pnpm build dependency. CPU inference is the Windows baseline. The installer contains the native runtime
+libraries; it does not depend on a user's FFmpeg or llama.cpp in `PATH` and does not contain the model.
+
+On first launch, choose folders and download the model (about 865 MB, checked against pinned SHA-256 hashes;
+interrupted downloads resume). Open the search panel with **Ctrl+Shift+Space**. Code folders and login startup
+are opt-in. The tray offers folder settings, pause/resume, retrying the model download, and Quit. Subsequent
+indexing and searching are local. Installation needs the Microsoft WebView2 runtime; if absent the installer
+obtains Microsoft's bootstrapper, so first installation needs a connection.
+
+The CLI is `helper/digup.exe` inside the installed/portable directory. `helper/digup.exe --help` documents its
+commands. Windows has no automatic updater yet: install a newer verified installer manually. Default-app
+opening does not promise PDF-page or media-timestamp navigation; the search panel supplies previews.
+
+These are development/validation builds until the documented release checklist passes. A passing build or
+PATH-isolated smoke test alone is not evidence that a clean Windows 10 and Windows 11 machine have both passed.
+
 ## FAQ
 
 **How is this different from Spotlight?** Spotlight finds files by their names, text and metadata. DigUp also finds
 them by what they show or say, and takes you to the page or moment. The two work fine side by side.
 
-**Windows or Linux?** Both are on the way.
+**Windows or Linux?** Windows source builds and their validation workflow are described above. Linux's portable
+engine and Tauri shell remain in development; neither changes the supported macOS release.
 
 **Why is the download 865 MB?** That's the model: the text part (310 MB) and the image and audio encoders (555 MB).
 The app itself is about 20 MB.
