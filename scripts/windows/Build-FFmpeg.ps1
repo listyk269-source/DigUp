@@ -65,6 +65,7 @@ Invoke-Checked $bash @('--noprofile', '--norc', $buildScript)
 
 New-Item -ItemType Directory -Force -Path "$Destination/doc", "$Destination/source" | Out-Null
 Copy-Item -LiteralPath "$sourceRoot/COPYING.LGPLv2.1" -Destination "$Destination/LICENSE.txt"
+Copy-Item -LiteralPath "$Destination/LICENSE.txt" -Destination "$Destination/source/LICENSE.txt"
 Copy-Item -LiteralPath $sourceArchive -Destination "$Destination/source"
 foreach ($recipe in @('Build-FFmpeg.ps1', 'build-ffmpeg.sh', 'ffmpeg-dependencies.json', 'Common.ps1', 'dependencies.json')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $recipe) -Destination "$Destination/source"
@@ -72,20 +73,27 @@ foreach ($recipe in @('Build-FFmpeg.ps1', 'build-ffmpeg.sh', 'ffmpeg-dependencie
 @'
 FFmpeg for DigUp: unmodified upstream source, dynamically linked LGPL-2.1-or-later build.
 
-The source/ directory contains the exact upstream source archive and its SHA-256 in
-ffmpeg-dependencies.json, plus the PowerShell/Bash build recipe. No patches were applied.
+The accompanying release source ZIP is a self-contained minimal build tree: the
+exact upstream archive is in Vendor/downloads, and the PowerShell/Bash recipes and
+its SHA-256 are in scripts/windows/ffmpeg-dependencies.json. No patches were applied.
+The build output also keeps a flat copy of the archive and recipes under source/.
 No GPL, nonfree, external codec libraries, networking or GPU acceleration are enabled.
 GNU Make and NASM are build tools only; they are not part of the installed runtime.
 
-To rebuild from a DigUp checkout on Windows x64:
-1. Install Git for Windows, PowerShell 7, pinned Swift 6.3.3 (clang-cl/lld-link) and Visual Studio 2022 C++ Build Tools + Windows SDK.
-2. Open an x64 MSVC developer shell.
-3. Add Swift's Toolchains/6.3.3+Asserts/usr/bin to PATH, then run:
+To rebuild on Windows x64:
+1. Extract the accompanying source ZIP and change to its root directory. A DigUp
+   checkout at the release's recorded source commit can also be used. The ZIP is
+   complete for this FFmpeg build; it does not require a full DigUp checkout.
+2. Install Git for Windows, PowerShell 7, pinned Swift 6.3.3 (clang-cl/lld-link) and Visual Studio 2022 C++ Build Tools + Windows SDK.
+3. Open an x64 MSVC developer shell, remaining in the extracted tree's root.
+4. Add Swift's Toolchains/6.3.3+Asserts/usr/bin to PATH, then run:
    pwsh -File scripts/windows/Build-FFmpeg.ps1 -Destination Vendor/ffmpeg -Jobs 8
    The default compiler is Swift's LLVM clang-cl with the MSVC ABI. To use Microsoft's
    compiler instead, pass -Compiler cl (its English language pack is needed by configure).
 The script checks every download's SHA-256, then runs the exact configure command in
 build-ffmpeg.sh and GNU Make. Its output includes replaceable DLLs and ffmpeg/ffprobe.
+The bundled source archive is reused from Vendor/downloads. GNU Make and NASM are
+downloaded with pinned hashes on the first build; they are not runtime dependencies.
 Build outputs may differ byte-for-byte across MSVC/Windows SDK revisions; CI controls
 the hosted runner family and records the compiler versions with the release checksums.
 
