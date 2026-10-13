@@ -152,6 +152,16 @@ containing a side effect is indexed without ever being executed.
 
 ## Diagnostics and removal
 
+The portable engine has no OCR backend yet. Screenshots and scanned PDF pages can
+have visual embeddings, but text that exists only in pixels is not added to FTS.
+Text-bearing PDFs preserve their page numbers; audio/video search preserves the
+matching time. The app does not supply a speech transcript. RAW camera formats,
+SVG rendering and tiled TIFF images are not supported on this path. JPEG/PNG,
+PDF text, DOCX, ODT, WAV and MP4 have real fixtures in `Media-Smoke.ps1`; other
+containers/codecs depend on the bundled FFmpeg build and are not all individually
+certified by that smoke. Damaged or unsupported files are reported as failed,
+without stopping indexing of the remaining files.
+
 If setup reports a missing model, use Retry or run `helper/digup.exe download-model`.
 Check available disk space and the selected model directory. If a DLL or FFmpeg
 cannot be loaded, reinstall the complete bundle; do not download an arbitrary DLL

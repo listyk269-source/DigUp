@@ -163,7 +163,7 @@ On first launch, choose folders and download the model (about 865 MB, checked ag
 interrupted downloads resume). Open the search panel with **Ctrl+Shift+Space**. Code folders and login startup
 are opt-in. The tray offers folder settings, pause/resume, retrying the model download, and Quit. Subsequent
 indexing and searching are local. Installation needs the Microsoft WebView2 runtime; if absent the installer
-obtains Microsoft's bootstrapper, so first installation needs a connection.
+runs its bundled, verified Microsoft bootstrapper, so first installation needs a connection.
 
 The CLI is `helper/digup.exe` inside the installed/portable directory. `helper/digup.exe --help` documents its
 commands. Windows has no automatic updater yet: install a newer verified installer manually. Default-app
