@@ -30,7 +30,7 @@ Copy-Item "$tmp/miniz/miniz.c" "$script:Vendor/miniz"
 Copy-Item "$tmp/miniz/*.h" "$script:Vendor/miniz/include"
 
 Reset-BuildDirectory "$script:Vendor/pdfium"
-Invoke-Checked tar @('-xzf', (Get-VerifiedDownload $script:Manifest.downloads.pdfium), '-C', "$script:Vendor/pdfium")
+Expand-NativeArchive (Get-VerifiedDownload $script:Manifest.downloads.pdfium) "$script:Vendor/pdfium"
 Copy-Item "$script:Vendor/pdfium/lib/pdfium.dll.lib" "$script:Vendor/pdfium/lib/pdfium.lib"
 
 Reset-BuildDirectory "$script:Vendor/cmake"

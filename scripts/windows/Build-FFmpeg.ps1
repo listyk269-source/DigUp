@@ -53,33 +53,35 @@ $ninjaArchive = Get-VerifiedDownload $ffmpegManifest.ninja
 $pkgconfArchive = Get-VerifiedDownload $ffmpegManifest.pkgconf
 New-Item -ItemType Directory -Force -Path $buildRoot, $toolsRoot, $objectRoot | Out-Null
 if (!(Test-Path -LiteralPath "$toolsRoot/usr/bin/make.exe")) {
-    Invoke-Checked tar @('-xf', $makeArchive, '-C', $toolsRoot)
+    Expand-NativeArchive $makeArchive $toolsRoot
 }
 if (!(Test-Path -LiteralPath "$toolsRoot/nasm/nasm-2.16.03/nasm.exe")) {
-    Expand-Archive -LiteralPath $nasmArchive -DestinationPath "$toolsRoot/nasm" -Force
+    Expand-NativeArchive $nasmArchive "$toolsRoot/nasm"
 }
 if (!(Test-Path -LiteralPath "$sourceRoot/configure")) {
-    Invoke-Checked tar @('-xf', $sourceArchive, '-C', $buildRoot)
+    Expand-NativeArchive $sourceArchive $buildRoot
 }
 if (!(Test-Path -LiteralPath "$dav1dSource/meson.build")) {
-    Invoke-Checked tar @('-xf', $dav1dArchive, '-C', $buildRoot)
+    Expand-NativeArchive $dav1dArchive $buildRoot
 }
 if (!(Test-Path -LiteralPath "$pythonRoot/python.exe")) {
-    Expand-Archive -LiteralPath $pythonArchive -DestinationPath $pythonRoot -Force
+    Expand-NativeArchive $pythonArchive $pythonRoot
 }
 if (!(Test-Path -LiteralPath "$mesonRoot/meson.py")) {
-    Invoke-Checked tar @('-xf', $mesonArchive, '-C', $toolsRoot)
+    Expand-NativeArchive $mesonArchive $toolsRoot
 }
 if (!(Test-Path -LiteralPath "$ninjaRoot/ninja.exe")) {
-    Expand-Archive -LiteralPath $ninjaArchive -DestinationPath $ninjaRoot -Force
+    Expand-NativeArchive $ninjaArchive $ninjaRoot
 }
 if (!(Test-Path -LiteralPath "$toolsRoot/usr/bin/pkgconf.exe")) {
-    Invoke-Checked tar @('-xf', $pkgconfArchive, '-C', $toolsRoot)
+    Expand-NativeArchive $pkgconfArchive $toolsRoot
 }
 # Embedded Python ignores PYTHONPATH; explicitly add only the pinned Meson source tree.
 @('python313.zip', '.', $mesonRoot) | Set-Content -LiteralPath "$pythonRoot/python313._pth" -Encoding utf8NoBOM
+Write-BuildPhase 'START reset FFmpeg/dav1d output directories'
 Reset-BuildDirectory $Destination
 Reset-BuildDirectory $dav1dObjects
+Write-BuildPhase 'END reset FFmpeg/dav1d output directories'
 $nativeFile = Join-Path $buildRoot 'dav1d-native.ini'
 $compilerPath = (Get-Command "$Compiler.exe").Source.Replace('\', '/')
 @("[binaries]", "c = '$compilerPath'", "c_ld = '$(if ($Compiler -eq 'clang-cl') { 'lld-link' } else { 'link' })'") |
@@ -87,12 +89,12 @@ $compilerPath = (Get-Command "$Compiler.exe").Source.Replace('\', '/')
 $savedPath = $env:PATH
 try {
     $env:PATH = "$pythonRoot;$ninjaRoot;$toolsRoot/nasm/nasm-2.16.03;$savedPath"
-    Invoke-Checked "$pythonRoot/python.exe" @("$mesonRoot/meson.py", 'setup', $dav1dObjects, $dav1dSource,
+    Invoke-BoundedChecked "$pythonRoot/python.exe" @('-u', "$mesonRoot/meson.py", 'setup', $dav1dObjects, $dav1dSource,
         '--native-file', $nativeFile, '--prefix', $Destination, '--libdir', 'lib', '--backend', 'ninja',
         '--buildtype', 'release', '--default-library', 'shared', '--wrap-mode', 'nodownload', '-Db_vscrt=md',
-        '-Denable_tools=false', '-Denable_tests=false', '-Denable_examples=false', '-Denable_docs=false')
-    Invoke-Checked "$ninjaRoot/ninja.exe" @('-C', $dav1dObjects, '-j', [string]$Jobs)
-    Invoke-Checked "$pythonRoot/python.exe" @("$mesonRoot/meson.py", 'install', '-C', $dav1dObjects, '--no-rebuild')
+        '-Denable_tools=false', '-Denable_tests=false', '-Denable_examples=false', '-Denable_docs=false') -TimeoutSeconds 300 -Phase 'dav1d Meson setup'
+    Invoke-BoundedChecked "$ninjaRoot/ninja.exe" @('-C', $dav1dObjects, '-j', [string]$Jobs) -TimeoutSeconds 900 -Phase 'dav1d Ninja build'
+    Invoke-BoundedChecked "$pythonRoot/python.exe" @('-u', "$mesonRoot/meson.py", 'install', '-C', $dav1dObjects, '--no-rebuild') -TimeoutSeconds 120 -Phase 'dav1d Meson install'
 } finally { $env:PATH = $savedPath }
 $env:DIGUP_FFMPEG_SOURCE = $sourceRoot
 $env:DIGUP_FFMPEG_BUILD = $objectRoot
@@ -103,7 +105,7 @@ $env:DIGUP_FFMPEG_JOBS = [string]$Jobs
 $env:DIGUP_FFMPEG_CC = "$Compiler.exe"
 $env:DIGUP_FFMPEG_LD = if ($Compiler -eq 'clang-cl') { 'lld-link.exe' } else { 'link.exe' }
 $buildScript = Join-Path $PSScriptRoot 'build-ffmpeg.sh'
-Invoke-Checked $bash @('--noprofile', '--norc', $buildScript)
+Invoke-BoundedChecked $bash @('--noprofile', '--norc', $buildScript) -TimeoutSeconds 1800 -Phase 'FFmpeg configure/build/install'
 
 New-Item -ItemType Directory -Force -Path "$Destination/doc", "$Destination/source" | Out-Null
 Copy-Item -LiteralPath "$sourceRoot/COPYING.LGPLv2.1" -Destination "$Destination/LICENSE.txt"

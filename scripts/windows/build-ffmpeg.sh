@@ -13,6 +13,7 @@ export PKG_CONFIG_PATH="$destination/lib/pkgconfig"
 # Do not discover codecs from the host environment. Only the pinned dav1d built beside FFmpeg is enabled.
 export PKG_CONFIG_LIBDIR="$destination/lib/pkgconfig"
 cd "$build_dir"
+printf '[%s] START FFmpeg configure pid=%s\n' "$(date -u +%FT%TZ)" "$$"
 "$source_dir/configure" \
   --prefix="$destination" --toolchain=msvc --arch=x86_64 --target-os=win32 \
   --cc="$DIGUP_FFMPEG_CC" --ld="$DIGUP_FFMPEG_LD" \
@@ -20,5 +21,8 @@ cd "$build_dir"
   --pkg-config="$tool_dir/usr/bin/pkgconf.exe" \
   --disable-gpl --disable-nonfree --disable-version3 \
   --disable-network --disable-hwaccels --disable-ffplay --disable-doc --disable-debug
+printf '[%s] END FFmpeg configure; START make\n' "$(date -u +%FT%TZ)"
 make -r -j"${DIGUP_FFMPEG_JOBS:-8}"
+printf '[%s] END FFmpeg make; START install\n' "$(date -u +%FT%TZ)"
 make -r install
+printf '[%s] END FFmpeg install\n' "$(date -u +%FT%TZ)"
