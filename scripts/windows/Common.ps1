@@ -32,14 +32,20 @@ function Get-VerifiedDownload {
     New-Item -ItemType Directory -Force $cache | Out-Null
     $destination = Join-Path $cache $Spec.file
     if (Test-Path -LiteralPath $destination) {
-        if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $Spec.sha256) { return $destination }
+        if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash -eq $Spec.sha256) {
+            Write-Host "Verified cached download: $($Spec.file)"
+            return $destination
+        }
         Remove-Item -LiteralPath $destination -Force
     }
     $partial = "$destination.partial"
     $curl = Join-Path $env:SystemRoot 'System32/curl.exe'
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         # A partial remains on network errors. curl verifies TLS and resumes via HTTP Range.
-        & $curl --fail --location --silent --show-error --retry 3 --retry-delay 2 --continue-at - --output $partial $Spec.url
+        Write-Host "Downloading $($Spec.file), attempt $attempt/3: $($Spec.url)"
+        & $curl --fail --location --silent --show-error --retry 2 --retry-delay 2 --retry-max-time 120 `
+            --connect-timeout 20 --max-time 300 --speed-time 60 --speed-limit 1024 `
+            --continue-at - --output $partial $Spec.url
         if ($LASTEXITCODE -eq 0 -and (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash -eq $Spec.sha256) {
             Move-Item -LiteralPath $partial -Destination $destination -Force
             return $destination
