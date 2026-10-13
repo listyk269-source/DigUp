@@ -3,6 +3,9 @@
 #if !canImport(ImageIO)
 import CStb
 import Foundation
+#if os(Windows)
+import WinSDK
+#endif
 
 extension ImageExtractor {
     /// No SVG here yet: stb and ffmpeg don't draw vector pictures.
@@ -86,7 +89,22 @@ struct RGBImage {
     /// Decoded from a file (nil when stb can't read it).
     static func load(_ path: String) -> RGBImage? {
         var width: Int32 = 0, height: Int32 = 0, channels: Int32 = 0
-        guard let pixels = stbi_load(FileAccess.path(path), &width, &height, &channels, 3) else { return nil }
+        let native = FileAccess.path(path)
+        var decoded: UnsafeMutablePointer<UInt8>?
+        #if os(Windows)
+        // A scanner can briefly hold the completed preview. stb's wide fopen reports ERROR_SHARING_VIOLATION;
+        // retry only that native error, for at most 150 ms. Unsupported/damaged files still fail immediately.
+        for attempt in 0..<5 {
+            SetLastError(0)
+            decoded = stbi_load(native, &width, &height, &channels, 3)
+            if decoded != nil { break }
+            guard GetLastError() == DWORD(ERROR_SHARING_VIOLATION), attempt < 4 else { return nil }
+            Thread.sleep(forTimeInterval: 0.01 * Double(1 << attempt))
+        }
+        #else
+        decoded = stbi_load(native, &width, &height, &channels, 3)
+        #endif
+        guard let pixels = decoded else { return nil }
         defer { stbi_image_free(pixels) }
         return RGBImage(width: Int(width), height: Int(height),
                         pixels: Array(UnsafeBufferPointer(start: pixels, count: Int(width) * Int(height) * 3)))

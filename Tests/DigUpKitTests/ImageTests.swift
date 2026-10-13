@@ -5,6 +5,9 @@ import Testing
 import CoreGraphics
 import ImageIO
 #endif
+#if os(Windows)
+import WinSDK
+#endif
 
 /// Pictures in the formats stb doesn't read, and a JPEG (Pictures/, from scripts/testbed/make_test_pictures.swift): a
 /// 400×240 pattern of four colored quadrants (red, green above blue, yellow) with a DateTimeOriginal, stored turned
@@ -41,6 +44,41 @@ import ImageIO
                                        to: folder, png: true)
         }
     }
+
+    @Test(arguments: ["pattern-o6.webp", "pattern-o6.heic", "pattern-o6.jpg"])
+    func preparedCopiesRemainReadableAcrossRepeatedWrites(_ name: String) throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for _ in 0..<100 {
+            let prepared = try ImageExtractor.prepare(Self.pictures.appendingPathComponent(name), maxPixel: 1024,
+                                                       minSide: 256, to: folder, png: true)
+            let shown = try Self.decode(prepared.path)
+            #expect(shown.width == 240 && shown.height == 400)
+            #expect(shown.quadrants == ["B", "R", "Y", "G"])
+        }
+    }
+
+    #if os(Windows)
+    @Test func temporaryWindowsSharingViolationDoesNotLosePreparedImage() throws {
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let prepared = try ImageExtractor.prepare(Self.pictures.appendingPathComponent("pattern-o6.webp"), maxPixel: 1024,
+                                                  minSide: 256, to: folder, png: true)
+        // A real exclusive Win32 handle reproduces a transient scanner/reader lock on the finished PNG.
+        let handle = try #require(FileAccess.path(prepared.path).withCString(encodedAs: UTF16.self) {
+            CreateFileW($0, DWORD(GENERIC_READ), 0, nil, DWORD(OPEN_EXISTING), DWORD(FILE_ATTRIBUTE_NORMAL), nil)
+        })
+        try #require(handle != INVALID_HANDLE_VALUE)
+        let bits = UInt(bitPattern: handle), closed = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            Thread.sleep(forTimeInterval: 0.04)
+            CloseHandle(HANDLE(bitPattern: bits))
+            closed.signal()
+        }
+        defer { closed.wait() }
+        let shown = try Self.decode(prepared.path)
+        #expect(shown.width == 240 && shown.height == 400)
+        #expect(shown.quadrants == ["B", "R", "Y", "G"])
+    }
+    #endif
 
     #if canImport(AppKit)
     @Test func vectorPicturesAreDrawn() throws {
