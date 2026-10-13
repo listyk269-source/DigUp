@@ -143,7 +143,15 @@ try {
     Get-ChildItem -LiteralPath $package -File -Recurse | Where-Object LastWriteTimeUtc -LT ([DateTime]'1980-01-01Z') |
         ForEach-Object { $_.LastWriteTimeUtc = [DateTime]'1980-01-01Z' }
     Compress-Archive -Path "$package/*" -DestinationPath "$output/DigUp-windows-x64-portable.zip"
-    Compress-Archive -Path "$script:Vendor/ffmpeg/source/*" -DestinationPath "$output/DigUp-FFmpeg-8.1.3-source.zip"
+    $sourcePackage = "$script:Repo/build.noindex/windows/ffmpeg-source"
+    Reset-BuildDirectory $sourcePackage
+    New-Item -ItemType Directory -Force "$sourcePackage/scripts/windows", "$sourcePackage/Vendor/downloads" | Out-Null
+    Copy-Item "$script:Vendor/ffmpeg/source/ffmpeg-8.1.3.tar.xz" "$sourcePackage/Vendor/downloads"
+    foreach ($recipe in @('Build-FFmpeg.ps1', 'build-ffmpeg.sh', 'ffmpeg-dependencies.json', 'Common.ps1', 'dependencies.json', 'Enter-Environment.ps1')) {
+        Copy-Item -LiteralPath "$PSScriptRoot/$recipe" -Destination "$sourcePackage/scripts/windows"
+    }
+    Copy-Item "$script:Vendor/ffmpeg/LICENSE.txt", "$script:Vendor/ffmpeg/source/BUILDING.txt", "$script:Vendor/ffmpeg/source/BUILD-VERSIONS.json" $sourcePackage
+    Compress-Archive -Path "$sourcePackage/*" -DestinationPath "$output/DigUp-FFmpeg-8.1.3-source.zip"
     Get-ChildItem -LiteralPath $output -File | Sort-Object Name | ForEach-Object {
         "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
     } | Set-Content "$output/SHA256SUMS.txt" -Encoding ascii
