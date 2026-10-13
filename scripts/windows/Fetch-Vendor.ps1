@@ -33,7 +33,5 @@ Reset-BuildDirectory "$script:Vendor/pdfium"
 Expand-NativeArchive (Get-VerifiedDownload $script:Manifest.downloads.pdfium) "$script:Vendor/pdfium"
 Copy-Item "$script:Vendor/pdfium/lib/pdfium.dll.lib" "$script:Vendor/pdfium/lib/pdfium.lib"
 
-Reset-BuildDirectory "$script:Vendor/cmake"
-Expand-Archive -LiteralPath (Get-VerifiedDownload $script:Manifest.downloads.cmake) -DestinationPath "$tmp/cmake"
-Copy-Item "$tmp/cmake/*/*" "$script:Vendor/cmake" -Recurse
+# Expand-NativeArchive bootstrapped the same pinned CMake used by Build-Llama.
 Write-Host 'Verified Windows dependencies are ready in Vendor/.'

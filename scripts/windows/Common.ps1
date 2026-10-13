@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 $script:Repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $script:Manifest = Get-Content (Join-Path $PSScriptRoot 'dependencies.json') -Raw | ConvertFrom-Json
 $script:Vendor = Join-Path $script:Repo 'Vendor'
+$script:verifiedPinnedCMake = $null
 
 function Invoke-Checked {
     param([Parameter(Mandatory)][string]$Program, [string[]]$Arguments = @())
@@ -141,14 +142,42 @@ function Invoke-BoundedChecked {
     if ($exitCode -ne 0) { throw "$Phase failed (exit $exitCode)." }
 }
 
+function Get-PinnedCMake {
+    $directory = Join-Path $script:Vendor 'cmake'
+    $binary = Join-Path $directory 'bin/cmake.exe'
+    $expectedVersion = $script:Manifest.tools.cmake
+    if (!$script:verifiedPinnedCMake) {
+        # Bootstrap only this ZIP through .NET. Calling Expand-NativeArchive here
+        # would recurse; Windows tar may delegate XZ to a hanging external helper.
+        $archive = Get-VerifiedDownload $script:Manifest.downloads.cmake
+        $temporary = Join-Path $script:Vendor 'cmake-bootstrap'
+        Write-BuildPhase "START bootstrap pinned CMake $expectedVersion from verified ZIP"
+        Reset-BuildDirectory $temporary
+        [IO.Compression.ZipFile]::ExtractToDirectory($archive, $temporary)
+        $root = Join-Path $temporary "cmake-$expectedVersion-windows-x86_64"
+        if (!(Test-Path -LiteralPath "$root/bin/cmake.exe")) { throw 'Pinned CMake ZIP has an unexpected layout.' }
+        Reset-BuildDirectory $directory
+        Get-ChildItem -LiteralPath $root | Copy-Item -Destination $directory -Recurse
+        if ((Get-Item -LiteralPath $binary).VersionInfo.ProductVersion -ne $expectedVersion) { throw 'Pinned CMake version mismatch.' }
+        Write-BuildPhase "END bootstrap pinned CMake $expectedVersion"
+        $script:verifiedPinnedCMake = $binary
+    }
+    Invoke-BoundedChecked $script:verifiedPinnedCMake @('--version') -TimeoutSeconds 20 -Phase "pinned CMake $expectedVersion version"
+    return $script:verifiedPinnedCMake
+}
+
 function Expand-NativeArchive {
     param([Parameter(Mandatory)][string]$Archive, [Parameter(Mandatory)][string]$Destination)
-    # Do not pick GNU tar from PATH: a Windows drive prefix can be treated as a
-    # remote host by GNU tar. Windows bsdtar handles drive paths and these formats.
-    $tar = Join-Path $env:SystemRoot 'System32/tar.exe'
-    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    Invoke-BoundedChecked $tar @('--version') -TimeoutSeconds 20 -Phase 'Windows bsdtar version'
-    Invoke-BoundedChecked $tar @('-xf', $Archive, '-C', $Destination) -TimeoutSeconds 300 -Phase "extract $([IO.Path]::GetFileName($Archive))"
+    # CMake's pinned libarchive includes XZ/Zstd support without a PATH-resolved
+    # decompressor. Server 2022's system tar hung in its external `xz -d -qq` child.
+    $cmake = Get-PinnedCMake
+    $archivePath = [IO.Path]::GetFullPath($Archive, (Get-Location).ProviderPath)
+    $destinationPath = [IO.Path]::GetFullPath($Destination, (Get-Location).ProviderPath)
+    New-Item -ItemType Directory -Force -Path $destinationPath | Out-Null
+    Push-Location $destinationPath
+    try {
+        Invoke-BoundedChecked $cmake @('-E', 'tar', 'xf', $archivePath) -TimeoutSeconds 300 -Phase "extract $([IO.Path]::GetFileName($Archive))"
+    } finally { Pop-Location }
 }
 
 function Reset-BuildDirectory {

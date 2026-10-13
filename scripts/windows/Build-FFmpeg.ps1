@@ -135,8 +135,10 @@ is the BSD-2-Clause dav1d library, built from the included source for software A
 decoding. Its replaceable DLL is installed beside FFmpeg; see dav1d-BSD-2-Clause.txt.
 The bundled x86 assembly macros carry the notice in x86inc-ISC.txt. The upstream
 AV1 patent notice is included as dav1d-PATENTS.txt.
-Python, Meson, Ninja, pkgconf, GNU Make and NASM are isolated build tools only;
+CMake, Python, Meson, Ninja, pkgconf, GNU Make and NASM are isolated build tools only;
 they are not part of the installed runtime and do not require system installation.
+CMake is bootstrapped from its SHA-256-verified ZIP in dependencies.json using .NET;
+its built-in archive reader extracts XZ/Zstd without system tar or external decompressors.
 
 To rebuild on Windows x64:
 1. Extract the accompanying source ZIP and change to its root directory. A DigUp
@@ -171,6 +173,7 @@ Copy-Item -LiteralPath "$Destination/doc/BUILDING.txt" -Destination "$Destinatio
     mesonVersion = $ffmpegManifest.meson.version
     ninjaVersion = $ffmpegManifest.ninja.version
     pkgconfVersion = $ffmpegManifest.pkgconf.version
+    cmakeVersion = $script:Manifest.tools.cmake
     compiler = $Compiler
     compilerVersion = @($compilerVersion)
     msvcToolsVersion = $env:VCToolsVersion
