@@ -8,6 +8,13 @@ param(
 . "$PSScriptRoot/Common.ps1"
 Set-Location $script:Repo
 if (!$IsWindows -or [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -ne 'X64') { throw 'Windows x64 is required.' }
+$resolutionFile = Join-Path $script:Repo 'Package.resolved'
+$resolution = if (Test-Path -LiteralPath $resolutionFile) { [IO.File]::ReadAllBytes($resolutionFile) } else { $null }
+function Restore-MacResolution {
+    # SwiftPM deletes the Mac-only Sparkle lock on Windows. Preserve original bytes
+    # if it removed the file; never overwrite a file someone changed while building.
+    if ($resolution -and !(Test-Path -LiteralPath $resolutionFile)) { [IO.File]::WriteAllBytes($resolutionFile, $resolution) }
+}
 $swiftVersion = (& swift --version) -join ' '
 if ($LASTEXITCODE -ne 0 -or $swiftVersion -notmatch [regex]::Escape("Swift version $($script:Manifest.tools.swift)")) {
     throw "Expected Swift $($script:Manifest.tools.swift); found $swiftVersion"
@@ -63,6 +70,7 @@ try {
     Copy-RuntimeDlls $crt[0].FullName $helper
     Copy-RuntimeDlls $crt[0].FullName $package
     Copy-Item "$script:Repo/LICENSE", "$script:Repo/THIRD_PARTY_NOTICES.md", "$PSScriptRoot/dependencies.json" $licenses
+    Restore-MacResolution
     @{
         sourceCommit = (& git rev-parse HEAD)
         workingTreeDirty = [bool](& git status --porcelain)
@@ -156,4 +164,4 @@ try {
         "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
     } | Set-Content "$output/SHA256SUMS.txt" -Encoding ascii
     Write-Host "Built artifacts: $output"
-} finally { $env:PATH = $originalPath; $env:DIGUP_CPU_ONLY = $originalCpuOnly }
+} finally { Restore-MacResolution; $env:PATH = $originalPath; $env:DIGUP_CPU_ONLY = $originalCpuOnly }
