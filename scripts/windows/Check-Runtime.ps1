@@ -20,7 +20,7 @@ $inventory = foreach ($file in $files) {
             throw "Unpackaged runtime dependency: $($file.Name) -> $import"
         }
         # A build machine may have vendor DLLs in System32. Only explicit OS DLLs may rely on it.
-        if ($import -match '^(swift|Foundation|_Foundation|BlocksRuntime|dispatch|llama|mtmd|ggml|pdfium|avcodec|avformat|avutil|avfilter|swresample|swscale|vcruntime|msvcp|concrt)' -and
+        if ($import -match '^(swift|Foundation|_Foundation|BlocksRuntime|dispatch|llama|mtmd|ggml|pdfium|dav1d|avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|vcruntime|msvcp|concrt)' -and
             !(Test-Path -LiteralPath (Join-Path $file.DirectoryName $import))) {
             throw "Application runtime must be app-local: $($file.Name) -> $import"
         }
