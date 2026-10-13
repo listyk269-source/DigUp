@@ -10,7 +10,10 @@ STB_COMMIT=2c980bb59875b0d32144a71867fbdebb2f77cd20   # nothings/stb, 2026-08-02
 MINIZ_VERSION=3.1.2
 PDFIUM_TAG=chromium/8086
 STAMP="sqlite $SQLITE_ZIP stb $STB_COMMIT miniz $MINIZ_VERSION pdfium $PDFIUM_TAG"
-if [[ "$(cat Vendor/VENDOR 2>/dev/null)" == "$STAMP" ]]; then exit 0; fi
+if [[ "$(cat Vendor/VENDOR 2>/dev/null)" == "$STAMP" ]]; then
+  cp scripts/stb.c Vendor/stb/stb.c
+  exit 0
+fi
 
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) PDFIUM=pdfium-linux-x64 ;;
@@ -37,15 +40,7 @@ rm -rf Vendor/stb && mkdir -p Vendor/stb/include
 for h in stb_image.h stb_image_write.h stb_image_resize2.h; do
   curl -sSL -o "Vendor/stb/include/$h" "https://raw.githubusercontent.com/nothings/stb/$STB_COMMIT/$h"
 done
-cat > Vendor/stb/stb.c <<'C'
-// The stb implementations, once (the headers alone are declarations). Written by scripts/fetch-vendor.sh.
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image.h"
-#include "stb_image_write.h"
-#include "stb_image_resize2.h"
-C
+cp scripts/stb.c Vendor/stb/stb.c
 
 echo "miniz ($MINIZ_VERSION)"
 curl -sSL -o "$T/miniz.zip" "https://github.com/richgel999/miniz/releases/download/$MINIZ_VERSION/miniz-$MINIZ_VERSION.zip"

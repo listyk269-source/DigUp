@@ -32,6 +32,8 @@ if (!$SkipVendor) {
     & "$PSScriptRoot/Build-Llama.ps1" -Jobs $Jobs
     & "$PSScriptRoot/Build-FFmpeg.ps1" -Destination "$script:Vendor/ffmpeg" -Jobs $Jobs
 }
+# The adapter is project source, even when pinned third-party build products are reused.
+Copy-Item -LiteralPath "$script:Repo/scripts/stb.c" -Destination "$script:Vendor/stb/stb.c"
 if (!$SwiftRuntimeDirectory) {
     $candidates = @(Get-ChildItem @("${env:ProgramFiles}/Swift/Runtimes/$($script:Manifest.tools.swift)",
         "$env:LOCALAPPDATA/Programs/Swift/Runtimes/$($script:Manifest.tools.swift)") -Filter swiftCore.dll -Recurse -ErrorAction SilentlyContinue)
@@ -55,7 +57,10 @@ try {
     # Embed while linking: post-link mt.exe can corrupt Swift's PE/DWARF layout.
     Invoke-Checked swift @('build', '-c', 'release', '--product', 'digup', '--jobs', "$Jobs",
         '-Xlinker', '/MANIFEST:EMBED', '-Xlinker', "/MANIFESTINPUT:$PSScriptRoot/cli.manifest")
-    if (!$SkipTests) { Invoke-Checked swift @('test', '--jobs', "$Jobs") }
+    if (!$SkipTests) {
+        & "$PSScriptRoot/Test-Stb.ps1"
+        Invoke-Checked swift @('test', '--jobs', "$Jobs")
+    }
     $swiftBin = (& swift build -c release --show-bin-path | Select-Object -Last 1).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot locate the Swift output.' }
     $package = "$script:Repo/build.noindex/windows/package"

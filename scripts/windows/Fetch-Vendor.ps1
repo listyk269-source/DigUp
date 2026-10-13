@@ -15,14 +15,7 @@ New-Item -ItemType Directory -Force "$script:Vendor/stb/include" | Out-Null
 foreach ($name in @('stbImage', 'stbWrite', 'stbResize')) {
     Copy-Item -LiteralPath (Get-VerifiedDownload $script:Manifest.downloads.$name) -Destination "$script:Vendor/stb/include"
 }
-@'
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image.h"
-#include "stb_image_write.h"
-#include "stb_image_resize2.h"
-'@ | Set-Content "$script:Vendor/stb/stb.c" -Encoding utf8NoBOM
+Copy-Item -LiteralPath "$script:Repo/scripts/stb.c" -Destination "$script:Vendor/stb/stb.c"
 
 Expand-Archive -LiteralPath (Get-VerifiedDownload $script:Manifest.downloads.miniz) -DestinationPath "$tmp/miniz"
 New-Item -ItemType Directory -Force "$script:Vendor/miniz/include" | Out-Null

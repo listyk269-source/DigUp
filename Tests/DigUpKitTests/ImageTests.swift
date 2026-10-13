@@ -68,11 +68,16 @@ import WinSDK
         })
         try #require(handle != INVALID_HANDLE_VALUE)
         let bits = UInt(bitPattern: handle), closed = DispatchSemaphore(value: 0)
-        DispatchQueue.global().async {
+        let started = DispatchSemaphore(value: 0)
+        // Other tests may occupy the dispatch pool longer than the image reader's retry budget.
+        let releaser = Thread {
+            started.signal()
             Thread.sleep(forTimeInterval: 0.04)
             CloseHandle(HANDLE(bitPattern: bits))
             closed.signal()
         }
+        releaser.start()
+        started.wait()
         defer { closed.wait() }
         let shown = try Self.decode(prepared.path)
         #expect(shown.width == 240 && shown.height == 400)
