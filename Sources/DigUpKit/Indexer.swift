@@ -116,6 +116,24 @@ public final class Indexer {
                     movedFrom.insert(row.path)
                     summary.moved += 1
                 } else {
+                    #if os(Windows)
+                    // A pre-release Windows index could spell its selected root differently from the disk. Such a
+                    // row lies outside the current bytewise path range. Reuse it only when the native filesystem
+                    // confirms the very same path; an inode alone also matches genuinely distinct hard-link names.
+                    if let row = try store.files(device: file.device, inode: file.inode).first(where: {
+                        FolderSelection.realPath($0.path).utf8.elementsEqual(file.path.utf8)
+                    }) {
+                        try store.move(row.id, to: file.path)
+                        movedFrom.insert(row.path)
+                        summary.moved += 1
+                        if row.size != file.size || abs(row.mtime - file.mtime) > 0.001 || row.kind != file.kind {
+                            try store.requeue(row.id, as: file)
+                            summary.changed += 1
+                            summary.queued.append(row.id)
+                        }
+                        continue
+                    }
+                    #endif
                     summary.queued.append(try store.insert(file))
                     summary.added += 1
                 }

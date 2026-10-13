@@ -97,6 +97,53 @@ import WinSDK
     }
 
     #if os(Windows)
+    @Test func legacyRootCasingKeepsExistingRowAndVectorsWithoutMergingHardLinks() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-legacy-case-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let documents = base.appendingPathComponent("MixedCase Документы")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        let file = documents.appendingPathComponent("numbers.txt")
+        try Data("111 222 333".utf8).write(to: file)
+        let store = try IndexStore(directory: base.appendingPathComponent("index"))
+        let indexer = try Indexer(store: store, options: IndexOptions(),
+                                  makeEmbedder: { throw WorkerError.notFound("numeric fixture needs no model") })
+        #expect(try indexer.sync([documents]).added == 1)
+        #expect(try indexer.run() == ["done": 1])
+        let original = try #require(store.files(under: [documents.path]).first)
+        // A known vector checks byte-preserving DB repair independently of embedding inference.
+        var vector = [Float](repeating: 0, count: Vectors.dimension)
+        vector[0] = 1
+        try store.addSegment(file: original.id, kind: .chunk, modality: .text, vector: vector)
+        let legacy = documents.path.uppercased() + "/" + file.lastPathComponent
+        try store.move(original.id, to: legacy)
+        let result = try indexer.sync([documents])
+        #expect(result.added == 0 && result.moved == 1 && result.changed == 0)
+        #expect(try store.files(under: [documents.path]).map(\.id) == [original.id])
+        #expect(try Searcher(store: store).vectorCount == 1)
+        #expect(try keywordCount("333", store: store) == 1)
+
+        let linked = documents.appendingPathComponent("separate hard link.txt")
+        let created = WindowsPaths.extended(linked.path).withCString(encodedAs: UTF16.self) { target in
+            WindowsPaths.extended(file.path).withCString(encodedAs: UTF16.self) { original in
+                CreateHardLinkW(target, original, nil)
+            }
+        }
+        try #require(created)
+        #expect(try indexer.sync([documents]).added == 1)
+        #expect(try store.files(under: [documents.path]).count == 2)
+
+        // A changed legacy file keeps its identity, but correctly queues fresh content and discards stale vectors.
+        try store.move(original.id, to: legacy)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: 0)
+        try handle.write(contentsOf: Data("444 555 666 777".utf8))
+        try handle.close()
+        let changed = try indexer.sync([documents])
+        #expect(changed.added == 0 && changed.moved == 1 && changed.queued.contains(original.id))
+        #expect(try store.files(under: [documents.path]).contains { $0.id == original.id })
+        #expect(try Searcher(store: store).vectorCount == 0)
+    }
+
     @Test func rootCasingDoesNotDuplicateFilesAcrossSyncs() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-case-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }

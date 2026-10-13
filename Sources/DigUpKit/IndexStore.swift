@@ -247,6 +247,18 @@ public final class IndexStore {
         return out
     }
 
+    #if os(Windows)
+    /// Legacy Windows roots may have been stored using the caller's casing. Use the existing inode index to find
+    /// possible aliases, then let the caller confirm the filesystem's canonical path before moving any row.
+    func files(device: UInt64, inode: UInt64) throws -> [FileRecord] {
+        guard inode != 0 else { return [] }
+        var out: [FileRecord] = []
+        try db.query("SELECT \(Self.fileColumns) FROM files WHERE device = ? AND inode = ? ORDER BY id",
+                     [.int(Int64(bitPattern: device)), .int(Int64(bitPattern: inode))]) { out.append(Self.record($0)) }
+        return out
+    }
+    #endif
+
     /// Adds a file (pending) and returns its id.
     @discardableResult
     public func insert(_ file: Candidate) throws -> Int64 {
