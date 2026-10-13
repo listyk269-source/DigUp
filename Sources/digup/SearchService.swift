@@ -144,14 +144,14 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 guard let codeSearcher else { return ["hits": [], "strong": 0, "meaning": false] }
                 hits = try codeSearcher.search(text, queryVector: vector, limit: limit, prefixLast: prefixLast).filter {
                     FolderSelection.isSearched($0.path, folders: codeRoots, skipped: codeSkipped)
-                        && FileManager.default.fileExists(atPath: $0.path)
+                        && FileManager.default.fileExists(atPath: FileAccess.path($0.path))
                 }
             } else {
                 hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast)
                     .filter {
                         (roots.isEmpty || FolderSelection.isSearched($0.path, folders: roots, skipped: skipped))
                             && !types.contains(($0.path as NSString).pathExtension.lowercased())
-                            && FileManager.default.fileExists(atPath: $0.path)
+                            && FileManager.default.fileExists(atPath: FileAccess.path($0.path))
                     }
             }
             var reply: [String: Any] = [
