@@ -100,6 +100,7 @@ jobs:
           $installer = Get-ChildItem 'build.noindex/windows/artifacts/*-setup.exe' | Select-Object -First 1
           ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models $models -OutputDirectory 'build.noindex/windows/smoke'
           ./scripts/windows/Media-Smoke.ps1 -PackageDirectory 'build.noindex/windows/package' -Models $models -OutputDirectory 'build.noindex/windows/media-smoke'
+          ./scripts/windows/Portable-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/portable-smoke'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
           $env:PATH = "$PWD/Vendor/llama/lib;$PWD/Vendor/pdfium/bin;$PWD/Vendor/ffmpeg/bin;$env:PATH"
@@ -117,6 +118,8 @@ jobs:
             build.noindex/windows/smoke/*.txt
             build.noindex/windows/media-smoke/*.json
             build.noindex/windows/media-smoke/*.txt
+            build.noindex/windows/portable-smoke/*.json
+            build.noindex/windows/portable-smoke/*.txt
             build.noindex/windows/package/licenses/**
             build.noindex/windows/package/runtime-inventory.json
       # Publishing to Releases is intentionally separate: Win10/11 clean-VM and
