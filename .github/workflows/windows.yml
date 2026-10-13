@@ -1,0 +1,105 @@
+name: Windows x64
+
+on:
+  push:
+    branches: [main, 'feat/windows-*']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke:
+    runs-on: windows-2022
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Cache verified downloads
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: Vendor/downloads
+          key: windows-downloads-${{ hashFiles('scripts/windows/dependencies.json', 'scripts/windows/ffmpeg-dependencies.json') }}
+      - name: Cache Cargo downloads and pinned Tauri CLI
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-tauri.exe
+          key: windows-rust195-tauri2122-${{ hashFiles('shell/src-tauri/Cargo.lock') }}
+      - name: Install pinned Swift and Rust
+        run: |
+          . ./scripts/windows/Common.ps1
+          $installer = Get-VerifiedDownload $script:Manifest.downloads.swift
+          $process = Start-Process -FilePath $installer -ArgumentList '/quiet', '/norestart' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -notin @(0, 3010)) { throw "Swift installer exit $($process.ExitCode)" }
+          rustup toolchain install $script:Manifest.tools.rust --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE) { throw 'Rust installation failed' }
+          rustup default $script:Manifest.tools.rust
+          if ($LASTEXITCODE) { throw 'Rust selection failed' }
+          if (!(Test-Path "$env:USERPROFILE/.cargo/bin/cargo-tauri.exe")) {
+            cargo install tauri-cli --version $script:Manifest.tools.tauriCli --locked
+            if ($LASTEXITCODE) { throw 'Tauri CLI installation failed' }
+          }
+      - name: Build CLI, GUI, NSIS and portable archive; run unit tests
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_CERTIFICATE_PFX || '' }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ startsWith(github.ref, 'refs/tags/') && secrets.WINDOWS_CERTIFICATE_PASSWORD || '' }}
+        run: |
+          . ./scripts/windows/Enter-Environment.ps1
+          $certificate = $null
+          $pfx = Join-Path $env:RUNNER_TEMP 'digup-signing.pfx'
+          try {
+            if ($env:WINDOWS_CERTIFICATE_PFX) {
+              [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX))
+              $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+              $certificate = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+              $env:DIGUP_CERT_THUMBPRINT = $certificate.Thumbprint
+            }
+            ./scripts/windows/Build.ps1 -Jobs 4
+          } finally {
+            if ($certificate) { Remove-Item -LiteralPath "Cert:\CurrentUser\My\$($certificate.Thumbprint)" }
+            if (Test-Path -LiteralPath $pfx) { Remove-Item -LiteralPath $pfx -Force }
+          }
+      - name: Cache verified model bytes for real smoke
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: build.noindex/windows/models
+          key: windows-model-${{ hashFiles('Sources/DigUpKit/ModelFiles.swift') }}
+      - name: Download/check pinned model and smoke the installed GUI and CLI
+        run: |
+          . ./scripts/windows/Enter-Environment.ps1
+          $models = Join-Path (Get-Location) 'build.noindex/windows/models'
+          $installer = Get-ChildItem 'build.noindex/windows/artifacts/*-setup.exe' | Select-Object -First 1
+          ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models $models -OutputDirectory 'build.noindex/windows/smoke'
+          ./scripts/windows/Media-Smoke.ps1 -PackageDirectory 'build.noindex/windows/package' -Models $models -OutputDirectory 'build.noindex/windows/media-smoke'
+          $env:DIGUP_MODELS = $models
+          $env:DIGUP_CPU_ONLY = '1'
+          $env:PATH = "$PWD/Vendor/llama/lib;$PWD/Vendor/pdfium/bin;$PWD/Vendor/ffmpeg/bin;$env:PATH"
+          swift test --skip-build --filter ReferenceVectorTests
+          if ($LASTEXITCODE) { throw 'Real model reference vector checks failed' }
+      - name: Upload build and smoke evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: DigUp-windows-x64-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build.noindex/windows/artifacts/*
+            build.noindex/windows/smoke/*.json
+            build.noindex/windows/smoke/*.txt
+            build.noindex/windows/media-smoke/*.json
+            build.noindex/windows/media-smoke/*.txt
+            build.noindex/windows/package/licenses/**
+            build.noindex/windows/package/runtime-inventory.json
+      # Publishing to Releases is intentionally separate: Win10/11 clean-VM and
+      # redistribution checks in docs/windows.md must pass before public release.

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "tools": {
+    "swift": "6.3.3",
+    "rust": "1.95.0",
+    "tauriCli": "2.12.2",
+    "cmake": "4.1.2",
+    "visualStudio": "2022",
+    "architecture": "x86_64-pc-windows-msvc"
+  },
+  "llama": {
+    "tag": "b11461",
+    "commit": "4d756bc72bf00a4aacf410ae15a2d315f3db400d",
+    "url": "https://github.com/ggml-org/llama.cpp.git"
+  },
+  "downloads": {
+    "swift": {
+      "file": "swift-6.3.3-RELEASE-windows10.exe",
+      "url": "https://download.swift.org/swift-6.3.3-release/windows10/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-windows10.exe",
+      "sha256": "235626548f249cd516d3d4d90eee980dccad46f3822dac1f8e3119b0fede94b7"
+    },
+    "sqlite": {
+      "file": "sqlite-amalgamation-3540000.zip",
+      "url": "https://sqlite.org/2026/sqlite-amalgamation-3540000.zip",
+      "sha256": "68e913b0fe8ec6b4e5f391c594a28872884e80d6cd042a1e50c957be46b5aa4d"
+    },
+    "stbImage": {
+      "file": "stb_image.h",
+      "url": "https://raw.githubusercontent.com/nothings/stb/2c980bb59875b0d32144a71867fbdebb2f77cd20/stb_image.h",
+      "sha256": "594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3"
+    },
+    "stbWrite": {
+      "file": "stb_image_write.h",
+      "url": "https://raw.githubusercontent.com/nothings/stb/2c980bb59875b0d32144a71867fbdebb2f77cd20/stb_image_write.h",
+      "sha256": "cbd5f0ad7a9cf4468affb36354a1d2338034f2c12473cf1a8e32053cb6914a05"
+    },
+    "stbResize": {
+      "file": "stb_image_resize2.h",
+      "url": "https://raw.githubusercontent.com/nothings/stb/2c980bb59875b0d32144a71867fbdebb2f77cd20/stb_image_resize2.h",
+      "sha256": "173e654634f6ccaad98f603e686ea212eec1fe8ea6d2a5e5e8056efa10ae3880"
+    },
+    "miniz": {
+      "file": "miniz-3.1.2.zip",
+      "url": "https://github.com/richgel999/miniz/releases/download/3.1.2/miniz-3.1.2.zip",
+      "sha256": "f0446d863f9c19926ad9483c523fdc42e42b8d4a6a431d27e09d49c79a140d9a"
+    },
+    "pdfium": {
+      "file": "pdfium-win-x64-8086.tgz",
+      "url": "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium%2F8086/pdfium-win-x64.tgz",
+      "sha256": "1fd8af952832dbb0eb16d9249f68fe09e5f5ebf7c3dd9f6066ea2720cc28487d"
+    },
+    "webviewBootstrapper": {
+      "file": "MicrosoftEdgeWebview2Setup.exe",
+      "url": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/a3af1bf0-d324-4cfe-b9bf-0b020a73ddfb/MicrosoftEdgeWebview2Setup.exe",
+      "sha256": "9b5ca0a259e6fc9b57230089258bb2ee1de74a9ed52f88d06b4ac354a8a68c70"
+    },
+    "cmake": {
+      "file": "cmake-4.1.2-windows-x86_64.zip",
+      "url": "https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-windows-x86_64.zip",
+      "sha256": "82730741149681597510a4bc7095da1460b472dac24eaf9c23ad7440f47753ab"
+    }
+  }
+}
