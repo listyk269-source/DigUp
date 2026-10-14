@@ -8,6 +8,17 @@ outside this release target.
 
 ## Status and evidence
 
+The Tauri search panel's **Graph** button explores files related to the selected result. Click a node or its entry
+in the connected-files list, then **Expand links** / **More links** to reveal neighbors, or **Start here** to center
+a new graph on that file. **Minimum similarity** filters cosine scores; these are not probabilities or confirmed
+relationships. The view contains only expanded neighborhoods, with a 120-file rendering limit; start from another
+node to continue exploring. It does not materialize every pair of files or claim automatic topic/people detection.
+Links compare the matched indexed fragment, or the normalized file-vector average when no vector belongs to that
+fragment. Neighbors use the closest fragment per file. **Refresh** recomputes the view after indexing changes.
+Folder exclusions and the separate code index apply. Graph navigation reads stored vectors only, requires no
+additional model/download, and does not change the index schema or search ranking. The macOS native app does not
+yet expose this Tauri view. `Graph-Smoke.ps1` checks real indexed vectors, WebView controls and model-free navigation.
+
 `scripts/windows/Build.ps1` is the build entry point. `.github/workflows/windows.yml`
 builds, tests, installs, exercises real inference and the installed WebView, then
 uninstalls. A workflow definition is not evidence that GitHub Actions has passed:

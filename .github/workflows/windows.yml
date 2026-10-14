@@ -103,6 +103,7 @@ jobs:
           ./scripts/windows/Portable-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/portable-smoke'
           ./scripts/windows/Cyrillic-Progress-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/cyrillic-progress'
           ./scripts/windows/Search-Pagination-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/search-pagination'
+          ./scripts/windows/Graph-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/graph-smoke'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
           $env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
@@ -134,6 +135,9 @@ jobs:
             build.noindex/windows/cyrillic-progress/Отдельный индекс/worker*.log
             build.noindex/windows/search-pagination/*.json
             build.noindex/windows/search-pagination/*.txt
+            build.noindex/windows/graph-smoke/*.json
+            build.noindex/windows/graph-smoke/*.txt
+            build.noindex/windows/graph-smoke/*.svg
             build.noindex/windows/gpu-policy-smoke/*.json
             build.noindex/windows/gpu-policy-smoke/*.jsonl
             build.noindex/windows/gpu-policy-smoke/*.txt

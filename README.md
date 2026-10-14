@@ -146,6 +146,11 @@ The Windows build uses the existing portable Swift engine and CLI with the Rust/
 It does not replace the macOS app or introduce a second indexing engine. See [Windows build and validation](docs/windows.md)
 for pinned prerequisites, installation, troubleshooting, removal, and the Windows 10/11 acceptance checklist.
 
+The Tauri panel also has **Graph**: select a search result to explore related files from the existing index,
+then select a node and **Expand links**. Similarity links are computed locally from stored vectors; no additional
+model or reindexing is needed. The view shows expanded neighborhoods rather than every pair of files, and respects
+folder exclusions. See the Windows guide for thresholds, graph limits and the real-vector smoke test.
+
 From PowerShell 7, after installing the documented build prerequisites:
 
 ```powershell
