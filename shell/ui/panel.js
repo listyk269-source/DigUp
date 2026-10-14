@@ -85,8 +85,9 @@ function queryChanged() {
     show({ hits: [], strong: 0 }, text, typed ? "codeHint" : "empty");
     return;
   }
-  // Words now. The last word is probably half-typed, so it matches as a prefix.
-  ask({ op: "search_page", q: text, code, meaning: false, prefix_last: true, limit: PAGE_SIZE })
+  // Keep the bounded keyword preview cheap on every keystroke. Complete, paged
+  // retrieval starts after typing pauses, even if the model is unavailable.
+  ask({ op: "search", q: text, code, meaning: false, prefix_last: true, limit: PAGE_SIZE })
     .then((reply) => {
       if (generation === state.generation && state.finalGeneration !== generation) show(reply, text, "words");
     })
