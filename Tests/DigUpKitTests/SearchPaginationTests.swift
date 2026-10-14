@@ -22,6 +22,17 @@ import Testing
         #expect(try snapshot.page(offset: 0, limit: 40).isEmpty)
         #expect(try searcher.text(ofSegment: hit.segmentID, atPath: hit.path) == nil)
         #expect(try searcher.text(ofSegment: hit.segmentID, atPath: "/chosen/b.txt") == "UNRELATED953")
+        // SQLite can reuse the file ID and segment ID together for a different path.
+        try store.db.run("DELETE FROM fts WHERE rowid = ?", [.int(hit.segmentID)])
+        try store.db.run("DELETE FROM segments WHERE id = ?", [.int(hit.segmentID)])
+        try store.db.run("DELETE FROM fts WHERE rowid IN (SELECT id FROM segments WHERE file = ?)", [.int(chosen)])
+        try store.db.run("DELETE FROM files WHERE id = ?", [.int(chosen)])
+        let replacement = try store.insert(Candidate(path: "/chosen/c.txt", kind: .doc, size: 1, mtime: 1, inode: 3, device: 1))
+        try store.addSegment(file: replacement, kind: .chunk, modality: .text, text: "DIFFERENTFILE864")
+        #expect(replacement == chosen)
+        #expect(try snapshot.page(offset: 0, limit: 40).isEmpty)
+        #expect(try searcher.text(ofSegment: hit.segmentID, atPath: hit.path) == nil)
+        #expect(try searcher.text(ofSegment: hit.segmentID, atPath: "/chosen/c.txt") == "DIFFERENTFILE864")
     }
 
     @Test func pagesReachEveryEligibleFileBeyondBothKeywordBudgets() throws {

@@ -238,7 +238,7 @@ public final class Searcher {
         let wordRank = Dictionary(words.enumerated().map { ($0.element.file, ($0.offset + 1, $0.element)) },
                                   uniquingKeysWith: { first, _ in first })
         let ranking = scored.sorted(by: { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) })
-        return SearchSnapshot(scores: ranking.map(\.value)) { [self, rowSegment] range in
+        return SearchSnapshot(scores: ranking.map(\.value)) { [self, rowSegment, filePath] range in
             var hits: [SearchHit] = []
             for rank in range {
                 let (file, score) = ranking[rank]
@@ -266,7 +266,7 @@ public final class Searcher {
                         info = (try? JSONSerialization.jsonObject(with: json) as? [String: String]) ?? [:]
                     }
                 }
-                guard !path.isEmpty else { continue } // removed since this ranking was prepared
+                guard !path.isEmpty, filePath[file] == path else { continue } // removed/renamed; file IDs can also be reused
                 var segment = SegmentKind.name, loc: Double?, locEnd: Double?, storedExcerpt: String?
                 var foundSegment = false
                 try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ? AND file = ?", [.int(segmentID), .int(file)]) {
