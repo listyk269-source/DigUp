@@ -17,15 +17,20 @@ $package = Join-Path $testRoot 'Приложение café'
 [IO.Compression.ZipFile]::ExtractToDirectory([IO.Path]::GetFullPath($Archive), $package)
 $fixture = Join-Path $testRoot 'Документы для графа Ё'
 $outside = Join-Path $testRoot 'Excluded folder'
+$code = Join-Path $testRoot 'Code project'
 $index = Join-Path $testRoot 'Private index'
 $settings = Join-Path $testRoot 'settings.json'
-New-Item -ItemType Directory -Path $fixture,$outside | Out-Null
+New-Item -ItemType Directory -Path $fixture,$outside,$code | Out-Null
 for ($number = 1; $number -le 24; $number++) {
     "GRAPH742. Coastal lighthouse log number $number. Fishing boats follow the harbor beacon through fog." |
         Set-Content -LiteralPath (Join-Path $fixture ("Заметка café {0:D3}.txt" -f $number)) -Encoding utf8NoBOM
 }
 'GRAPH742. Coastal lighthouse log. Fishing boats follow the harbor beacon through fog.' |
     Set-Content -LiteralPath (Join-Path $outside 'Excluded.txt') -Encoding utf8NoBOM
+for ($number = 1; $number -le 8; $number++) {
+    "// CODEGRAPH742: multiply two integers and return their product.`nfn multiply_$number(a: i32, b: i32) -> i32 { a * b }" |
+        Set-Content -LiteralPath (Join-Path $code "multiply_$number.rs") -Encoding utf8NoBOM
+}
 @{setUp=$true; folders=@($fixture); codeRoots=@(); skipped=@(); skipTypes=@(); device='cpu'} |
     ConvertTo-Json | Set-Content -LiteralPath $settings -Encoding utf8NoBOM
 function Private-StartInfo([string]$Program, [string[]]$Arguments) {
@@ -33,6 +38,7 @@ function Private-StartInfo([string]$Program, [string[]]$Arguments) {
     $start.UseShellExecute=$false; $start.CreateNoWindow=$true; $start.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden
     $start.RedirectStandardInput=$true; $start.RedirectStandardOutput=$true; $start.RedirectStandardError=$true
     $start.StandardOutputEncoding=[Text.Encoding]::UTF8; $start.StandardErrorEncoding=[Text.Encoding]::UTF8
+    $start.StandardInputEncoding=[Text.UTF8Encoding]::new($false)
     foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
     foreach ($variable in 'DIGUP_WORKER_DIR','DIGUP_BACKENDS','DIGUP_FFMPEG','GGML_BACKEND_PATH','DIGUP_DEVICE') { $start.Environment.Remove($variable) | Out-Null }
     $start.Environment['PATH']="$env:SystemRoot/System32;$env:SystemRoot"
@@ -54,6 +60,7 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label) {
 }
 $cli=Join-Path $package 'helper/digup.exe'; $gui=Join-Path $package 'DigUp.exe'
 Run-Private $cli @('index',$fixture,$outside,'--index',$index) 'index'
+Run-Private $cli @('index',$code,'--code','--index',$index) 'index-code'
 foreach ($pass in 'first','restart') {
     $report=Join-Path $testRoot "gui-$pass.json"
     Run-Private $gui @('--index',$index,'--models',$modelsPath,'--settings',$settings,'--debug-isolated',
@@ -92,6 +99,8 @@ try {
     $next=Ask-Graph @{op='related_files';path=$path;offset=6;limit=6;minimum_cosine=0.55}
     $searchPage=Ask-Graph @{op='search_page';cursor=$before.cursor;offset=6;limit=6}
     $status=Ask-Graph @{op='status'}
+    @{first=$first;next=$next;status=$status;searchPage=$searchPage} | ConvertTo-Json -Depth 12 |
+        Set-Content -LiteralPath "$testRoot/model-free-protocol.json" -Encoding utf8NoBOM
     if (!$first.ok -or !$next.ok -or $first.total -ne 23 -or $first.hits.Count -ne 6 -or $next.hits.Count -ne 6 -or
         @(@($first.hits.path)+@($next.hits.path) | Sort-Object -Unique).Count -ne 12 -or $status.encoder -ne 'stopped' -or
         $searchPage.hits.Count -ne 6) { throw 'Stored-vector graph/model independence or original search cursor failed.' }
@@ -107,10 +116,35 @@ try {
     if ($stderr.Wait(5000)) { $stderr.Result | Set-Content -LiteralPath "$testRoot/model-free.stderr.txt" -Encoding utf8NoBOM }
     $process.Dispose()
 }
+# A code-only graph must remain separate from the files index and release its matrix while idle, without an encoder.
+$start=Private-StartInfo $cli @('search-service','--restrict-roots','--code-root',$code,'--encoder-idle','1','--index',$index)
+$start.Environment['DIGUP_MODELS']=Join-Path $testRoot 'No model available'
+$process=[Diagnostics.Process]::Start($start); $stderr=$process.StandardError.ReadToEndAsync()
+try {
+    $codeSearch=Ask-Graph @{op='search_page';q='CODEGRAPH742';code=$true;meaning=$false;limit=6}
+    if (!$codeSearch.hits.Count) { throw 'Real code fixtures were not indexed.' }
+    $codeGraph=Ask-Graph @{op='related_files';path=$codeSearch.hits[0].path;code=$true;limit=6;minimum_cosine=0.35}
+    $loaded=Ask-Graph @{op='status'}
+    if (!$codeGraph.ok -or !$codeGraph.hits.Count -or @($codeGraph.hits | Where-Object kind -ne 'code').Count -or
+        $loaded.encoder -ne 'stopped' -or $loaded.vectors -ne 0 -or $loaded.code_vectors -lt 8) {
+        throw 'Code graph mixed indexes or required an encoder.'
+    }
+    Start-Sleep -Seconds 3
+    $idle=Ask-Graph @{op='status'}
+    if ($idle.code_vectors -ne 0) { throw 'Code-only graph retained its vector matrix while idle.' }
+    @{graph=$codeGraph;loaded=$loaded;idle=$idle} | ConvertTo-Json -Depth 12 |
+        Set-Content -LiteralPath "$testRoot/code-model-free.json" -Encoding utf8NoBOM
+    $process.StandardInput.Close()
+    if (!$process.WaitForExit(15000) -or $process.ExitCode) { throw 'Code graph helper did not exit normally.' }
+} finally {
+    if (!$process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(5000) }
+    if ($stderr.Wait(5000)) { $stderr.Result | Set-Content -LiteralPath "$testRoot/code-model-free.stderr.txt" -Encoding utf8NoBOM }
+    $process.Dispose()
+}
 @{result='passed';realModel=$true;storedVectorGraph=$true;requiresModelForGraph=$false;userInstallationModified=$false;
     archiveSha256=(Get-FileHash -LiteralPath $Archive).Hash.ToLowerInvariant();
     checks=@('real WebView DOM graph click','neighbor expansion','cosine links and unique files','selected-folder exclusion',
         'restart','Unicode/spaces','neighbor pagination','graph with no model present','search cursor survives graph',
-        'removed folders denied','PATH only System32/Windows')} | ConvertTo-Json -Depth 4 |
+        'removed folders denied','PATH only System32/Windows','separate real code graph','idle vector release without encoder')} | ConvertTo-Json -Depth 4 |
     Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Actual packaged GUI and model-free stored-vector graph passed: $testRoot"

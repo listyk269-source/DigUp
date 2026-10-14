@@ -108,7 +108,7 @@ class GraphView {
     this.el("graph-view").hidden = !this.visible;
     const node = this.model.nodes.get(this.selected), page = this.pages.get(this.selected);
     this.el("graph-status").textContent = this.error || (this.loading ? "Finding related files…" :
-      `${this.model.nodes.size} files · ${this.model.edges.size} similarity links${this.model.omitted ? " · View limit reached. Use Start here to explore further." : ""}`);
+      `${this.model.nodes.size} files · ${this.model.edges.size} similarity links${this.model.nodes.size >= this.model.cap ? " · View limit reached. Use Start here to explore further." : ""}`);
     this.el("graph-title").textContent = node ? this.nameOf(node.path) : "Related files";
     this.el("graph-path").textContent = node?.path ?? "";
     this.el("graph-basis").textContent = page ? (page.basis === "matched_fragment" ? "Based on the matched fragment" : "Based on the file’s average meaning") + ` · ${page.total} indexed neighbors above the threshold` : "Select Expand links to explore this file";
@@ -133,14 +133,18 @@ class GraphView {
     svg.replaceChildren(create("title", {}, "Local file similarity graph. Select a file, expand its links, or pan the background."));
     for (const edge of this.model.edges.values()) {
       const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to);
-      const line = create("line", { x1: from.x, y1: from.y, x2: to.x, y2: to.y, class: "graph-edge", "stroke-width": 1 + Math.max(0, edge.cosine) * 2 });
+      const dx = to.x - from.x, dy = to.y - from.y;
+      const end = Math.min(dx ? 72 / Math.abs(dx) : Infinity, dy ? 24 / Math.abs(dy) : Infinity);
+      const line = create("line", { x1: from.x + dx * end, y1: from.y + dy * end,
+        x2: to.x - dx * end, y2: to.y - dy * end, class: "graph-edge", "stroke-width": 1 + Math.max(0, edge.cosine) * 2 });
       line.append(create("title", {}, `Similarity ${edge.cosine.toFixed(3)}`)); svg.append(line);
     }
     for (const node of this.model.nodes.values()) {
       const group = create("g", { transform: `translate(${node.x},${node.y})`, class: "graph-node" + (node.path === this.selected ? " selected" : ""),
         "data-node": "true", tabindex: "0", role: "button", "aria-label": `${this.nameOf(node.path)}, ${node.kind}` });
       group.append(create("title", {}, node.path), create("rect", { x: -70, y: -22, width: 140, height: 44, rx: 6 }));
-      const name = this.nameOf(node.path), short = [...name].length > 16 ? [...name].slice(0, 15).join("") + "…" : name;
+      const name = this.nameOf(node.path), letters = [...name];
+      const short = letters.length > 16 ? letters.slice(0, 8).join("") + "…" + letters.slice(-7).join("") : name;
       group.append(create("text", { x: 0, y: -2, "text-anchor": "middle", class: "graph-node-name" }, short),
         create("text", { x: 0, y: 14, "text-anchor": "middle", class: "graph-node-kind" }, node.kind));
       group.onclick = () => this.select(node.path);
