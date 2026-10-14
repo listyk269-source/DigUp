@@ -17,6 +17,8 @@ import LlamaRuntime
 ///         Complete FTS candidate retrieval; no 100-file/1000-segment cutoff. Metadata is read per page.
 ///         New queries/folder settings replace the cursor. Reload preserves the ranking; deleted files are skipped.
 ///   {"op":"index_stats"} → selected-folder metadata counts, recent indexed files and whole-database size.
+///   {"op":"related_files","path":…, "segment":id?, "code":bool, "offset":0, "limit":12, "minimum_cosine":0.55}
+///         → seed, hits, total, next_offset, has_more, basis, vector_source. Stored vectors only; no query encoder.
 ///   {"op":"embed_ahead","q":…,"code":bool}   → {"ok":true}: embeds and caches the text (the panel sends what's typed so
 ///                                               far on every keystroke, so the pause's vector is usually ready)
 ///   {"op":"text","segment":id,"code":bool}    → {"text":…}: the part of a file a hit points at, for the preview
@@ -129,6 +131,30 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
 
     private func handle(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
         switch op {
+        case "related_files":
+            lastQuery = Date()
+            let code = request["code"] as? Bool ?? false
+            guard let path = request["path"] as? String, accepts(path, code: code),
+                  FileManager.default.fileExists(atPath: FileAccess.path(path)) else {
+                return ["ok": false, "error": "The file is missing or outside the selected folders."]
+            }
+            guard let selected = code ? codeSearcher : searcher else {
+                return ["ok": false, "error": "This index is not available."]
+            }
+            let offset = max(0, request["offset"] as? Int ?? 0)
+            let limit = min(max(1, request["limit"] as? Int ?? 12), 40)
+            let kinds = (request["kinds"] as? [String]).map { Set($0.compactMap(FileKind.init(rawValue:))) }
+            let started = Date()
+            let related = try selected.relatedFiles(to: path, segmentID: (request["segment"] as? NSNumber)?.int64Value,
+                offset: offset, limit: limit, minimumCosine: request["minimum_cosine"] as? Double ?? 0.55,
+                kinds: kinds, acceptsPath: { [self] in accepts($0, code: code) })
+            if let issue = related.issue { return ["ok": false, "error": issue] }
+            let next = min(offset, related.total) + min(limit, max(0, related.total - min(offset, related.total)))
+            return ["ok": true, "seed": related.seed.map(hitFields) as Any? ?? NSNull(),
+                "hits": related.hits.filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }.map(hitFields),
+                "total": related.total, "next_offset": next, "has_more": next < related.total,
+                "basis": related.basis, "vector_source": selected.vectorSource as Any? ?? NSNull(),
+                "ms": Int(Date().timeIntervalSince(started) * 1000)]
         case "search", "search_page":
             if op == "search_page", let cursor = request["cursor"] as? String {
                 guard cursor == snapshotToken, snapshot != nil else {
@@ -341,7 +367,8 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         while true {
             Thread.sleep(forTimeInterval: 1)
             lock.withLock {
-                guard encoder != nil || searcher.vectorsLoaded, Date().timeIntervalSince(lastQuery) > idleSeconds
+                guard encoder != nil || searcher.vectorsLoaded || codeSearcher?.vectorsLoaded == true,
+                      Date().timeIntervalSince(lastQuery) > idleSeconds
                 else { return }
                 stopEncoder()
                 searcher.releaseVectors()

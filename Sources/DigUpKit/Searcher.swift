@@ -43,6 +43,15 @@ public struct SearchHit: Sendable {
     public var focus: Double? = nil
 }
 
+/// A bounded page of file-to-file similarity, derived from stored vectors without running a model.
+public struct RelatedFiles: Sendable {
+    public let seed: SearchHit?
+    public let hits: [SearchHit]
+    public let total: Int
+    public let basis: String
+    public let issue: String?
+}
+
 /// Hybrid search: meaning (EmbeddingGemma's vectors) + words (FTS5).
 ///
 /// Meaning is the model's cosine similarity, put on one scale per query (`meaning`): every vector is scored anyway, so
@@ -134,6 +143,89 @@ public final class Searcher {
     /// found first, the top 5 unchanged; the synthetic code eval 40 → 41 of 41; 1.5 changed nothing, 0.5 lost the top 5).
     public static let wordWeight = 2.0
     public static let codeWordWeight = 1.0
+
+    /// A matched fragment anchors the neighborhood when supplied; otherwise use the normalized mean of the file's
+    /// valid vectors. Every other file contributes its closest fragment once. Cosine is similarity, not probability.
+    /// Filters run before ranking/paging; live SQLite path/segment ownership is checked again when reading a node.
+    public func relatedFiles(to path: String, segmentID: Int64? = nil, offset: Int = 0, limit: Int = 12,
+                             minimumCosine: Double = 0.55, kinds: Set<FileKind>? = nil,
+                             acceptsPath: ((String) -> Bool)? = nil) throws -> RelatedFiles {
+        func unavailable(_ issue: String) -> RelatedFiles {
+            RelatedFiles(seed: nil, hits: [], total: 0, basis: "", issue: issue)
+        }
+        guard acceptsPath?(path) ?? true else { return unavailable("This file is outside the selected folders.") }
+        // Start a fresh vector view: indexing can replace row IDs or the model between graph expansions.
+        try reload()
+        guard let file = filePath.first(where: { $0.value.utf8.elementsEqual(path.utf8) })?.key,
+              let matrix else { return unavailable("This file has no indexed vectors yet.") }
+        let rows = rowFile.indices.filter { rowFile[$0] == file }
+        guard !rows.isEmpty else { return unavailable("This file has no indexed vectors yet.") }
+        var matched: Int?
+        if let segmentID {
+            var owned = false
+            try store.db.query("SELECT 1 FROM segments WHERE id = ? AND file = ?", [.int(segmentID), .int(file)]) { _ in owned = true }
+            guard owned else { return unavailable("The indexed fragment changed. Refresh search results.") }
+            matched = rows.first { rowSegment[$0] == segmentID }
+        }
+        var vector = [Float](repeating: 0, count: Vectors.dimension)
+        var validRows: [Int] = []
+        for row in matched.map({ [$0] }) ?? rows {
+            let halves = matrix.halves + row * Vectors.dimension
+            guard (0..<Vectors.dimension).allSatisfy({ halves[$0].isFinite }) else { continue }
+            let squared = (0..<Vectors.dimension).reduce(0.0) { $0 + pow(Double(halves[$1]), 2) }
+            guard squared > 0 else { continue }
+            validRows.append(row)
+            for column in vector.indices { vector[column] += Float(halves[column]) }
+        }
+        let squared = vector.reduce(0.0) { $0 + Double($1) * Double($1) }
+        guard squared.isFinite, squared > 0, let first = validRows.first else {
+            return unavailable("This file has no usable indexed vectors yet.")
+        }
+        let norm = Float(sqrt(squared))
+        vector = vector.map { $0 / norm }
+        guard let seed = try relatedHit(file: file, row: first, cosine: nil) else {
+            return unavailable("This file changed in the index. Refresh search results.")
+        }
+        let accepted = Set(filePath.compactMap { id, value in
+            id != file && (acceptsPath?(value) ?? true) && (kinds == nil || fileKind[id].map { kinds!.contains($0) } ?? false)
+                ? id : nil
+        })
+        let threshold = minimumCosine.isFinite ? min(1, max(-1, minimumCosine)) : 0.55
+        let scores = score(vector)
+        var best: [Int64: (cosine: Double, row: Int)] = [:]
+        for row in scores.indices where accepted.contains(rowFile[row]) && scores[row].isFinite {
+            let cosine = min(1, max(-1, Double(scores[row])))
+            if cosine >= threshold && cosine > (best[rowFile[row]]?.cosine ?? -.infinity) {
+                best[rowFile[row]] = (cosine, row)
+            }
+        }
+        let ranking = best.sorted { $0.value.cosine > $1.value.cosine || ($0.value.cosine == $1.value.cosine && $0.key < $1.key) }
+        let start = min(max(0, offset), ranking.count)
+        let end = start + min(max(0, min(limit, 40)), ranking.count - start)
+        let hits = try ranking[start..<end].compactMap { try relatedHit(file: $0.key, row: $0.value.row, cosine: $0.value.cosine) }
+        return RelatedFiles(seed: seed, hits: hits, total: ranking.count,
+                            basis: matched == nil ? "file_mean" : "matched_fragment", issue: nil)
+    }
+
+    private func relatedHit(file: Int64, row: Int, cosine: Double?) throws -> SearchHit? {
+        var hit: SearchHit?
+        try store.db.query("""
+            SELECT f.path, f.kind, f.mtime, f.size, f.info, s.kind, s.loc, s.loc_end, s.excerpt
+            FROM files f JOIN segments s ON s.file = f.id WHERE f.id = ? AND s.id = ?
+            """, [.int(file), .int(rowSegment[row])]) { record in
+            let path = record.text(0) ?? ""
+            guard !path.isEmpty, filePath[file]?.utf8.elementsEqual(path.utf8) == true else { return }
+            let info = record.text(4)?.data(using: .utf8).flatMap {
+                (try? JSONSerialization.jsonObject(with: $0)) as? [String: String]
+            } ?? [:]
+            hit = SearchHit(path: path, kind: FileKind(rawValue: record.text(1) ?? "") ?? .doc,
+                score: cosine ?? 1, z: nil, cosine: cosine, keywordRank: nil,
+                segment: SegmentKind(rawValue: record.text(5) ?? "") ?? .name, segmentID: rowSegment[row],
+                loc: record.isNull(6) ? nil : record.double(6), locEnd: record.isNull(7) ? nil : record.double(7),
+                excerpt: record.text(8), modified: record.double(2), size: record.int(3), info: info)
+        }
+        return hit
+    }
 
     public func search(_ text: String, queryVector: [Float]?, kinds: Set<FileKind>? = nil, limit: Int = 20,
                        zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false,
