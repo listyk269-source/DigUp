@@ -196,7 +196,9 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         case "text":
             guard let segment = (request["segment"] as? NSNumber)?.int64Value else { throw CLIError("which segment?") }
             let code = request["code"] as? Bool ?? false
-            return ["text": try (code ? codeSearcher : searcher)?.text(ofSegment: segment) ?? NSNull()]
+            let path = request["path"] as? String
+            if let path, !accepts(path, code: code) { return ["text": NSNull()] }
+            return ["text": try (code ? codeSearcher : searcher)?.text(ofSegment: segment, atPath: path) ?? NSNull()]
         case "reload":
             let hadVectors = searcher.vectorsLoaded
             searcher.releaseVectors() // an older page snapshot must not retain a second vector matrix

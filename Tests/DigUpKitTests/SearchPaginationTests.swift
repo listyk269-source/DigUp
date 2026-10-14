@@ -3,6 +3,27 @@ import Testing
 @testable import DigUpKit
 
 @Suite struct SearchPaginationTests {
+    @Test func reusedSegmentIDNeverShowsAnotherFilesText() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-reused-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = try IndexStore(directory: folder)
+        let other = try store.insert(Candidate(path: "/chosen/b.txt", kind: .doc, size: 1, mtime: 1, inode: 1, device: 1))
+        let chosen = try store.insert(Candidate(path: "/chosen/a.txt", kind: .doc, size: 1, mtime: 1, inode: 2, device: 1))
+        try store.addSegment(file: chosen, kind: .chunk, modality: .text, text: "ONLYFOO742")
+        let searcher = try Searcher(store: store, loadVectors: false)
+        let snapshot = try searcher.snapshot("ONLYFOO742", queryVector: nil)
+        let hit = try #require(snapshot.page(offset: 0, limit: 40).first)
+        try store.db.run("DELETE FROM fts WHERE rowid = ?", [.int(hit.segmentID)])
+        try store.db.run("DELETE FROM segments WHERE id = ?", [.int(hit.segmentID)])
+        try store.addSegment(file: other, kind: .chunk, modality: .text, text: "UNRELATED953")
+        var reused = false
+        try store.db.query("SELECT file FROM segments WHERE id = ?", [.int(hit.segmentID)]) { reused = $0.int(0) == other }
+        #expect(reused) // real SQLite row-ID reuse, no fabricated SearchHit
+        #expect(try snapshot.page(offset: 0, limit: 40).isEmpty)
+        #expect(try searcher.text(ofSegment: hit.segmentID, atPath: hit.path) == nil)
+        #expect(try searcher.text(ofSegment: hit.segmentID, atPath: "/chosen/b.txt") == "UNRELATED953")
+    }
+
     @Test func pagesReachEveryEligibleFileBeyondBothKeywordBudgets() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-pages-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }

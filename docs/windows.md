@@ -24,8 +24,8 @@ match, not every file in the index. Weaker matches remain expandable and open
 automatically when a later page adds them. Keyword and meaning pages replace
 one another as typing finishes; obsolete replies cannot append to a new query.
 
-The total reflects the index at query time. Files removed after that snapshot
-are skipped, so fewer displayed files than that total are possible. Rerun the
+The total reflects the index at query time. Deleted files and segments replaced
+by reindexing are skipped, so fewer displayed files than that total are possible. Rerun the
 query for a fresh ranking. Changing selected folders expires an older cursor;
 **Refresh results** starts a new query. Existing CLI/macOS top-k search behavior
 and ranking weights remain unchanged.

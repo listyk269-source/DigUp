@@ -433,7 +433,7 @@ function picture(hit) {
     default: {
       const passage = element("div", "passage" + (hit.kind === "code" ? " code" : ""));
       passage.textContent = (hit.excerpt ?? "").replace(/[«»]/g, "");
-      ask({ op: "text", segment: hit.segment_id, code: state.isCode })
+      ask({ op: "text", segment: hit.segment_id, path: hit.path, code: state.isCode })
         .then((reply) => { if (reply.text) passage.innerHTML = highlighted(reply.text, state.text); })
         .catch(() => {});
       return passage;
@@ -652,7 +652,7 @@ $("stats-toggle").addEventListener("click", () => {
   if (state.statsOpen) refreshStats();
 });
 $("stats-refresh").addEventListener("click", refreshStats);
-setInterval(() => { if (state.statsOpen && !document.hidden) refreshStats(); }, 10000);
+setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys

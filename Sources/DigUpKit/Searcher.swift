@@ -268,12 +268,15 @@ public final class Searcher {
                 }
                 guard !path.isEmpty else { continue } // removed since this ranking was prepared
                 var segment = SegmentKind.name, loc: Double?, locEnd: Double?, storedExcerpt: String?
-                try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ?", [.int(segmentID)]) {
+                var foundSegment = false
+                try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ? AND file = ?", [.int(segmentID), .int(file)]) {
+                    foundSegment = true
                     segment = SegmentKind(rawValue: $0.text(0) ?? "") ?? .name
                     loc = $0.isNull(1) ? nil : $0.double(1)
                     locEnd = $0.isNull(2) ? nil : $0.double(2)
                     storedExcerpt = $0.text(3)
                 }
+                guard foundSegment else { continue } // deleted/reindexed IDs can be reused by another file
                 // Quote the matched words only when they come from the segment we point at, so a PDF hit on page 5
                 // never shows page 2's words. A segment with no place and no text of its own (a screenshot's image
                 // vector) can borrow them from its file's OCR text, which describes the same picture.
@@ -411,9 +414,16 @@ public final class Searcher {
 
     /// The text of a page, a document's passage or a screenshot's OCR, as it's written: the preview shows the part of a
     /// document that matched.
-    public func text(ofSegment id: Int64) throws -> String? {
+    public func text(ofSegment id: Int64, atPath path: String? = nil) throws -> String? {
         var text: String?
-        try store.db.query("SELECT coalesce(original, body) FROM fts WHERE rowid = ?", [.int(id)]) { text = $0.text(0) }
+        if let path {
+            try store.db.query("""
+                SELECT coalesce(fts.original, fts.body) FROM fts JOIN segments s ON s.id = fts.rowid
+                JOIN files f ON f.id = s.file WHERE s.id = ? AND f.path = ?
+                """, [.int(id), .text(path)]) { text = $0.text(0) }
+        } else {
+            try store.db.query("SELECT coalesce(original, body) FROM fts WHERE rowid = ?", [.int(id)]) { text = $0.text(0) }
+        }
         return text
     }
 
