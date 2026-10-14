@@ -12,6 +12,11 @@ import LlamaRuntime
 ///         `meaning` false: keyword-only (while typing, or while the encoder isn't ready); `strong`: the weaker-matches
 ///         fold (`Searcher.strongCount`); each hit has the fields of `digup search --json` plus segment_id, modified,
 ///         size and info.
+///   {"op":"search_page", "q":…, "limit":40, …} → first page plus cursor, total, next_offset, has_more.
+///   {"op":"search_page", "cursor":…, "offset":40, "limit":40} → next page of that stable ranking.
+///         Complete FTS candidate retrieval; no 100-file/1000-segment cutoff. Metadata is read per page.
+///         New queries/folder settings replace the cursor. Reload preserves the ranking; deleted files are skipped.
+///   {"op":"index_stats"} → selected-folder metadata counts, recent indexed files and whole-database size.
 ///   {"op":"embed_ahead","q":…,"code":bool}   → {"ok":true}: embeds and caches the text (the panel sends what's typed so
 ///                                               far on every keystroke, so the pause's vector is usually ready)
 ///   {"op":"text","segment":id,"code":bool}    → {"text":…}: the part of a file a hit points at, for the preview
@@ -45,6 +50,9 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private var vectorCache: [String: [Float]] = [:]
     private var lastQuery = Date()
     private var warnedAboutSource = false
+    private var snapshot: SearchSnapshot?
+    private var snapshotToken = ""
+    private var snapshotMeaning = false
     private let lock = NSLock()
     private let output = NSLock()
     /// Renders for previews: two at a time, beside the request loop, each made once per file version.
@@ -121,7 +129,13 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
 
     private func handle(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
         switch op {
-        case "search":
+        case "search", "search_page":
+            if op == "search_page", let cursor = request["cursor"] as? String {
+                guard cursor == snapshotToken, snapshot != nil else {
+                    return ["ok": false, "expired": true, "error": "Search changed. Refresh results to continue."]
+                }
+                return try readPage(request)
+            }
             let text = request["q"] as? String ?? ""
             let code = request["code"] as? Bool ?? false
             let kinds = (request["kinds"] as? [String]).map { Set($0.compactMap(FileKind.init(rawValue:))) }
@@ -144,6 +158,18 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 }
             }
             let embedded = Date()
+            if op == "search_page" {
+                let selected = code ? codeSearcher : searcher
+                snapshot = try selected?.snapshot(text, queryVector: vector, kinds: kinds, prefixLast: prefixLast,
+                    acceptsPath: { [self] in accepts($0, code: code) })
+                snapshotToken = UUID().uuidString
+                snapshotMeaning = vector != nil
+                var reply = try readPage(request)
+                reply["ms"] = ["embed": Int(embedded.timeIntervalSince(started) * 1000),
+                               "search": Int(Date().timeIntervalSince(embedded) * 1000)]
+                if let warning { reply["warning"] = warning }
+                return reply
+            }
             let hits: [SearchHit]
             if code {
                 guard let codeSearcher else { return ["hits": [], "strong": 0, "meaning": false] }
@@ -173,14 +199,19 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             return ["text": try (code ? codeSearcher : searcher)?.text(ofSegment: segment) ?? NSNull()]
         case "reload":
             let hadVectors = searcher.vectorsLoaded
+            searcher.releaseVectors() // an older page snapshot must not retain a second vector matrix
             searcher = try Searcher(store: store, loadVectors: hadVectors)
             if let codeStore {
-                codeSearcher = try Searcher(store: codeStore, loadVectors: codeSearcher?.vectorsLoaded ?? false)
+                let hadCodeVectors = codeSearcher?.vectorsLoaded ?? false
+                codeSearcher?.releaseVectors()
+                codeSearcher = try Searcher(store: codeStore, loadVectors: hadCodeVectors)
             } else {
                 try openCode()
             }
             return ["ok": true, "vectors": searcher.vectorCount, "code_vectors": codeSearcher?.vectorCount ?? 0]
         case "folders":
+            snapshot = nil // a removed folder must not remain visible through an older cursor
+            snapshotToken = ""
             if let value = request["roots"] as? [String] { roots = value.map { Arguments.folderURL($0).path } }
             if let value = request["skipped"] as? [String] { skipped = value.map { Arguments.folderURL($0).path } }
             if let value = request["types"] as? [String] { types = IndexOptions.extensions(value.joined(separator: ",")) }
@@ -197,9 +228,41 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             return ["encoder": encoderState, "vectors": searcher.vectorsLoaded ? searcher.vectorCount : 0,
                     "code_vectors": codeSearcher?.vectorsLoaded == true ? codeSearcher!.vectorCount : 0,
                     "index": store.file.path]
+        case "index_stats":
+            var indexes: [[String: Any]] = []
+            for (name, selected, code) in [("files", Optional(store), false), ("code", codeStore, true)] {
+                guard let selected else { continue }
+                let stats = try selected.overview { [self] in accepts($0, code: code) }
+                indexes.append(["name": name, "by_kind_and_state": stats.byKindAndState,
+                    "segments": stats.segments, "vectors": stats.vectors, "unsupported_raw": stats.unsupportedRaw,
+                    "bytes": IndexStore.size(of: selected.file), "last_indexed": stats.lastIndexed as Any? ?? NSNull(),
+                    "recent": stats.recent.map { ["path": $0.path, "kind": $0.kind.rawValue, "size": $0.size,
+                                                 "indexed_at": stats.indexedAt[$0.id] ?? 0] as [String: Any] }])
+            }
+            return ["indexes": indexes, "folders": roots?.count ?? 0, "code_folders": codeRoots.count,
+                    "encoder": encoderState, "sampled_at": Date().timeIntervalSince1970]
         default:
             throw CLIError("unknown op \(op)")
         }
+    }
+
+    private func accepts(_ path: String, code: Bool) -> Bool {
+        if code { return FolderSelection.isSearched(path, folders: codeRoots, skipped: codeSkipped) }
+        return (roots.map { FolderSelection.isSearched(path, folders: $0, skipped: skipped) } ?? true)
+            && !types.contains((path as NSString).pathExtension.lowercased())
+    }
+
+    private func readPage(_ request: [String: Any]) throws -> [String: Any] {
+        lastQuery = Date()
+        let total = snapshot?.total ?? 0
+        let offset = min(max(0, request["offset"] as? Int ?? 0), total)
+        let limit = min(max(1, request["limit"] as? Int ?? 40), 200)
+        let next = offset + min(limit, total - offset)
+        let hits = try (snapshot?.page(offset: offset, limit: limit) ?? [])
+            .filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }
+        return ["hits": hits.map(hitFields), "strong": hits.prefix { $0.score >= (snapshot?.strongThreshold ?? 0) }.count,
+                "meaning": snapshotMeaning, "total": total, "offset": offset, "next_offset": next,
+                "has_more": next < total, "cursor": snapshotToken]
     }
 
     private func write(_ fields: [String: Any]) {

@@ -494,6 +494,45 @@ public final class IndexStore {
 
     // MARK: Stats
 
+    public struct Overview {
+        public var byKindAndState: [String: [String: Int]] = [:]
+        public var vectors = 0
+        public var segments = 0
+        public var unsupportedRaw = 0
+        public var lastIndexed: Double?
+        public var recent: [FileRecord] = []
+        public var indexedAt: [Int64: Double] = [:]
+    }
+
+    /// Metadata only, filtered exactly like search. Does not read document text or load model vectors.
+    public func overview(acceptsPath: (String) -> Bool) throws -> Overview {
+        var result = Overview()
+        var ids: [Int64] = []
+        try db.query("SELECT \(Self.fileColumns), indexed_at, detail FROM files ORDER BY indexed_at DESC, id DESC") { row in
+            let file = Self.record(row)
+            guard acceptsPath(file.path) else { return }
+            ids.append(file.id)
+            result.byKindAndState[file.kind.rawValue, default: [:]][file.state, default: 0] += 1
+            if file.state == "failed", UnsupportedRawImage.matchesFailure(row.text(9)) { result.unsupportedRaw += 1 }
+            if (file.state == "done" || file.state == "partial"), !row.isNull(8) {
+                if result.lastIndexed == nil { result.lastIndexed = row.double(8) }
+                if result.recent.count < 6 {
+                    result.recent.append(file)
+                    result.indexedAt[file.id] = row.double(8)
+                }
+            }
+        }
+        if !ids.isEmpty {
+            // Only database-generated IDs enter SQL; paths never enter SQL text.
+            let selected = ids.map(String.init).joined(separator: ",")
+            try db.query("SELECT COUNT(*), COUNT(vec) FROM segments WHERE kind != 'name' AND file IN (\(selected))") {
+                result.segments = Int($0.int(0))
+                result.vectors = Int($0.int(1))
+            }
+        }
+        return result
+    }
+
     public struct Counts: Sendable {
         public var byKindAndState: [String: [String: Int]] = [:]
         public var vectors = 0

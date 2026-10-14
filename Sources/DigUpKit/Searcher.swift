@@ -1,5 +1,25 @@
 import Foundation
 
+/// A stable ranking. Only the requested page reads file metadata and excerpts from SQLite.
+/// A fresh query creates a fresh snapshot; indexing can continue between pages.
+public final class SearchSnapshot {
+    public let total: Int
+    public let strongThreshold: Double
+    private let read: (Range<Int>) throws -> [SearchHit]
+
+    init(scores: [Double], read: @escaping (Range<Int>) throws -> [SearchHit]) {
+        total = scores.count
+        strongThreshold = (scores.first ?? 0) > 0 ? scores[0] * 0.5 : -.infinity
+        self.read = read
+    }
+
+    public func page(offset: Int, limit: Int) throws -> [SearchHit] {
+        let start = min(max(0, offset), total)
+        let count = min(max(0, limit), total - start)
+        return try read(start..<(start + count))
+    }
+}
+
 public struct SearchHit: Sendable {
     public let path: String
     public let kind: FileKind
@@ -118,6 +138,14 @@ public final class Searcher {
     public func search(_ text: String, queryVector: [Float]?, kinds: Set<FileKind>? = nil, limit: Int = 20,
                        zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false,
                        acceptsPath: ((String) -> Bool)? = nil) throws -> [SearchHit] {
+        try snapshot(text, queryVector: queryVector, kinds: kinds, zGate: zGate, wordWeight: wordWeight,
+                     prefixLast: prefixLast, acceptsPath: acceptsPath, complete: false).page(offset: 0, limit: limit)
+    }
+
+    /// Complete candidate retrieval for paged search. The existing CLI/Mac top-k API retains its candidate budget.
+    public func snapshot(_ text: String, queryVector: [Float]?, kinds: Set<FileKind>? = nil,
+                         zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false,
+                         acceptsPath: ((String) -> Bool)? = nil, complete: Bool = true) throws -> SearchSnapshot {
         let wordWeight = wordWeight ?? (isCode ? Self.codeWordWeight : Self.wordWeight)
         if queryVector != nil, !vectorsLoaded { try reload() }
         let fileKind = self.fileKind
@@ -130,7 +158,7 @@ public final class Searcher {
         var fileConstraint = ""
         if accepted != nil || kinds != nil {
             let files = fileKind.keys.filter(allowed).sorted()
-            guard !files.isEmpty else { return [] }
+            guard !files.isEmpty else { return SearchSnapshot(scores: [], read: { _ in [] }) }
             fileConstraint = " AND s.file IN (" + files.map(String.init).joined(separator: ",") + ")"
         }
 
@@ -168,13 +196,14 @@ public final class Searcher {
         }
         if !patterns.isEmpty {
             var seen = Set<Int64>()
+            let budget = complete ? "" : " LIMIT 1000"
             try store.db.query("""
                 SELECT s.file, s.id, snippet(fts, 1, '«', '»', '…', 12), fts.original FROM fts
                 JOIN segments s ON s.id = fts.rowid
-                WHERE fts MATCH ? \(fileConstraint) ORDER BY bm25(fts, 3.0, 1.0) LIMIT 1000
+                WHERE fts MATCH ? \(fileConstraint) ORDER BY bm25(fts, 3.0, 1.0), s.id\(budget)
                 """, [.text(patterns.joined(separator: " OR "))]) { row in
                 let file = row.int(0)
-                guard words.count < 100, allowed(file), seen.insert(file).inserted else { return }
+                guard (complete || words.count < 100), allowed(file), seen.insert(file).inserted else { return }
                 // Text that normalizing changed is quoted as it's written (with its hamza, harakat, joiners).
                 let snippet = row.text(3).flatMap { SearchText.snippet($0, terms: terms) } ?? row.text(2)
                 words.append((file, row.int(1), snippet))
@@ -208,61 +237,64 @@ public final class Searcher {
 
         let wordRank = Dictionary(words.enumerated().map { ($0.element.file, ($0.offset + 1, $0.element)) },
                                   uniquingKeysWith: { first, _ in first })
-        var hits: [SearchHit] = []
-        for (file, score) in scored.sorted(by: { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) })
-            .prefix(limit) {
-            let rank = hits.count
-            let semantic = best[file]
-            let keyword = wordRank[file]
-            // Point at the best meaning segment if it stands out; else at the segment the words matched.
-            let useMeaning = semantic.map { $0.z >= zGate || keyword == nil } ?? false
-            guard var segmentID = useMeaning ? semantic.map({ rowSegment[$0.row] }) : keyword?.1.segment else { continue }
-            var focus: Double?
-            if isCode {
-                // Where a name is defined is looked for in the first 10 results only: a name used all over a big repo
-                // (ggml_tensor) is in hundreds of stretches of every file that has it (2026-10-09, llama.cpp and two
-                // more repos: 560 → 100 ms a search; the others take 10–50 ms).
-                (segmentID, focus) = try codePlace(file: file, segment: segmentID,
-                                                   identifier: rank < 10 ? identifier : nil, query: text, terms: terms,
-                                                   wordsHere: keyword?.1.segment == segmentID || identifier != nil)
-            }
-            var path = "", kind = FileKind.doc, modified = 0.0, size: Int64 = 0, info: [String: String] = [:]
-            try store.db.query("SELECT path, kind, mtime, size, info FROM files WHERE id = ?", [.int(file)]) {
-                path = $0.text(0) ?? ""
-                kind = FileKind(rawValue: $0.text(1) ?? "") ?? .doc
-                modified = $0.double(2)
-                size = $0.int(3)
-                if let json = $0.text(4)?.data(using: .utf8) {
-                    info = (try? JSONSerialization.jsonObject(with: json) as? [String: String]) ?? [:]
+        let ranking = scored.sorted(by: { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) })
+        return SearchSnapshot(scores: ranking.map(\.value)) { [self, rowSegment] range in
+            var hits: [SearchHit] = []
+            for rank in range {
+                let (file, score) = ranking[rank]
+                let semantic = best[file]
+                let keyword = wordRank[file]
+                // Point at the best meaning segment if it stands out; else at the segment the words matched.
+                let useMeaning = semantic.map { $0.z >= zGate || keyword == nil } ?? false
+                guard var segmentID = useMeaning ? semantic.map({ rowSegment[$0.row] }) : keyword?.1.segment else { continue }
+                var focus: Double?
+                if isCode {
+                    // Where a name is defined is looked for in the first 10 results only: a name used all over a big repo
+                    // (ggml_tensor) is in hundreds of stretches of every file that has it (2026-10-09, llama.cpp and two
+                    // more repos: 560 → 100 ms a search; the others take 10–50 ms).
+                    (segmentID, focus) = try codePlace(file: file, segment: segmentID,
+                                                       identifier: rank < 10 ? identifier : nil, query: text, terms: terms,
+                                                       wordsHere: keyword?.1.segment == segmentID || identifier != nil)
                 }
-            }
-            var segment = SegmentKind.name, loc: Double?, locEnd: Double?, storedExcerpt: String?
-            try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ?", [.int(segmentID)]) {
-                segment = SegmentKind(rawValue: $0.text(0) ?? "") ?? .name
-                loc = $0.isNull(1) ? nil : $0.double(1)
-                locEnd = $0.isNull(2) ? nil : $0.double(2)
-                storedExcerpt = $0.text(3)
-            }
-            // Quote the matched words only when they come from the segment we point at, so a PDF hit on page 5
-            // never shows page 2's words. A segment with no place and no text of its own (a screenshot's image
-            // vector) can borrow them from its file's OCR text, which describes the same picture.
-            var snippet = keyword.flatMap { $0.1.segment == segmentID ? $0.1.snippet : nil }
-                .flatMap { $0.contains("«") ? excerpt($0, limit: 400) : nil }
-            if snippet == nil, storedExcerpt == nil, loc == nil, let match = keyword?.1,
-               let text = match.snippet, text.contains("«") {
-                var matchedKind: String?
-                try store.db.query("SELECT kind FROM segments WHERE id = ?", [.int(match.segment)]) {
-                    matchedKind = $0.text(0)
+                var path = "", kind = FileKind.doc, modified = 0.0, size: Int64 = 0, info: [String: String] = [:]
+                try store.db.query("SELECT path, kind, mtime, size, info FROM files WHERE id = ?", [.int(file)]) {
+                    path = $0.text(0) ?? ""
+                    kind = FileKind(rawValue: $0.text(1) ?? "") ?? .doc
+                    modified = $0.double(2)
+                    size = $0.int(3)
+                    if let json = $0.text(4)?.data(using: .utf8) {
+                        info = (try? JSONSerialization.jsonObject(with: json) as? [String: String]) ?? [:]
+                    }
                 }
-                if matchedKind != SegmentKind.name.rawValue { snippet = excerpt(text, limit: 400) }
+                guard !path.isEmpty else { continue } // removed since this ranking was prepared
+                var segment = SegmentKind.name, loc: Double?, locEnd: Double?, storedExcerpt: String?
+                try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ?", [.int(segmentID)]) {
+                    segment = SegmentKind(rawValue: $0.text(0) ?? "") ?? .name
+                    loc = $0.isNull(1) ? nil : $0.double(1)
+                    locEnd = $0.isNull(2) ? nil : $0.double(2)
+                    storedExcerpt = $0.text(3)
+                }
+                // Quote the matched words only when they come from the segment we point at, so a PDF hit on page 5
+                // never shows page 2's words. A segment with no place and no text of its own (a screenshot's image
+                // vector) can borrow them from its file's OCR text, which describes the same picture.
+                var snippet = keyword.flatMap { $0.1.segment == segmentID ? $0.1.snippet : nil }
+                    .flatMap { $0.contains("«") ? excerpt($0, limit: 400) : nil }
+                if snippet == nil, storedExcerpt == nil, loc == nil, let match = keyword?.1,
+                   let text = match.snippet, text.contains("«") {
+                    var matchedKind: String?
+                    try store.db.query("SELECT kind FROM segments WHERE id = ?", [.int(match.segment)]) {
+                        matchedKind = $0.text(0)
+                    }
+                    if matchedKind != SegmentKind.name.rawValue { snippet = excerpt(text, limit: 400) }
+                }
+                hits.append(SearchHit(path: path, kind: kind, score: score, z: semantic?.z, cosine: semantic?.cosine,
+                                      keywordRank: keyword?.0, segment: segment, segmentID: segmentID, loc: loc,
+                                      locEnd: locEnd,
+                                      excerpt: snippet ?? storedExcerpt, modified: modified, size: size, info: info,
+                                      focus: focus))
             }
-            hits.append(SearchHit(path: path, kind: kind, score: score, z: semantic?.z, cosine: semantic?.cosine,
-                                  keywordRank: keyword?.0, segment: segment, segmentID: segmentID, loc: loc,
-                                  locEnd: locEnd,
-                                  excerpt: snippet ?? storedExcerpt, modified: modified, size: size, info: info,
-                                  focus: focus))
+            return hits
         }
-        return hits
     }
 
     /// Code: the stretch to point at, and the line in it to open at. A name looked up points at the stretch that
