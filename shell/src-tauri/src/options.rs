@@ -48,6 +48,8 @@ pub struct Options {
     pub debug_reconfigure_folder: Option<PathBuf>,
     /// Isolated release smoke: click through every search page and open the real index overview.
     pub debug_load_all: bool,
+    /// Isolated release smoke: explore a real stored-vector neighborhood through the graph's DOM controls.
+    pub debug_graph: bool,
 }
 
 impl Options {
@@ -85,6 +87,7 @@ impl Options {
             debug_isolated: false,
             debug_reconfigure_folder: None,
             debug_load_all: false,
+            debug_graph: false,
         };
         while let Some(arg) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -113,6 +116,7 @@ impl Options {
                     options.debug_reconfigure_folder = Some(value()?.into())
                 }
                 "--debug-load-all" => options.debug_load_all = true,
+                "--debug-graph" => options.debug_graph = true,
                 _ => return Err(format!("unknown argument {arg}")),
             }
         }
@@ -136,6 +140,9 @@ impl Options {
         }
         if options.debug_load_all && !options.debug_isolated {
             return Err("--debug-load-all requires --debug-isolated".into());
+        }
+        if options.debug_graph && !options.debug_isolated {
+            return Err("--debug-graph requires --debug-isolated".into());
         }
         // On a Mac the shell is only tried out: the helper's default index there is the Mac app's.
         if cfg!(target_os = "macos") && options.index.is_none() {
@@ -258,6 +265,7 @@ mod tests {
     fn isolated_smoke_requires_private_explicit_paths() {
         assert!(parse(&["--debug-isolated"], None, None).is_err());
         assert!(parse(&["--debug-load-all"], None, None).is_err());
+        assert!(parse(&["--debug-graph"], None, None).is_err());
         assert!(parse(&["--debug-reconfigure-folder", "relative"], None, None).is_err());
         let root = std::env::temp_dir().join("DigUp test кириллица");
         let args = [

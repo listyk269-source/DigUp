@@ -64,11 +64,16 @@ let debugPending = false;
 const progressHistory = [];
 let progressQueued = false;
 let debugOptions = {};
+const graph = new GraphView({ ask, invoke, nameOf, onVisibility: (visible) => {
+  if (visible) state.statsOpen = false;
+  render();
+} });
 const debugPages = [];
 
 // MARK: Searching
 
 function queryChanged() {
+  if (graph.visible) graph.close();
   const generation = ++state.generation;
   clearTimeout(state.timer);
   state.navigated = false;
@@ -282,13 +287,16 @@ function revealSelected() {
 
 function render() {
   const empty = state.phase === "empty";
-  const height = empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
+  const height = graph.visible ? 720 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
     invoke("panel_height", { height }).catch(() => {});
   }
-  $body.hidden = empty || state.statsOpen;
-  $footer.hidden = empty || state.statsOpen;
+  $body.hidden = empty || state.statsOpen || graph.visible;
+  $footer.hidden = empty || state.statsOpen || graph.visible;
+  $("graph-view").hidden = !graph.visible;
+  $("graph-toggle").disabled = !selectedHit();
+  $("graph-toggle").setAttribute("aria-expanded", String(graph.visible));
   $("index-overview").hidden = !state.statsOpen;
   $("stats-toggle").setAttribute("aria-expanded", String(state.statsOpen));
   renderPaging();
@@ -648,15 +656,21 @@ ICONS.screenshot = ICONS.image;
 $query.addEventListener("input", queryChanged);
 $("load-more").addEventListener("click", () => state.page?.expired ? queryChanged() : loadMore());
 $("stats-toggle").addEventListener("click", () => {
+  if (graph.visible) graph.close();
   state.statsOpen = !state.statsOpen;
   render();
   if (state.statsOpen) refreshStats();
 });
+$("graph-toggle").addEventListener("click", () => graph.visible ? graph.close() : graph.show(selectedHit(), state.isCode));
+$("graph-reveal").textContent = `Show in ${FILE_MANAGER}`;
+tauri.event.listen("search-scope-changed", () => { if (graph.visible) graph.close(); });
 $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys
+  if (graph.visible && event.key === "Escape") { event.preventDefault(); graph.close(); return; }
+  if (graph.visible && event.target.closest?.("#graph-view")) return;
   if (event.target.closest?.("button")) return; // native Tab/Space/Enter behavior for page and overview controls
   const modifier = isMac ? event.metaKey : event.ctrlKey;
   switch (event.key) {
@@ -807,6 +821,17 @@ async function completeDebugSearch() {
     while ($("stats-refresh").disabled && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
     if (Date.now() >= deadline) state.error = "Pagination smoke timed out";
   }
+  if (debugOptions.graph) {
+    const deadline = Date.now() + 60000;
+    $("graph-toggle").click();
+    while (graph.loading && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+    const first = graph.debug();
+    $("graph-neighbors").querySelector("button")?.click();
+    $("graph-expand").click();
+    while (graph.loading && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+    graph.debugFirst = first;
+    if (Date.now() >= deadline) state.error = "Graph smoke timed out";
+  }
   report();
 }
 
@@ -818,6 +843,7 @@ function report() {
     invoke("debug_report", {
       report: {
         query: $query.value,
+        graph: debugOptions.graph ? { ...graph.debug(), first: graph.debugFirst } : null,
         appearance: { panelRadius: getComputedStyle(document.querySelector(".panel")).borderRadius,
           bodyBackground: getComputedStyle(document.body).backgroundColor },
         phase: state.phase,

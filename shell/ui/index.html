@@ -14,6 +14,7 @@
       <input id="query" type="text" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search"
              placeholder="Describe it: “payment error screenshot”, “zebra in a video”…">
       <button id="stats-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="index-overview">Index</button>
+      <button id="graph-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="graph-view" disabled title="Select a search result to explore related files">Graph</button>
     </header>
     <section id="index-status" class="index-status" aria-label="Indexing progress">
       <div class="index-heading" role="status" aria-live="polite" aria-atomic="true">
@@ -34,6 +35,21 @@
       <div id="stats-recent" class="stats-recent"></div>
       <p id="stats-stamp" class="overview-note"></p>
     </section>
+    <section id="graph-view" class="graph-view" aria-label="Related files graph" hidden>
+      <div class="graph-toolbar"><h2>Related files</h2><button id="graph-back" class="quiet-button" type="button">Back to results</button></div>
+      <p id="graph-status" role="status" aria-live="polite"></p>
+      <div class="graph-controls">
+        <label>Minimum similarity <select id="graph-minimum"><option value="0.35">0.35 · Broader</option><option value="0.55" selected>0.55 · Balanced</option><option value="0.75">0.75 · Closer</option></select></label>
+        <button id="graph-zoom-out" class="quiet-button" type="button" aria-label="Zoom out">−</button><button id="graph-zoom-in" class="quiet-button" type="button" aria-label="Zoom in">+</button>
+        <button id="graph-center" class="quiet-button" type="button">Center selected</button><button id="graph-refresh" class="quiet-button" type="button">Refresh</button>
+      </div>
+      <svg id="graph-scene" class="graph-scene" viewBox="-360 -125 720 250" preserveAspectRatio="xMidYMid slice" tabindex="0" role="group" aria-label="File similarity graph. Drag background or use arrow keys to pan."></svg>
+      <p class="graph-note">Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.</p>
+      <div class="graph-detail"><h3 id="graph-title"></h3><p id="graph-path"></p><p id="graph-basis"></p>
+        <div class="graph-actions"><button id="graph-expand" class="quiet-button" type="button">Expand links</button><button id="graph-start-here" class="quiet-button" type="button">Start here</button><button id="graph-open" class="quiet-button" type="button">Open</button><button id="graph-reveal" class="quiet-button" type="button">Show in Explorer</button></div>
+        <div id="graph-neighbors" class="graph-neighbors" aria-label="Connected files"></div>
+      </div>
+    </section>
     <section id="body" class="body" hidden>
       <div class="results"><div id="list" class="list" role="listbox" aria-label="Results"></div>
         <div id="more-controls" class="more-controls" hidden><button id="load-more" type="button">Show more</button><span id="page-status" role="status" aria-live="polite"></span></div>
@@ -45,6 +61,7 @@
       <span id="keys" class="keys"></span>
     </footer>
   </main>
+  <script src="graph.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

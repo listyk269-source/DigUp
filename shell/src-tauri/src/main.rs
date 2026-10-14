@@ -173,6 +173,7 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
     if ![
         "search",
         "search_page",
+        "related_files",
         "embed_ahead",
         "text",
         "render",
@@ -396,10 +397,24 @@ fn retry_model(app: AppHandle) {
 #[tauri::command]
 fn panel_height(app: AppHandle, height: f64) {
     if let Some(panel) = app.get_webview_window("panel") {
-        let _ = panel.set_size(LogicalSize::new(
-            PANEL_WIDTH,
-            height.clamp(FIELD_HEIGHT, 640.0),
-        ));
+        let monitor = panel.current_monitor().ok().flatten();
+        let maximum = monitor
+            .as_ref()
+            .map(|screen| screen.work_area().size.height as f64 / screen.scale_factor())
+            .unwrap_or(720.0);
+        let actual = height.clamp(FIELD_HEIGHT, 720.0).min(maximum);
+        let _ = panel.set_size(LogicalSize::new(PANEL_WIDTH, actual));
+        if let (Some(screen), Ok(position)) = (monitor, panel.outer_position()) {
+            let work = screen.work_area();
+            let bottom = work.position.y + work.size.height as i32
+                - (actual * screen.scale_factor()).ceil() as i32;
+            let y = position
+                .y
+                .clamp(work.position.y, bottom.max(work.position.y));
+            if y != position.y {
+                let _ = panel.set_position(PhysicalPosition::new(position.x, y));
+            }
+        }
     }
 }
 
@@ -417,7 +432,7 @@ async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, Str
 
 #[tauri::command]
 fn debug_search_options(shell: State<'_, Arc<Shell>>) -> Value {
-    json!({"loadAll": shell.options.debug_load_all})
+    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph})
 }
 
 #[tauri::command]
@@ -702,6 +717,7 @@ fn start_model_download(app: &AppHandle) {
 
 /// After setup or a change of folders: the search service, the watcher and indexing follow the new folders.
 fn apply_folders(app: &AppHandle) {
+    let _ = app.emit("search-scope-changed", ());
     let shell = app.state::<Arc<Shell>>().inner().clone();
     let folders = shell.folders();
     let code_roots = shell.code_roots();
