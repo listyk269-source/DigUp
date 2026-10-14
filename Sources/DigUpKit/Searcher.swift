@@ -266,7 +266,8 @@ public final class Searcher {
                         info = (try? JSONSerialization.jsonObject(with: json) as? [String: String]) ?? [:]
                     }
                 }
-                guard !path.isEmpty, filePath[file] == path else { continue } // removed/renamed; file IDs can also be reused
+                // SQLite path identity is byte-based; Swift String equality also equates distinct Unicode spellings.
+                guard !path.isEmpty, filePath[file]?.utf8.elementsEqual(path.utf8) == true else { continue }
                 var segment = SegmentKind.name, loc: Double?, locEnd: Double?, storedExcerpt: String?
                 var foundSegment = false
                 try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ? AND file = ?", [.int(segmentID), .int(file)]) {

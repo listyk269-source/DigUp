@@ -33,6 +33,13 @@ import Testing
         #expect(try snapshot.page(offset: 0, limit: 40).isEmpty)
         #expect(try searcher.text(ofSegment: hit.segmentID, atPath: hit.path) == nil)
         #expect(try searcher.text(ofSegment: hit.segmentID, atPath: "/chosen/c.txt") == "DIFFERENTFILE864")
+        try store.db.run("UPDATE files SET path = ? WHERE id = ?", [.text("/chosen/Café.txt"), .int(replacement)])
+        try searcher.reload()
+        let unicodeSnapshot = try searcher.snapshot("DIFFERENTFILE864", queryVector: nil)
+        #expect(try unicodeSnapshot.page(offset: 0, limit: 40).count == 1)
+        // These are equal as Swift Strings but distinct SQLite/NTFS path bytes.
+        try store.db.run("UPDATE files SET path = ? WHERE id = ?", [.text("/chosen/Cafe\u{301}.txt"), .int(replacement)])
+        #expect(try unicodeSnapshot.page(offset: 0, limit: 40).isEmpty)
     }
 
     @Test func pagesReachEveryEligibleFileBeyondBothKeywordBudgets() throws {
