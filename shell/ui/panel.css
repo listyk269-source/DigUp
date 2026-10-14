@@ -56,6 +56,11 @@ html, body {
   overflow: hidden;
 }
 
+/* Windows uses an opaque rectangular native window. Fill its corners as well as the panel,
+   so the desktop cannot show through a second rounded web surface inside the frame. */
+html.platform-windows, html.platform-windows body { background: var(--surface); }
+.platform-windows .panel { border-radius: 0; }
+
 /* The field */
 
 .field {

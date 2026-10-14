@@ -75,6 +75,12 @@ foreach ($pass in 'first','restart') {
     Invoke-PrivateProcess $gui @('--index',$index,'--models',$modelsPath,'--settings',$settings,
         '--debug-isolated','--debug-load-all','--debug-query','PAGINATION742','--debug-report',$report,'--debug-quit') "gui-$pass"
     $ui = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    if ($ui.appearance.panelRadius -ne '0px' -or $ui.appearance.bodyBackground -in @('transparent','rgba(0, 0, 0, 0)')) {
+        throw "Windows panel has rounded or transparent web corners ($pass)."
+    }
+    if ([Environment]::OSVersion.Version.Build -ge 22000 -and $ui.nativeCornerPreference -ne 1) {
+        throw "Windows 11 native panel has not disabled corner rounding ($pass)."
+    }
     $pages = @($ui.pagination.pages)
     if ($ui.error -or $ui.pagination.error -or $ui.phase -ne 'meaning' -or $ui.pagination.loaded -ne 145 -or
         $ui.pagination.total -ne 145 -or $ui.pagination.hasMore -or $ui.pagination.buttonVisible -or
@@ -94,6 +100,7 @@ foreach ($pass in 'first','restart') {
     archiveSha256=(Get-FileHash -LiteralPath $Archive).Hash.ToLowerInvariant();
     checks=@('145 real indexed documents','40/80/120/145 via Show more DOM clicks','no six-file group cap',
         'all unique results','actual WebView overview','RAW and other failure counts','restart preserves index and pages',
-        'Unicode/spaces','System32/Windows PATH only')} | ConvertTo-Json -Depth 5 |
+        'Unicode/spaces','System32/Windows PATH only','square opaque Windows web surface',
+        'native DWM corner preference on Windows 11 (unsupported on Windows 10)')} | ConvertTo-Json -Depth 5 |
     Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Actual packaged GUI pagination and index overview passed: $testRoot"

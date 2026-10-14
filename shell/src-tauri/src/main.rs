@@ -430,6 +430,12 @@ fn debug_setup_snapshot(shell: State<'_, Arc<Shell>>, report: Value) {
 /// Debug runs: what the page showed for the debug query, printed (and the shell quits, if asked).
 #[tauri::command]
 fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value) {
+    #[cfg(windows)]
+    {
+        report["nativeCornerPreference"] = json!(app
+            .get_webview_window("panel")
+            .and_then(|window| panel_corner_preference(&window)));
+    }
     let saved_device = shell.settings.lock().unwrap().device;
     report["savedDevice"] = json!(saved_device);
     report["devicePreference"] = json!(shell.options.effective_device(saved_device));
@@ -814,6 +820,45 @@ fn quit(app: &AppHandle) {
 
 // MARK: Windows
 
+#[cfg(windows)]
+fn square_panel_corners(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+    };
+    if let Ok(hwnd) = window.hwnd() {
+        // SAFETY: the live Tauri window owns this HWND; DWM reads an i32 during this call only.
+        // Windows 10 does not support this Windows 11 attribute. Its failure is harmless:
+        // the opaque web surface already has square corners there.
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                hwnd.0,
+                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                (&DWMWCP_DONOTROUND as *const i32).cast(),
+                std::mem::size_of::<i32>() as u32,
+            );
+        }
+    }
+}
+
+#[cfg(windows)]
+fn panel_corner_preference(window: &tauri::WebviewWindow) -> Option<i32> {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DwmGetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE,
+    };
+    let hwnd = window.hwnd().ok()?;
+    let mut preference = 0i32;
+    // SAFETY: the live HWND and writable i32 remain valid for the duration of this call.
+    let result = unsafe {
+        DwmGetWindowAttribute(
+            hwnd.0,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            (&mut preference as *mut i32).cast(),
+            std::mem::size_of::<i32>() as u32,
+        )
+    };
+    (result >= 0).then_some(preference)
+}
+
 fn make_panel(app: &AppHandle) -> tauri::Result<()> {
     let mut builder = WebviewWindowBuilder::new(app, "panel", WebviewUrl::App("index.html".into()));
     let shell = app.state::<Arc<Shell>>();
@@ -824,7 +869,7 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
         .title("DigUp")
         .inner_size(PANEL_WIDTH, FIELD_HEIGHT)
         .decorations(false)
-        .transparent(true)
+        .transparent(!cfg!(windows))
         .shadow(true)
         .resizable(false)
         .maximizable(false)
@@ -834,6 +879,8 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
         .skip_taskbar(true)
         .visible(false)
         .build()?;
+    #[cfg(windows)]
+    square_panel_corners(&panel);
     let app = app.clone();
     panel.on_window_event(move |event| {
         // Like Spotlight: it steps away when you click elsewhere.

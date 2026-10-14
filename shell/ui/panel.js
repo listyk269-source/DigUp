@@ -18,6 +18,7 @@ const PANEL_HEIGHT = 560;
 const WEAKER = "\u0000weaker";     // the selectable row that folds and unfolds the weaker matches
 const isMac = /Mac/.test(navigator.platform);
 const isWindows = /Win/.test(navigator.platform);
+document.documentElement.classList.toggle("platform-windows", isWindows);
 const MOD = isMac ? "⌘" : "Ctrl+";
 const FILE_MANAGER = isMac ? "Finder" : isWindows ? "Explorer" : "Files";
 // Pictures every web view shows as they are; anything else (HEIC, TIFF, RAW…) comes as JPEG from the helper.
@@ -817,6 +818,8 @@ function report() {
     invoke("debug_report", {
       report: {
         query: $query.value,
+        appearance: { panelRadius: getComputedStyle(document.querySelector(".panel")).borderRadius,
+          bodyBackground: getComputedStyle(document.body).backgroundColor },
         phase: state.phase,
         error: state.error,
         groups: state.groups.map((group) => ({ title: group.title, rows: group.rows.map((hit) => nameOf(hit.path)) })),
