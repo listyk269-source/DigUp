@@ -13,6 +13,7 @@
       </svg>
       <input id="query" type="text" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Search"
              placeholder="Describe it: “payment error screenshot”, “zebra in a video”…">
+      <button id="stats-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="index-overview">Index</button>
     </header>
     <section id="index-status" class="index-status" aria-label="Indexing progress">
       <div class="index-heading" role="status" aria-live="polite" aria-atomic="true">
@@ -22,8 +23,21 @@
       <p id="index-detail">Checking the local index.</p>
       <progress id="index-progress" aria-label="Current indexing pass" hidden></progress>
     </section>
+    <section id="index-overview" class="index-overview" aria-label="Index overview" hidden>
+      <div class="overview-heading"><h2>Your local index</h2><button id="stats-refresh" class="quiet-button" type="button">Refresh</button></div>
+      <p id="stats-message" role="status" aria-live="polite">Loading index statistics…</p>
+      <dl id="stats-totals" class="stats-totals"></dl>
+      <h3>Files by type</h3>
+      <table class="stats-table"><thead><tr><th>Type</th><th>Searchable</th><th>Pending</th><th>Issues</th></tr></thead><tbody id="stats-kinds"></tbody></table>
+      <h3>Recently indexed</h3>
+      <p class="overview-note">Latest indexed files from your selected folders. No query or opening history is recorded.</p>
+      <div id="stats-recent" class="stats-recent"></div>
+      <p id="stats-stamp" class="overview-note"></p>
+    </section>
     <section id="body" class="body" hidden>
-      <div id="list" class="list" role="listbox" aria-label="Results"></div>
+      <div class="results"><div id="list" class="list" role="listbox" aria-label="Results"></div>
+        <div id="more-controls" class="more-controls" hidden><button id="load-more" type="button">Show more</button><span id="page-status" role="status" aria-live="polite"></span></div>
+      </div>
       <div id="preview" class="preview" aria-live="polite"></div>
     </section>
     <footer id="footer" class="footer" hidden>

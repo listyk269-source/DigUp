@@ -11,7 +11,7 @@ const ask = (request) => invoke("ask", { request });
 const fileURL = (path) => tauri.core.convertFileSrc(path);
 
 const TYPING_PAUSE = 120;          // ms after the last keystroke until the meaning results show
-const ROWS_PER_GROUP = 6;
+const PAGE_SIZE = 40;
 const FIELD_HEIGHT = 56;
 const INDEX_HEIGHT = 80;
 const PANEL_HEIGHT = 560;
@@ -52,10 +52,18 @@ const state = {
   error: null,
   indexing: null,
   indexStatus: null,     // replayable Rust snapshot of real index-service events
+  page: null,
+  loadingMore: false,
+  pageError: null,
+  statsOpen: false,
+  stats: null,
+  statsGeneration: 0,
 };
 let debugPending = false;
 const progressHistory = [];
 let progressQueued = false;
+let debugOptions = {};
+const debugPages = [];
 
 // MARK: Searching
 
@@ -64,35 +72,41 @@ function queryChanged() {
   clearTimeout(state.timer);
   state.navigated = false;
   state.error = null;
+  state.page = null;
+  state.loadingMore = false;
+  state.pageError = null;
   const typed = $query.value.trim();
   const code = /^code:/i.test(typed);
   const text = code ? typed.slice(5).trim() : typed;
   state.isCode = code;
+  if (text) state.statsOpen = false;
+  renderPaging();
   if (!typed || (code && !text)) {
     show({ hits: [], strong: 0 }, text, typed ? "codeHint" : "empty");
     return;
   }
   // Words now. The last word is probably half-typed, so it matches as a prefix.
-  ask({ op: "search", q: text, code, meaning: false, prefix_last: true, limit: 40 })
+  ask({ op: "search_page", q: text, code, meaning: false, prefix_last: true, limit: PAGE_SIZE })
     .then((reply) => {
       if (generation === state.generation && state.finalGeneration !== generation) show(reply, text, "words");
     })
-    .catch(failed);
+    .catch((error) => { if (generation === state.generation) failed(error); });
   // The meaning is embedded now, so its vector is ready when typing pauses: the pause is the whole wait.
   ask({ op: "embed_ahead", q: text, code }).catch(() => {});
   state.timer = setTimeout(() => {
-    ask({ op: "search", q: text, code, meaning: true, limit: 40 })
+    ask({ op: "search_page", q: text, code, meaning: true, limit: PAGE_SIZE })
       .then((reply) => {
         if (generation !== state.generation) return;
         state.finalGeneration = generation;
         show(reply, text, reply.meaning ? "meaning" : "wordsOnly");
-        if (debugPending) report();
+        if (debugPending) completeDebugSearch();
       })
-      .catch(failed);
+      .catch((error) => { if (generation === state.generation) failed(error); });
   }, TYPING_PAUSE);
 }
 
 function show(reply, text, phase) {
+  if (reply.ok === false) { failed(reply.error); return; }
   const hits = reply.hits || [];
   const strong = Math.min(reply.strong ?? hits.length, hits.length);
   state.text = text;
@@ -106,13 +120,117 @@ function show(reply, text, phase) {
     if (!groups.has(title)) groups.set(title, []);
     groups.get(title).push(hit);
   }
-  const perGroup = state.isCode ? ROWS_PER_GROUP * 3 : ROWS_PER_GROUP;
-  state.groups = [...groups].map(([title, rows]) => ({ title, rows: rows.slice(0, perGroup), total: rows.length }));
+  state.groups = [...groups].map(([title, rows]) => ({ title, rows, total: rows.length }));
+  state.page = reply.cursor ? { cursor: reply.cursor, offset: reply.next_offset, total: reply.total, hasMore: reply.has_more } : null;
   if (!state.navigated) state.showWeaker = false;
   // Follow the top hit until you pick something with the arrow keys.
   const ids = rowIDs();
   if (!state.navigated || !ids.includes(state.selection)) state.selection = ids[0] ?? null;
   render();
+}
+
+async function loadMore() {
+  const page = state.page;
+  if (!page?.hasMore || state.loadingMore) return;
+  const generation = state.generation;
+  state.loadingMore = true;
+  state.pageError = null;
+  renderPaging();
+  try {
+    const reply = await ask({ op: "search_page", cursor: page.cursor, offset: page.offset, limit: PAGE_SIZE });
+    if (generation !== state.generation || state.page?.cursor !== page.cursor) return;
+    if (reply.ok === false) { state.pageError = reply.error; state.page.expired = !!reply.expired; return; }
+    const seen = new Set([...state.strong, ...state.weaker].map((hit) => hit.path));
+    const hits = (reply.hits || []).filter((hit) => !seen.has(hit.path) && seen.add(hit.path));
+    const strong = hits.filter((hit) => (reply.hits || []).indexOf(hit) < reply.strong);
+    const weaker = hits.filter((hit) => !strong.includes(hit));
+    const selected = state.selection, scroll = $list.scrollTop;
+    state.navigated = true;
+    if (weaker.length) state.showWeaker = true;
+    show({ ...reply, hits: [...state.strong, ...strong, ...state.weaker, ...weaker], strong: state.strong.length + strong.length }, state.text, state.phase);
+    state.selection = selected;
+    $list.scrollTop = scroll;
+  } catch (error) {
+    if (generation === state.generation) state.pageError = String(error);
+  } finally {
+    if (generation === state.generation) { state.loadingMore = false; renderPaging(); renderFooter(); }
+  }
+}
+
+function renderPaging() {
+  const page = state.page;
+  $("more-controls").hidden = !page?.hasMore;
+  $("load-more").disabled = state.loadingMore;
+  $("load-more").textContent = state.loadingMore ? "Loading…" : page?.expired ? "Refresh results" : "Show more";
+  $("page-status").textContent = state.pageError || (page ? `${state.strong.length + state.weaker.length} of ${page.total.toLocaleString()} matches loaded` : "");
+}
+
+async function refreshStats() {
+  const generation = ++state.statsGeneration;
+  $("stats-refresh").disabled = true;
+  $("stats-message").textContent = "Loading index statistics…";
+  try {
+    const reply = await ask({ op: "index_stats" });
+    if (generation !== state.statsGeneration) return;
+    if (reply.ok === false) throw new Error(reply.error);
+    state.stats = reply;
+    const kinds = new Map(), totals = { searchable: 0, pending: 0, partial: 0, failed: 0, skipped: 0, raw: 0, bytes: 0, vectors: 0, segments: 0 };
+    for (const index of reply.indexes || []) {
+      for (const [kind, states] of Object.entries(index.by_kind_and_state || {})) {
+        const row = kinds.get(kind) || { searchable: 0, pending: 0, issues: 0 };
+        row.searchable += (states.done || 0) + (states.partial || 0);
+        row.pending += states.pending || 0;
+        row.issues += (states.failed || 0) + (states.skipped || 0);
+        kinds.set(kind, row);
+        totals.searchable += (states.done || 0) + (states.partial || 0);
+        for (const key of ["pending", "partial", "failed", "skipped"]) totals[key] += states[key] || 0;
+      }
+      totals.raw += index.unsupported_raw || 0;
+      for (const key of ["bytes", "vectors", "segments"]) totals[key] += index[key] || 0;
+    }
+    const n = (value) => value.toLocaleString();
+    $("stats-totals").replaceChildren();
+    for (const [label, value] of [["Searchable files", n(totals.searchable)], ["Waiting to index", n(totals.pending)],
+      ["Long files still being read", n(totals.partial)], ["Unsupported RAW files", n(totals.raw)],
+      ["Other failed files", n(Math.max(0, totals.failed - totals.raw))], ["Skipped files", n(totals.skipped)],
+      ["Indexed fragments / vectors", `${n(totals.segments)} / ${n(totals.vectors)}`],
+      ["Database storage (including retained files)", formatBytes(totals.bytes)]]) {
+      $("stats-totals").append(element("dt", "", label), element("dd", "", value));
+    }
+    $("stats-kinds").replaceChildren();
+    for (const [kind, values] of [...kinds].sort((a, b) => b[1].searchable - a[1].searchable || a[0].localeCompare(b[0]))) {
+      const row = element("tr", "");
+      row.append(element("th", "", KIND_TITLE[kind] || kind));
+      for (const key of ["searchable", "pending", "issues"]) row.append(element("td", "", n(values[key])));
+      $("stats-kinds").append(row);
+    }
+    $("stats-recent").replaceChildren();
+    const recent = (reply.indexes || []).flatMap((index) => index.recent || [])
+      .sort((a, b) => b.indexed_at - a.indexed_at).slice(0, 6);
+    for (const file of recent) {
+      const button = element("button", "", nameOf(file.path));
+      button.type = "button";
+      button.title = file.path;
+      button.onclick = () => invoke("open_path", { path: file.path }).catch((error) => { $("stats-message").textContent = String(error); });
+      $("stats-recent").append(button);
+    }
+    $("stats-message").textContent = kinds.size ? `${n(reply.folders + reply.code_folders)} selected folders · ${state.indexStatus?.stage === "idle" ? "Watching for changes" : "Indexing status shown above"}` : "No files in the selected folders have reached the index yet.";
+    if (!recent.length) $("stats-recent").append(element("p", "overview-note", "No indexed files yet."));
+    const latest = Math.max(0, ...(reply.indexes || []).map((index) => index.last_indexed || 0));
+    $("stats-stamp").textContent = `Updated ${new Date(reply.sampled_at * 1000).toLocaleTimeString()}`
+      + (latest ? ` · Last file indexed ${new Date(latest * 1000).toLocaleString()}` : "")
+      + ". Counts cover selected folders; database storage covers the whole saved index.";
+  } catch (error) {
+    if (generation === state.statsGeneration) $("stats-message").textContent = `Statistics unavailable: ${String(error)}. Try Refresh.`;
+  } finally {
+    if (generation === state.statsGeneration) $("stats-refresh").disabled = false;
+  }
+}
+
+function formatBytes(value) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function failed(error) {
@@ -162,13 +280,16 @@ function revealSelected() {
 
 function render() {
   const empty = state.phase === "empty";
-  const height = empty ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
+  const height = empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
     invoke("panel_height", { height }).catch(() => {});
   }
-  $body.hidden = empty;
-  $footer.hidden = empty;
+  $body.hidden = empty || state.statsOpen;
+  $footer.hidden = empty || state.statsOpen;
+  $("index-overview").hidden = !state.statsOpen;
+  $("stats-toggle").setAttribute("aria-expanded", String(state.statsOpen));
+  renderPaging();
   if (empty) return;
   renderList();
   renderPreview();
@@ -350,10 +471,12 @@ function renderFooter() {
     summary = state.encoder === "starting" ? "Matching words; meaning search is warming up…" : "Matching words…";
   } else if (state.phase === "wordsOnly") summary = "Words only: meaning search isn't available";
   else if (state.phase === "codeHint") summary = "Searching your code";
-  else summary = `${strong} ${strong === 1 ? "result" : "results"}` + (weaker ? ` · ${weaker} weaker` : "");
+  else summary = state.page ? `${strong + weaker} of ${state.page.total.toLocaleString()} matches loaded`
+    : `${strong} ${strong === 1 ? "result" : "results"}` + (weaker ? ` · ${weaker} weaker` : "");
   // Results while indexing are partial: say so where they're counted.
   if (state.indexing && !state.error) summary += " · indexing is still in progress";
   $summary.textContent = summary;
+  $summary.title = state.page ? "Matches are ranked from the index at query time. Run the query again to include newer changes." : "";
   $keys.textContent = `↩ Open   ${MOD}↩ Show in ${FILE_MANAGER}`;
 }
 
@@ -521,9 +644,18 @@ ICONS.screenshot = ICONS.image;
 // MARK: Keys and events
 
 $query.addEventListener("input", queryChanged);
+$("load-more").addEventListener("click", () => state.page?.expired ? queryChanged() : loadMore());
+$("stats-toggle").addEventListener("click", () => {
+  state.statsOpen = !state.statsOpen;
+  render();
+  if (state.statsOpen) refreshStats();
+});
+$("stats-refresh").addEventListener("click", refreshStats);
+setInterval(() => { if (state.statsOpen && !document.hidden) refreshStats(); }, 10000);
 
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys
+  if (event.target.closest?.("button")) return; // native Tab/Space/Enter behavior for page and overview controls
   const modifier = isMac ? event.metaKey : event.ctrlKey;
   switch (event.key) {
     case "Escape":
@@ -551,6 +683,7 @@ tauri.event.listen("panel-shown", () => {
   $query.select();
   ask({ op: "prewarm" }).catch(() => {});
   refreshIndexStatus();
+  if (state.statsOpen) refreshStats();
 });
 
 tauri.event.listen("helper", ({ payload }) => {
@@ -649,8 +782,31 @@ function debugSearch(query) {
   $query.value = query;
   queryChanged();
 }
-invoke("debug_query").then(debugSearch);
+Promise.all([invoke("debug_search_options"), invoke("debug_query")]).then(([options, query]) => {
+  debugOptions = options;
+  debugSearch(query);
+});
 tauri.event.listen("debug-query", ({ payload }) => debugSearch(payload));   // after setup's first index
+
+async function completeDebugSearch() {
+  if (debugOptions.loadAll) {
+    const deadline = Date.now() + 60000;
+    const record = () => debugPages.push({ loaded: state.strong.length + state.weaker.length,
+      offset: state.page?.offset, total: state.page?.total, hasMore: state.page?.hasMore,
+      largestGroup: Math.max(0, ...state.groups.map((group) => group.rows.length)),
+      renderedRows: $list.querySelectorAll(".row").length });
+    record();
+    while (state.page?.hasMore && !state.pageError && Date.now() < deadline) {
+      $("load-more").click(); // same native DOM control the user clicks; no fabricated backend responses
+      while (state.loadingMore && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+      record();
+    }
+    $("stats-toggle").click();
+    while ($("stats-refresh").disabled && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+    if (Date.now() >= deadline) state.error = "Pagination smoke timed out";
+  }
+  report();
+}
 
 function report() {
   debugPending = false;
@@ -674,6 +830,12 @@ function report() {
         thumbnails: `${thumbs.filter((image) => image.complete && image.naturalWidth > 0).length} of ${thumbs.length} drawn`,
         facts: [...$preview.querySelectorAll(".facts .title, .facts .line, .reason span")].map((node) => node.textContent),
         footer: [$summary.textContent, $keys.textContent],
+        pagination: { ...state.page, loaded: state.strong.length + state.weaker.length, error: state.pageError,
+          paths: [...state.strong, ...state.weaker].map((hit) => nameOf(hit.path)), pages: debugPages,
+          buttonVisible: !$("more-controls").hidden },
+        overview: { visible: !$("index-overview").hidden, data: state.stats,
+          message: $("stats-message").textContent, totals: $("stats-totals").textContent,
+          kinds: $("stats-kinds").textContent, recent: $("stats-recent").textContent },
         indexing: { current: state.indexStatus, history: progressHistory, visible: !$indexStatus.hidden,
           title: $indexTitle.textContent, count: $indexCount.textContent, detail: $indexDetail.textContent },
       },

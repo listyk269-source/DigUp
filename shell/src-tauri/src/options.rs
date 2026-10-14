@@ -46,6 +46,8 @@ pub struct Options {
     pub debug_isolated: bool,
     /// A second real setup pass adds this folder before the debug query.
     pub debug_reconfigure_folder: Option<PathBuf>,
+    /// Isolated release smoke: click through every search page and open the real index overview.
+    pub debug_load_all: bool,
 }
 
 impl Options {
@@ -82,6 +84,7 @@ impl Options {
             debug_show: false,
             debug_isolated: false,
             debug_reconfigure_folder: None,
+            debug_load_all: false,
         };
         while let Some(arg) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -109,6 +112,7 @@ impl Options {
                 "--debug-reconfigure-folder" => {
                     options.debug_reconfigure_folder = Some(value()?.into())
                 }
+                "--debug-load-all" => options.debug_load_all = true,
                 _ => return Err(format!("unknown argument {arg}")),
             }
         }
@@ -129,6 +133,9 @@ impl Options {
             if !options.debug_isolated || !options.debug_setup || !folder.is_absolute() {
                 return Err("--debug-reconfigure-folder requires --debug-isolated, --debug-setup and an absolute folder path".into());
             }
+        }
+        if options.debug_load_all && !options.debug_isolated {
+            return Err("--debug-load-all requires --debug-isolated".into());
         }
         // On a Mac the shell is only tried out: the helper's default index there is the Mac app's.
         if cfg!(target_os = "macos") && options.index.is_none() {
@@ -250,6 +257,7 @@ mod tests {
     #[test]
     fn isolated_smoke_requires_private_explicit_paths() {
         assert!(parse(&["--debug-isolated"], None, None).is_err());
+        assert!(parse(&["--debug-load-all"], None, None).is_err());
         assert!(parse(&["--debug-reconfigure-folder", "relative"], None, None).is_err());
         let root = std::env::temp_dir().join("DigUp test кириллица");
         let args = [

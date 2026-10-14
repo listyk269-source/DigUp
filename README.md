@@ -165,7 +165,10 @@ libraries; it does not depend on a user's FFmpeg or llama.cpp in `PATH` and does
 
 On first launch, choose folders and download the model (about 865 MB, checked against pinned SHA-256 hashes;
 interrupted downloads resume). Open the search panel with **Ctrl+Shift+Space**. Code folders and login startup
-are opt-in. The tray offers folder settings, pause/resume, retrying the model download, and Quit. Subsequent
+are opt-in. Search loads 40 matches at a time; **Show more** continues through every qualifying match with no
+six-file limit per group. The **Index** button shows counts by type, pending/failed files, database size,
+fragments/vectors and recently indexed files. Statistics stay local and do not record query or opening history.
+The tray offers folder settings, pause/resume, retrying the model download, and Quit. Subsequent
 indexing and searching are local. Installation needs the Microsoft WebView2 runtime; if absent the installer
 runs its bundled, verified Microsoft bootstrapper, so first installation needs a connection.
 

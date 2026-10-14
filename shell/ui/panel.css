@@ -117,13 +117,45 @@ html, body {
   border-top: 1px solid var(--line);
 }
 
-.list {
+.results {
   width: var(--list-width);
   flex: none;
-  overflow-y: auto;
-  padding: 6px 8px 10px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--line);
 }
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 8px 10px;
+}
+
+.quiet-button, .more-controls button, .stats-recent button {
+  font: inherit; color: var(--text); background: var(--chip); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 10px; cursor: pointer;
+}
+button:hover { background-color: var(--selected); }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+button:disabled { opacity: 0.6; cursor: wait; }
+.more-controls { flex: none; padding: 8px 10px; border-top: 1px solid var(--line); }
+#page-status { display: block; margin-top: 6px; color: var(--secondary); font-size: 12px; }
+.index-overview { flex: 1; min-height: 0; overflow: auto; padding: 14px 18px 20px; border-top: 1px solid var(--line); }
+.overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.overview-heading h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.index-overview h3 { margin: 20px 0 8px; font-size: 14px; }
+#stats-message, .overview-note { color: var(--secondary); font-size: 12px; line-height: 1.5; }
+.stats-totals { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 18px; margin: 14px 0; }
+.stats-totals dt, .stats-totals dd { margin: 0; }
+.stats-totals dd, .stats-table td { font-variant-numeric: tabular-nums; text-align: right; }
+.stats-table { width: 100%; border-collapse: collapse; }
+.stats-table th, .stats-table td { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.stats-table th { font-size: 12px; font-weight: 600; text-align: right; color: var(--secondary); }
+.stats-table th:first-child { text-align: left; }
+.stats-recent { display: grid; gap: 5px; }
+.stats-recent button { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.overview-note { margin: 8px 0; }
 
 .group-title {
   font-size: 10px;

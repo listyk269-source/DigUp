@@ -14,6 +14,38 @@ uninstalls. A workflow definition is not evidence that GitHub Actions has passed
 attach its successful run URL and the clean-machine checklist below to a release.
 The PATH-isolated smoke on a developer/CI host is **not** a clean-VM test.
 
+## Search pages and index overview
+
+The search panel loads 40 files at a time. **Show more** appends the next page of
+the same ranked snapshot; there is no six-file cap on a type group. Paged search
+retrieves all FTS candidates, beyond the former 100-file/1000-segment budgets.
+The existing semantic relevance gate still applies: this is every qualifying
+match, not every file in the index. Weaker matches remain expandable and open
+automatically when a later page adds them. Keyword and meaning pages replace
+one another as typing finishes; obsolete replies cannot append to a new query.
+
+The total reflects the index at query time. Files removed after that snapshot
+are skipped, so fewer displayed files than that total are possible. Rerun the
+query for a fresh ranking. Changing selected folders expires an older cursor;
+**Refresh results** starts a new query. Existing CLI/macOS top-k search behavior
+and ranking weights remain unchanged.
+
+**Index** beside the search field opens a local overview: selected-folder file
+counts by type/state, pending and partial files, unsupported RAW and other
+failures, skipped files, fragments/vectors, last indexing time and six most
+recently indexed files. These are real metadata, not a popularity ranking.
+Query and opening history are not collected. Counts honor folder/type exclusions;
+database storage includes retained rows outside the selected folders and WAL.
+Refresh updates on demand and every 10 seconds while the overview is visible.
+No database migration or index reset is needed for this update.
+
+`scripts/windows/Search-Pagination-Smoke.ps1` checks the actual packaged GUI
+with 145 real-model indexed Unicode documents, DOM clicks through
+40/80/120/145 matches, accurate failure statistics, and a second launch against
+the same database. Its two damaged-image fixtures test error classification,
+not a camera RAW decoder. Unit tests additionally cross both FTS candidate
+budgets with 1105 files and a file with over 1000 matching segments.
+
 ## Build from a clean checkout
 
 Install Git, PowerShell 7.2 or newer, Visual Studio **2022** Build Tools with the

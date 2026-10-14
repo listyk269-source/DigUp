@@ -172,11 +172,13 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
         .unwrap_or_default();
     if ![
         "search",
+        "search_page",
         "embed_ahead",
         "text",
         "render",
         "prewarm",
         "status",
+        "index_stats",
     ]
     .contains(&op)
     {
@@ -414,6 +416,11 @@ async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, Str
 }
 
 #[tauri::command]
+fn debug_search_options(shell: State<'_, Arc<Shell>>) -> Value {
+    json!({"loadAll": shell.options.debug_load_all})
+}
+
+#[tauri::command]
 fn debug_setup_snapshot(shell: State<'_, Arc<Shell>>, report: Value) {
     if shell.options.debug_setup {
         shell.debug_setup_history.lock().unwrap().push(report);
@@ -512,6 +519,7 @@ fn main() {
             hide_panel,
             panel_height,
             debug_query,
+            debug_search_options,
             debug_report,
             debug_setup_snapshot,
             retry_model
