@@ -306,9 +306,13 @@ final class FaceService: @unchecked Sendable {
         let offset = min(max(request["offset"] as? Int ?? 0, 0), total)
         let limit = min(max(request["limit"] as? Int ?? 60, 1), 200), next = min(total, offset + limit)
         let page = indexed ? try sidecar.observations(path: path, model: FaceModels.modelID, offset: offset, limit: limit) : []
+        let peopleStore = FacePeopleStore(index: sidecar)
+        let names = Dictionary(uniqueKeysWithValues: try peopleStore.people().map { ($0.id, $0) })
+        let labeled = try page.filter { $0.file == current }.map { try Self.labeledFields($0, store: peopleStore, people: names) }
         try unchangedScope(revision)
-        return ["ok": true, "path": path, "kind": current.kind, "faces": page.filter { $0.file == current }.map(Self.fields), "total": total,
-                "next_offset": next, "has_more": next < total, "indexed": indexed, "stale": !indexed]
+        return ["ok": true, "path": path, "kind": current.kind, "faces": labeled, "total": total,
+                "next_offset": next, "has_more": next < total, "indexed": indexed, "stale": !indexed,
+                "index_revision": try sidecar.revision(), "people_revision": try peopleStore.revision()]
     }
 
     func search(_ request: [String: Any]) throws -> [String: Any] {
@@ -319,6 +323,8 @@ final class FaceService: @unchecked Sendable {
         let files = try indexedFiles()
         let byPath = Dictionary(uniqueKeysWithValues: files.map { (Data($0.path.utf8), $0) })
         let sidecar = try FaceIndexStore(directory: directory)
+        let peopleStore = FacePeopleStore(index: sidecar)
+        let names = Dictionary(uniqueKeysWithValues: try peopleStore.people().map { ($0.id, $0) })
         let indexRevision = try sidecar.revision()
         if (request["offset"] as? Int ?? 0) > 0,
            (request["index_revision"] as? NSNumber)?.int64Value != indexRevision {
@@ -343,7 +349,7 @@ final class FaceService: @unchecked Sendable {
         let hits = try matches[offset..<next].compactMap { match -> [String: Any]? in
             guard let target = try sidecar.observations(model: FaceModels.modelID, id: match.id).first,
                   Self.current(target.file, scope: selected) else { return nil }
-            var fields = Self.fields(target)
+            var fields = try Self.labeledFields(target, store: peopleStore, people: names)
             fields["name"] = (target.file.path as NSString).lastPathComponent
             fields["cosine"] = match.cosine; fields["score"] = match.cosine
             fields["match_types"] = ["face"]
@@ -356,15 +362,38 @@ final class FaceService: @unchecked Sendable {
             return ["ok": false, "expired": true, "error": "Face index changed. Run the face search again."]
         }
         try unchangedScope(revision)
-        return ["ok": true, "seed": Self.fields(seed), "hits": hits, "total": matches.count, "next_offset": next,
+        return ["ok": true, "seed": try Self.labeledFields(seed, store: peopleStore, people: names), "hits": hits, "total": matches.count, "next_offset": next,
                 "has_more": next < matches.count, "minimum_cosine": threshold, "model_id": FaceModels.modelID,
-                "index_revision": indexRevision]
+                "index_revision": indexRevision, "people_revision": try peopleStore.revision()]
     }
-    private static func fields(_ observation: IndexedFace) -> [String: Any] {
+    func people(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
+        let (selected, revision) = stateLock.withLock { (scope, scopeRevision) }
+        let byPath = Dictionary(uniqueKeysWithValues: try indexedFiles().map { (Data($0.path.utf8), $0) })
+        let handler = try FacePeopleService(directory: directory, acceptsCurrent: { file in
+            byPath[Data(file.path.utf8)] == file && Self.current(file, scope: selected)
+        }, acceptsScope: { file in
+            selected.accepts(file.path) && selected.accepts(FolderSelection.realPath(file.path))
+        }, checkScope: { [self] in try unchangedScope(revision) })
+        return try handler.handle(op, request)
+    }
+    static func fields(_ observation: IndexedFace) -> [String: Any] {
         ["id": observation.face.id, "face_id": observation.face.id, "path": observation.file.path, "kind": observation.file.kind,
          "bbox": observation.face.bbox, "landmarks": observation.face.landmarks, "score": observation.face.score,
          "quality": observation.face.score, "loc": observation.face.loc as Any? ?? NSNull(), "modified": observation.file.modified,
          "size": observation.file.size, "model_id": observation.model]
+    }
+    static func labeledFields(_ observation: IndexedFace, store: FacePeopleStore, people: [String: FacePerson]) throws -> [String: Any] {
+        var result = fields(observation)
+        let snapshot = FacePersonSnapshot(observation)
+        let annotations = try store.annotations(anchor: snapshot.anchor)
+        let assigned = annotations.first { $0.state == "assigned" }.flatMap { people[$0.personID] }
+        result["anchor_key"] = snapshot.anchor
+        result["person"] = assigned.map { ["id": $0.id, "name": $0.name] } as Any? ?? NSNull()
+        result["rejected_people"] = annotations.filter { $0.state == "rejected" }.compactMap { annotation -> [String: String]? in
+            guard let person = people[annotation.personID] else { return nil }
+            return ["id": person.id, "name": person.name]
+        }
+        return result
     }
 }
 

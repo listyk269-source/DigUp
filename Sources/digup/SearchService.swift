@@ -116,11 +116,15 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                     lock.withLock { stopEncoder() }
                     return 0
                 }
-                if op == "face_file" || op == "face_search" {
+                if ["face_file", "face_search", "people_list", "person_save", "person_faces", "face_label", "people_undo", "face_people"].contains(op) {
                     let request = UncheckedSendable(request)
                     faceQueries.async { [self] in
                         var reply: [String: Any]
-                        do { reply = try op == "face_file" ? faces.file(request.value) : faces.search(request.value) }
+                        do {
+                            if op == "face_file" { reply = try faces.file(request.value) }
+                            else if op == "face_search" { reply = try faces.search(request.value) }
+                            else { reply = try faces.people(op, request.value) }
+                        }
                         catch { reply = ["ok": false, "error": String("\(error)".prefix(500))] }
                         reply["id"] = request.value["id"] ?? NSNull()
                         write(reply)

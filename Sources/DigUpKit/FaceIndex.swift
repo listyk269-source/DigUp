@@ -2,7 +2,7 @@ import Foundation
 
 /// A face index is deliberately separate from EmbeddingGemma's 768-dimensional segment matrix.
 /// Every observation belongs to an exact file version and model/preprocessing version.
-public struct FaceFileVersion: Sendable, Equatable {
+public struct FaceFileVersion: Sendable, Equatable, Codable {
     public let path: String
     public let kind: String
     public let size: Int64
@@ -48,8 +48,9 @@ public final class FaceIndexStore {
         db = try Database(path: directory.appendingPathComponent(Self.name).path)
         var version: Int64 = 0
         try db.query("PRAGMA user_version") { version = $0.int(0) }
-        guard version <= 1 else { throw Database.Failure(message: "The face index needs a newer DigUp.") }
-        try db.execute("""
+        guard version <= 2 else { throw Database.Failure(message: "The face index needs a newer DigUp.") }
+        try db.transaction {
+            try db.execute("""
             CREATE TABLE IF NOT EXISTS face_jobs(
                 path TEXT PRIMARY KEY COLLATE BINARY, kind TEXT NOT NULL, size INTEGER NOT NULL, modified REAL NOT NULL,
                 model TEXT NOT NULL, config TEXT NOT NULL, state TEXT NOT NULL, frames INTEGER NOT NULL,
@@ -60,8 +61,10 @@ public final class FaceIndexStore {
             CREATE INDEX IF NOT EXISTS faces_path ON faces(path);
             CREATE TABLE IF NOT EXISTS face_meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL);
             INSERT OR IGNORE INTO face_meta(key, value) VALUES('revision', 0);
-            PRAGMA user_version = 1;
             """)
+            try FacePeopleStore.migrate(db)
+            try db.execute("PRAGMA user_version = 2")
+        }
     }
 
     public func completed(_ file: FaceFileVersion, model: String, config: String) throws -> Bool {
