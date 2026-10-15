@@ -104,13 +104,13 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                     lock.withLock { stopEncoder() }
                     return 0
                 }
-                if op == "render" {
+                if op == "render" || op == "media_details" {
                     renderSlots.wait()
                     let request = UncheckedSendable(request)
                     Thread.detachNewThread { [self] in
                         defer { renderSlots.signal() }
                         var reply: [String: Any]
-                        do { reply = try render(request.value) } catch {
+                        do { reply = try op == "render" ? render(request.value) : mediaDetails(request.value) } catch {
                             reply = ["ok": false, "error": String("\(error)".prefix(500))]
                         }
                         reply["id"] = request.value["id"] ?? NSNull()
@@ -131,6 +131,51 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
 
     private func handle(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
         switch op {
+        case "graph_search":
+            let code = request["code"] as? Bool ?? false
+            let paths = Array((request["paths"] as? [String] ?? []).prefix(120))
+            let allowed = Set(paths.filter { accepts($0, code: code) }.map { Data($0.utf8) })
+            let text = String((request["q"] as? String ?? "").prefix(2000))
+            guard !text.isEmpty, let vector = vector(for: text, code: code) else {
+                return ["ok": false, "error": "Semantic search is unavailable. Check the local model; filename filtering still works."]
+            }
+            guard let selected = code ? codeSearcher : searcher else { throw CLIError("This index is not available.") }
+            guard encoder?.info.vectorSource == selected.vectorSource else { throw CLIError("The index model changed. Start a new graph.") }
+            let page = try selected.snapshot(text, queryVector: vector, acceptsPath: { allowed.contains(Data($0.utf8)) })
+            return ["ok": true, "hits": try page.page(offset: 0, limit: 120).map(hitFields), "meaning": true, "total": page.total]
+        case "file_evidence":
+            let code = request["code"] as? Bool ?? false
+            guard let path = request["path"] as? String, accepts(path, code: code),
+                  let selected = code ? codeStore : store else { throw CLIError("This file is outside the selected folders.") }
+            var file: Int64?
+            var info: [String: String] = [:]
+            try selected.db.query("SELECT id, info FROM files WHERE path = ?", [.text(path)]) { row in
+                file = row.int(0)
+                info = row.text(1)?.data(using: .utf8).flatMap { (try? JSONSerialization.jsonObject(with: $0)) as? [String: String] } ?? [:]
+            }
+            guard let file else { throw CLIError("This file changed in the index. Refresh search results.") }
+            var ocr: [[String: Any]] = []
+            try selected.db.query("SELECT loc, excerpt FROM segments WHERE file = ? AND kind = 'ocr' LIMIT 10", [.int(file)]) { row in
+                if let text = row.text(1), !text.isEmpty { ocr.append(["text": String(text.prefix(1000)), "loc": row.isNull(0) ? NSNull() : row.double(0) as Any]) }
+            }
+            return ["ok": true, "info": info, "ocr": ocr, "faces": NSNull(), "objects": NSNull()]
+        case "related_counts":
+            lastQuery = Date()
+            let code = request["code"] as? Bool ?? false
+            guard let nodes = request["nodes"] as? [[String: Any]], nodes.count <= 12,
+                  let selected = code ? codeSearcher : searcher else { throw CLIError("Invalid neighbor count request") }
+            let visible = Array((request["visible"] as? [String] ?? []).prefix(120))
+            let types = (request["match_types"] as? [String]).map { Set($0.compactMap(MatchType.init(rawValue:))) }
+            try selected.reload()
+            var counts: [[String: Any]] = []
+            for node in nodes {
+                guard let path = node["path"] as? String, accepts(path, code: code) else { continue }
+                let related = try selected.relatedFiles(to: path, segmentID: (node["segment"] as? NSNumber)?.int64Value,
+                    limit: 0, minimumCosine: request["minimum_cosine"] as? Double ?? 0.75, matchTypes: types,
+                    refresh: false, visiblePaths: visible, acceptsPath: { [self] in accepts($0, code: code) })
+                counts.append(["path": path, "total": related.total, "unexpanded_count": related.unexpandedCount])
+            }
+            return ["ok": true, "counts": counts, "vector_source": selected.vectorSource as Any? ?? NSNull()]
         case "related_files":
             lastQuery = Date()
             let code = request["code"] as? Bool ?? false
@@ -147,7 +192,8 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             let started = Date()
             let related = try selected.relatedFiles(to: path, segmentID: (request["segment"] as? NSNumber)?.int64Value,
                 offset: offset, limit: limit, minimumCosine: request["minimum_cosine"] as? Double ?? 0.55,
-                kinds: kinds, acceptsPath: { [self] in accepts($0, code: code) })
+                kinds: kinds, matchTypes: (request["match_types"] as? [String]).map { Set($0.compactMap(MatchType.init(rawValue:))) },
+                acceptsPath: { [self] in accepts($0, code: code) })
             if let issue = related.issue { return ["ok": false, "error": issue] }
             let next = min(offset, related.total) + min(limit, max(0, related.total - min(offset, related.total)))
             return ["ok": true, "seed": related.seed.map(hitFields) as Any? ?? NSNull(),
@@ -299,6 +345,28 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
 
     // MARK: Previews
 
+    /// Explicit, local hashing runs beside search and rendering, never on the WebView or search-state lock.
+    private func mediaDetails(_ request: [String: Any]) throws -> [String: Any] {
+        guard let path = request["path"] as? String else { throw CLIError("which file?") }
+        let code = request["code"] as? Bool ?? false
+        let real = FolderSelection.realPath(path)
+        guard lock.withLock({ accepts(path, code: code) && accepts(real, code: code) }) else {
+            throw CLIError("This file is outside the selected folders.")
+        }
+        let native = FileAccess.path(path)
+        let before = try FileManager.default.attributesOfItem(atPath: native)
+        guard before[.type] as? FileAttributeType == .typeRegular else { throw CLIError("Not a regular file") }
+        let hash = try ModelFiles.sha256(of: URL(fileURLWithPath: path))
+        let after = try FileManager.default.attributesOfItem(atPath: native)
+        guard (before[.size] as? NSNumber) == (after[.size] as? NSNumber),
+              (before[.modificationDate] as? Date) == (after[.modificationDate] as? Date),
+              lock.withLock({ accepts(path, code: code) && accepts(real, code: code) }) else {
+            throw CLIError("The file changed while hashing. Retry after indexing finishes.")
+        }
+        return ["ok": true, "sha256": hash, "size": (after[.size] as? NSNumber)?.int64Value ?? 0,
+                "modified": (after[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0]
+    }
+
     private func render(_ request: [String: Any]) throws -> [String: Any] {
         guard let path = request["path"] as? String else { throw CLIError("which file?") }
         let kind = request["kind"] as? String ?? "image"
@@ -397,6 +465,20 @@ func hitFields(_ hit: SearchHit) -> [String: Any] {
     if let end = hit.locEnd { row["loc_end"] = end }
     if let focus = hit.focus { row["focus"] = focus }
     if let excerpt = hit.excerpt { row["excerpt"] = excerpt }
+    if !hit.matchEvidence.isEmpty {
+        row["match_types"] = hit.matchEvidence.map { $0.type.rawValue }
+        row["match_evidence"] = hit.matchEvidence.map { evidence -> [String: Any] in
+            var value: [String: Any] = ["type": evidence.type.rawValue]
+            if let cosine = evidence.cosine { value["cosine"] = cosine }
+            if let id = evidence.seedSegment { value["seed_segment"] = id }
+            if let id = evidence.segment { value["segment"] = id }
+            if let loc = evidence.seedLoc { value["seed_loc"] = loc }
+            if let loc = evidence.loc { value["loc"] = loc }
+            if let loc = evidence.locEnd { value["loc_end"] = loc }
+            if let text = evidence.value { value["value"] = text }
+            return value
+        }
+    }
     return row
 }
 

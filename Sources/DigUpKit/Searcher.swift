@@ -41,6 +41,8 @@ public struct SearchHit: Sendable {
     /// Code: the line to open at, in the stretch (`loc`…`locEnd`): where the name looked up is defined, or the first
     /// line with the query's words. Nil: the stretch's first line.
     public var focus: Double? = nil
+    /// Present only for file-to-file comparisons. An empty list means semantic similarity without channel evidence.
+    public var matchEvidence: [MatchEvidence] = []
 }
 
 /// A bounded page of file-to-file similarity, derived from stored vectors without running a model.
@@ -50,6 +52,7 @@ public struct RelatedFiles: Sendable {
     public let total: Int
     public let basis: String
     public let issue: String?
+    public let unexpandedCount: Int
 }
 
 /// Hybrid search: meaning (EmbeddingGemma's vectors) + words (FTS5).
@@ -63,6 +66,7 @@ public final class Searcher {
     private var rowFile: [Int64] = []
     private var rowSegment: [Int64] = []
     private var rowModality: [Modality] = []
+    private var rowKind: [SegmentKind] = []
     /// False for the vectors the later pass adds (`Indexer.finishLongFiles`): scored, but they don't set the scale.
     private var rowSetsScale: [Bool] = []
     private var fileKind: [Int64: FileKind] = [:]
@@ -106,6 +110,7 @@ public final class Searcher {
             rowSegment.append(row.int(0))
             rowFile.append(row.int(1))
             rowModality.append(Modality(rawValue: row.text(2) ?? "") ?? .none)
+            rowKind.append(SegmentKind(rawValue: row.text(4) ?? "") ?? .name)
             // Past the first step of a long PDF (its pages) or document (its chunks).
             let (kind, place) = (row.text(4), row.isNull(5) ? 0 : Int(row.double(5)))
             let later = row.text(6) == "pdf"
@@ -123,6 +128,7 @@ public final class Searcher {
         rowFile = []
         rowSegment = []
         rowModality = []
+        rowKind = []
         rowSetsScale = []
         vectorsLoaded = false
     }
@@ -149,13 +155,15 @@ public final class Searcher {
     /// Filters run before ranking/paging; live SQLite path/segment ownership is checked again when reading a node.
     public func relatedFiles(to path: String, segmentID: Int64? = nil, offset: Int = 0, limit: Int = 12,
                              minimumCosine: Double = 0.55, kinds: Set<FileKind>? = nil,
+                             matchTypes: Set<MatchType>? = nil, refresh: Bool = true,
+                             visiblePaths: [String] = [],
                              acceptsPath: ((String) -> Bool)? = nil) throws -> RelatedFiles {
         func unavailable(_ issue: String) -> RelatedFiles {
-            RelatedFiles(seed: nil, hits: [], total: 0, basis: "", issue: issue)
+            RelatedFiles(seed: nil, hits: [], total: 0, basis: "", issue: issue, unexpandedCount: 0)
         }
         guard acceptsPath?(path) ?? true else { return unavailable("This file is outside the selected folders.") }
         // Start a fresh vector view: indexing can replace row IDs or the model between graph expansions.
-        try reload()
+        if refresh || !vectorsLoaded { try reload() }
         guard let file = filePath.first(where: { $0.value.utf8.elementsEqual(path.utf8) })?.key,
               let matrix else { return unavailable("This file has no indexed vectors yet.") }
         let rows = rowFile.indices.filter { rowFile[$0] == file }
@@ -192,6 +200,36 @@ public final class Searcher {
         })
         let threshold = minimumCosine.isFinite ? min(1, max(-1, minimumCosine)) : 0.55
         let scores = score(vector)
+        // Score each supported channel against its own seed mean. Never relabel a general/cross-modal score as a face/OCR match.
+        let channelRows: [(MatchType, [Int])] = [(.visual, rows.filter { rowModality[$0] == .image }),
+            (.audio, rows.filter { rowModality[$0] == .audio }), (.ocr, rows.filter { rowKind[$0] == .ocr })]
+        var channelBest: [MatchType: [Int64: (cosine: Double, row: Int, anchor: Int?)]] = [:]
+        for (type, candidates) in channelRows {
+            let anchors = matched.flatMap { candidates.contains($0) ? [$0] : nil } ?? candidates
+            var mean = [Float](repeating: 0, count: Vectors.dimension), valid: [Int] = []
+            for row in anchors {
+                let halves = matrix.halves + row * Vectors.dimension
+                guard (0..<Vectors.dimension).allSatisfy({ halves[$0].isFinite }) else { continue }
+                valid.append(row)
+                for column in mean.indices { mean[column] += Float(halves[column]) }
+            }
+            let length = sqrt(mean.reduce(0.0) { $0 + Double($1) * Double($1) })
+            guard length.isFinite, length > 0 else { continue }
+            let channelScores = score(mean.map { $0 / Float(length) })
+            for row in channelScores.indices where accepted.contains(rowFile[row]) && channelScores[row].isFinite {
+                let same = type == .visual ? rowModality[row] == .image : type == .audio ? rowModality[row] == .audio : rowKind[row] == .ocr
+                let cosine = min(1, max(-1, Double(channelScores[row])))
+                if same && cosine >= threshold && cosine > (channelBest[type]?[rowFile[row]]?.cosine ?? -.infinity) {
+                    channelBest[type, default: [:]][rowFile[row]] = (cosine, row, valid.count == 1 ? valid.first : nil)
+                }
+            }
+        }
+        var metadataFiles = Set<Int64>()
+        if let taken = seed.info["taken"], !taken.isEmpty {
+            try store.db.query("SELECT id FROM files WHERE json_extract(info, '$.taken') = ?", [.text(taken)]) {
+                if accepted.contains($0.int(0)) { metadataFiles.insert($0.int(0)) }
+            }
+        }
         var best: [Int64: (cosine: Double, row: Int)] = [:]
         for row in scores.indices where accepted.contains(rowFile[row]) && scores[row].isFinite {
             let cosine = min(1, max(-1, Double(scores[row])))
@@ -199,12 +237,37 @@ public final class Searcher {
                 best[rowFile[row]] = (cosine, row)
             }
         }
+        if let matchTypes {
+            best = best.filter { metadataFiles.contains($0.key) && matchTypes.contains(.metadata) }
+        }
+        for (type, files) in channelBest where matchTypes == nil || matchTypes!.contains(type) {
+            for (file, value) in files where value.cosine > (best[file]?.cosine ?? -.infinity) {
+                best[file] = (value.cosine, value.row)
+            }
+        }
         let ranking = best.sorted { $0.value.cosine > $1.value.cosine || ($0.value.cosine == $1.value.cosine && $0.key < $1.key) }
         let start = min(max(0, offset), ranking.count)
         let end = start + min(max(0, min(limit, 40)), ranking.count - start)
-        let hits = try ranking[start..<end].compactMap { try relatedHit(file: $0.key, row: $0.value.row, cosine: $0.value.cosine) }
+        var hits: [SearchHit] = []
+        for item in ranking[start..<end] {
+            guard var hit = try relatedHit(file: item.key, row: item.value.row, cosine: item.value.cosine) else { continue }
+            for type in [MatchType.visual, .audio, .ocr] {
+                guard let evidence = channelBest[type]?[item.key],
+                      let target = try relatedHit(file: item.key, row: evidence.row, cosine: evidence.cosine) else { continue }
+                let anchor = try evidence.anchor.flatMap { try relatedHit(file: file, row: $0, cosine: nil) }
+                hit.matchEvidence.append(MatchEvidence(type: type, cosine: evidence.cosine, seedSegment: anchor?.segmentID,
+                    segment: target.segmentID, seedLoc: anchor?.loc, loc: target.loc, locEnd: target.locEnd, value: nil))
+            }
+            if metadataFiles.contains(item.key) {
+                hit.matchEvidence.append(MatchEvidence(type: .metadata, cosine: nil, seedSegment: nil,
+                    segment: nil, seedLoc: nil, loc: nil, locEnd: nil, value: seed.info["taken"]))
+            }
+            hits.append(hit)
+        }
+        let visible = Set(visiblePaths.map { Data($0.utf8) })
+        let unexpanded = ranking.filter { item in filePath[item.key].map { !visible.contains(Data($0.utf8)) } ?? false }.count
         return RelatedFiles(seed: seed, hits: hits, total: ranking.count,
-                            basis: matched == nil ? "file_mean" : "matched_fragment", issue: nil)
+                            basis: matched == nil ? "file_mean" : "matched_fragment", issue: nil, unexpandedCount: unexpanded)
     }
 
     private func relatedHit(file: Int64, row: Int, cosine: Double?) throws -> SearchHit? {

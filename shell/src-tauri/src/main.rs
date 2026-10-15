@@ -8,6 +8,7 @@ mod autostart;
 mod capture;
 mod helper;
 mod index_status;
+mod investigation;
 mod options;
 mod process;
 mod resources;
@@ -36,6 +37,41 @@ use watcher::FolderWatcher;
 
 const PANEL_WIDTH: f64 = 780.0;
 const FIELD_HEIGHT: f64 = 56.0;
+
+#[tauri::command]
+async fn graph_annotations(
+    shell: State<'_, Arc<Shell>>,
+) -> Result<investigation::Investigation, String> {
+    let shell = shell.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = shell.configuration.lock().unwrap();
+        investigation::Investigation::load(
+            &shell
+                .settings_path
+                .with_file_name("graph-investigation.json"),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn save_graph_annotations(
+    shell: State<'_, Arc<Shell>>,
+    state: investigation::Investigation,
+) -> Result<(), String> {
+    let shell = shell.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = shell.configuration.lock().unwrap();
+        state.save(
+            &shell
+                .settings_path
+                .with_file_name("graph-investigation.json"),
+        )
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
 
 /// What the commands and events share.
 struct Shell {
@@ -526,7 +562,7 @@ async fn debug_capture(
 ) -> Result<Value, String> {
     if !shell.options.debug_isolated
         || !shell.options.debug_ui_features
-        || !["documents", "media"].contains(&label.as_str())
+        || !["documents", "media", "comparison", "timeline", "context"].contains(&label.as_str())
     {
         return Err(
             "Native capture requires the isolated UI feature smoke and a known phase".into(),
@@ -650,6 +686,8 @@ fn main() {
             debug_search_options,
             debug_report,
             debug_capture,
+            graph_annotations,
+            save_graph_annotations,
             debug_setup_snapshot,
             retry_model
         ])

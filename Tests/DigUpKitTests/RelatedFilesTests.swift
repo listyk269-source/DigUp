@@ -89,4 +89,42 @@ import Testing
         _ = try add(store, "/replacement.txt", [vector(1)])
         #expect(try searcher.relatedFiles(to: "/seed.txt").seed == nil)
     }
+    @Test func channelEvidenceIsComputedIndependentlyAndNeverInventsFacesOrOCR() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-modal-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try IndexStore(directory: directory)
+        let seed = try add(store, "/seed.mp4", [], kind: .video)
+        try store.addSegment(file: seed, kind: .frame, modality: .image, loc: 3, vector: vector(1, 0))
+        try store.addSegment(file: seed, kind: .audio, modality: .audio, loc: 10, vector: vector(0, 1))
+        let image = try add(store, "/picture.jpg", [], kind: .image)
+        try store.addSegment(file: image, kind: .image, modality: .image, vector: vector(0.95))
+        let sound = try add(store, "/sound.wav", [], kind: .audio)
+        try store.addSegment(file: sound, kind: .audio, modality: .audio, loc: 25, vector: vector(0, 1))
+        let searcher = try Searcher(store: store)
+        let visual = try searcher.relatedFiles(to: "/seed.mp4", minimumCosine: 0.9, matchTypes: [.visual])
+        #expect(visual.hits.map(\.path) == ["/picture.jpg"])
+        #expect(abs((visual.hits.first?.matchEvidence.first?.cosine ?? 0) - 0.95) < 0.001)
+        #expect(visual.hits.first?.matchEvidence.first?.seedLoc == 3)
+        let audio = try searcher.relatedFiles(to: "/seed.mp4", matchTypes: [.audio])
+        #expect(audio.hits.map(\.path) == ["/sound.wav"])
+        #expect(audio.hits.first?.matchEvidence.first?.loc == 25)
+        #expect(try searcher.relatedFiles(to: "/seed.mp4", matchTypes: [.face]).total == 0)
+        #expect(try searcher.relatedFiles(to: "/seed.mp4", matchTypes: [.ocr]).total == 0)
+        let count = try searcher.relatedFiles(to: "/seed.mp4", limit: 0, visiblePaths: ["/sound.wav"])
+        #expect(count.total == 2 && count.unexpandedCount == 1)
+    }
+    @Test func metadataEvidenceRequiresAnActualMatchingEXIFDate() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-meta-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try IndexStore(directory: directory)
+        let seed = try add(store, "/seed.jpg", [vector(1)], kind: .image)
+        let target = try add(store, "/match.jpg", [vector(0.95)], kind: .image)
+        _ = try add(store, "/not-exif.jpg", [vector(0.99)], kind: .image)
+        for id in [seed, target] { try store.finish(id, state: "ready", info: ["taken": "2026:10:15 10:11:12"]) }
+        let searcher = try Searcher(store: store)
+        let result = try searcher.relatedFiles(to: "/seed.jpg", matchTypes: [.metadata])
+        #expect(result.hits.map(\.path) == ["/match.jpg"])
+        #expect(result.hits.first?.matchEvidence.last?.value == "2026:10:15 10:11:12")
+        #expect(result.hits.first?.matchEvidence.last?.cosine == nil)
+    }
 }
