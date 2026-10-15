@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T12:35:52.157Z",
+  "generatedAt": "2026-10-15T16:58:21.309Z",
   "title": "Design System: DigUp Graph Workspace",
   "extensions": {
     "colorMeta": {
@@ -551,6 +551,10 @@
       {
         "name": "face-review-stack",
         "value": "(max-width: 940px)"
+      },
+      {
+        "name": "people-review-stack",
+        "value": "(max-width: 1020px)"
       }
     ]
   },
@@ -685,22 +689,76 @@
       "description": "Cyan candidate selection, local crop, filename, reported cosine/time, explicit pagination, and dark pane scrollbars. Schematic labels carry no fabricated match score or media.",
       "html": "<section class=\"ds-face-candidates\" aria-label=\"Face matches\"><div class=\"ds-face-candidate-scroll\"><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button></div><button class=\"ds-face-more\" type=\"button\">Show more</button><p>Face matches are candidates, not proof of identity. Video is sampled; brief appearances can be missed.</p></section>",
       "css": ".ds-face-candidates{color-scheme:dark;background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-candidate-scroll{max-height:138px;overflow-y:auto;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-face-candidate-scroll:hover{scrollbar-color:#8999a8 #252b32}.ds-face-candidate-scroll::-webkit-scrollbar{width:10px}.ds-face-candidate-scroll::-webkit-scrollbar-track,.ds-face-candidate-scroll::-webkit-scrollbar-corner{background:#252b32}.ds-face-candidate-scroll::-webkit-scrollbar-thumb{background:#687785;border:2px solid #252b32;border-radius:8px}.ds-face-candidate-scroll::-webkit-scrollbar-thumb:hover{background:#8999a8}.ds-face-candidate{display:flex;width:100%;align-items:center;gap:9px;padding:9px 6px;border:1px solid transparent;border-radius:8px;color:#eef2f6;text-align:left;background:transparent;font:inherit;cursor:pointer}.ds-face-candidate[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-face-candidate:hover:not(:disabled){background:#424c57}.ds-face-candidate-crop{display:block;flex:none;width:45px;height:45px;background:#181c21;border-radius:5px}.ds-face-candidate-text{display:flex;flex-direction:column;gap:4px;min-width:0}.ds-face-candidate-text strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}.ds-face-candidate-text>span{color:#b4bec8;font-size:11px;font-variant-numeric:tabular-nums}.ds-face-more{margin:6px 18px 12px;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-face-more:hover:not(:disabled){background:#424c57}.ds-face-candidates p{margin:0;border-top:1px solid #414952;padding:9px 18px;color:#b4bec8;font-size:11px;line-height:1.5}.ds-face-candidates :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-candidates :disabled{opacity:.48;cursor:default}@media (forced-colors:active){.ds-face-candidates{color-scheme:normal}.ds-face-candidate[aria-pressed=\"true\"]{border-color:Highlight}.ds-face-candidate-scroll,.ds-face-candidate-scroll:hover{scrollbar-color:auto;scrollbar-width:auto}.ds-face-candidate-scroll::-webkit-scrollbar-track,.ds-face-candidate-scroll::-webkit-scrollbar-corner{background:Canvas}.ds-face-candidate-scroll::-webkit-scrollbar-thumb{background:ButtonText;border-color:Canvas}.ds-face-candidate-scroll::-webkit-scrollbar-thumb:hover{background:Highlight}}"
+    },
+    {
+      "name": "People Directory",
+      "kind": "nav",
+      "refersTo": "person-directory-item-selected",
+      "description": "Local label filter and directory with cyan current-person state, authored outline icon, wrapping name, and assigned count. The schematic item is not an identity claim.",
+      "html": "<aside class=\"ds-people-directory\"><label class=\"ds-people-filter-label\">Filter people<input type=\"search\" placeholder=\"Filter people\" autocomplete=\"off\"></label><div class=\"ds-people-list\" role=\"group\" aria-label=\"People\"><button type=\"button\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg><span><strong>Local person label</strong><small>Assigned observations</small></span></button><button type=\"button\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg><span><strong>Another local label</strong><small>Assigned observations</small></span></button></div></aside>",
+      "css": ".ds-people-directory{max-width:250px;padding:14px 12px;border-right:1px solid #414952;background:#202429;color:#eef2f6;color-scheme:dark;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-people-filter-label{display:grid;gap:6px;font-size:12px}.ds-people-filter-label input{width:100%;min-width:0;color:#eef2f6;background:#252b32;font:inherit;border:1px solid #505962;border-radius:8px;padding:8px 10px;caret-color:#f0a048}.ds-people-filter-label input::placeholder{color:#b4bec8}.ds-people-list{max-height:180px;overflow-y:auto;margin:12px 0;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-people-list:hover{scrollbar-color:#8999a8 #252b32}.ds-people-list button{display:flex;width:100%;gap:9px;align-items:center;text-align:left;padding:10px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:#eef2f6;font:inherit;cursor:pointer}.ds-people-list button[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-people-list button:hover:not(:disabled){background:#424c57}.ds-people-list svg{width:24px;height:24px;flex:none;stroke:#b4bec8;fill:none;stroke-width:1.4}.ds-people-list button>span{display:grid;min-width:0;gap:4px}.ds-people-list strong{font-size:13px;overflow-wrap:anywhere;font-weight:500}.ds-people-list small{color:#b4bec8;font-size:11px}.ds-people-directory :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-people-list button:disabled{opacity:.48;cursor:default}@media(forced-colors:active){.ds-people-directory{color-scheme:normal}.ds-people-list,.ds-people-list:hover{scrollbar-color:auto;scrollbar-width:auto}.ds-people-list button[aria-pressed=\"true\"]{border-color:Highlight}}"
+    },
+    {
+      "name": "Person Name Form",
+      "kind": "input",
+      "refersTo": "people-field",
+      "description": "Inline rename uses the same inspector-filled, amber-caret field as local-label creation and filtering. Save and Cancel remain explicit actions; runtime Rename focuses the field and Cancel restores focus.",
+      "html": "<form class=\"ds-person-form\"><label>Person name<input maxlength=\"120\" autocomplete=\"off\" value=\"Local person label\"></label><button type=\"button\">Save name</button><button type=\"button\">Cancel</button></form>",
+      "css": ".ds-person-form{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:14px 18px 10px;background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-person-form label{display:grid;gap:6px;font-size:12px;flex:1;min-width:130px}.ds-person-form input{width:100%;min-width:0;color:#eef2f6;background:#252b32;font:inherit;border:1px solid #505962;border-radius:8px;padding:8px 10px;caret-color:#f0a048}.ds-person-form input::placeholder{color:#b4bec8}.ds-person-form button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-person-form button:hover:not(:disabled){background:#424c57}.ds-person-form :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-person-form button:disabled{opacity:.48;cursor:default}"
+    },
+    {
+      "name": "Person Observation Modes",
+      "kind": "nav",
+      "refersTo": "person-mode-active",
+      "description": "Explicit Assigned, Suggestions, Excluded, and Needs review groups. The active group uses the existing active-preview material and aria-pressed; its text explains the review state.",
+      "html": "<section class=\"ds-person-modes\"><div class=\"ds-person-tabs\" role=\"group\" aria-label=\"Person observations\"><button type=\"button\" aria-pressed=\"true\">Assigned</button><button type=\"button\" aria-pressed=\"false\">Suggestions</button><button type=\"button\" aria-pressed=\"false\">Excluded</button><button type=\"button\" aria-pressed=\"false\">Needs review</button></div><p>Assigned by you. Select an observation to preview it or remove its label.</p></section>",
+      "css": ".ds-person-modes{background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-person-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 10px}.ds-person-tabs button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-person-tabs button[aria-pressed=\"true\"]{background:#3a4652;border-color:#899eb1}.ds-person-tabs button:hover:not(:disabled){background:#424c57}.ds-person-tabs button:focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-person-tabs button:disabled{opacity:.48;cursor:default}.ds-person-modes p{margin:0;padding:0 18px 12px;color:#b4bec8;font-size:12px;line-height:1.5}"
+    },
+    {
+      "name": "People Observation Selection and Bottom Actions",
+      "kind": "custom",
+      "refersTo": "people-action-bar",
+      "description": "A checked row and a different cyan preview row demonstrate independent bulk and preview state. The bottom action bar remains outside the scrolling list. Schematic crop backplates contain no media or match score.",
+      "html": "<section class=\"ds-person-review\"><div class=\"ds-person-observations\" role=\"group\" aria-label=\"Person observations\"><div class=\"ds-person-row\"><input type=\"checkbox\" checked aria-label=\"Select observation in local filename\"><button type=\"button\" aria-pressed=\"false\"><span class=\"ds-person-crop\" aria-hidden=\"true\"></span><span class=\"ds-person-result-text\"><strong>Local filename</strong><span>Photograph</span></span></button></div><div class=\"ds-person-row\"><input type=\"checkbox\" aria-label=\"Select observation in another local filename\"><button type=\"button\" aria-pressed=\"true\"><span class=\"ds-person-crop\" aria-hidden=\"true\"></span><span class=\"ds-person-result-text\"><strong>Another local filename</strong><span>Photograph</span></span></button></div></div><div class=\"ds-person-actions\"><button type=\"button\">Select loaded</button><span>1 selected</span><button type=\"button\">Exclude for person</button><button type=\"button\">Remove label</button></div></section>",
+      "css": ".ds-person-review{background:#202429;color:#eef2f6;color-scheme:dark;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-person-observations{max-height:180px;overflow-y:auto;padding:0 12px 14px;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-person-observations:hover{scrollbar-color:#8999a8 #252b32}.ds-person-row{display:flex;align-items:center;gap:8px;padding:3px 0}.ds-person-row>input{flex:none;width:15px;height:15px;accent-color:#77acc5}.ds-person-row>button{display:flex;width:100%;align-items:center;gap:9px;padding:9px 6px;border:1px solid transparent;border-radius:8px;color:#eef2f6;text-align:left;background:transparent;font:inherit;cursor:pointer;flex:1;min-width:0}.ds-person-row>button[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-person-row>button:hover:not(:disabled){background:#424c57}.ds-person-crop{display:block;flex:none;width:45px;height:45px;background:#181c21;border-radius:5px}.ds-person-result-text{min-width:0;display:flex;flex-direction:column;gap:4px}.ds-person-result-text strong{font-size:12px;font-weight:500;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.ds-person-result-text>span{color:#b4bec8;font-size:11px;font-variant-numeric:tabular-nums}.ds-person-actions{display:flex;gap:7px;flex-wrap:wrap;padding:10px 18px;border-top:1px solid #414952}.ds-person-actions>span{flex:1;min-width:160px;align-self:center;color:#b4bec8;font-size:12px}.ds-person-actions button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-person-actions button:hover:not(:disabled){background:#424c57}.ds-person-review :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-person-review button:disabled{opacity:.48;cursor:default}@media(forced-colors:active){.ds-person-review{color-scheme:normal}.ds-person-row>button[aria-pressed=\"true\"]{border-color:Highlight}.ds-person-observations,.ds-person-observations:hover{scrollbar-color:auto;scrollbar-width:auto}}"
+    },
+    {
+      "name": "Local Label Undo Notice",
+      "kind": "custom",
+      "refersTo": "people-undo",
+      "description": "Separate cool-filled, wrapping operation notice in People and Faces. A returned operation identifier exposes Undo, including after rename; worker counts appear only when supplied.",
+      "html": "<div class=\"ds-people-undo\"><span>Person label renamed</span><button type=\"button\">Undo</button></div>",
+      "css": ".ds-people-undo{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:9px 18px;background:#293b47;color:#e1e7ee;border-bottom:1px solid #505962;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-people-undo>span{flex:1 1 250px;min-width:0;overflow-wrap:anywhere;line-height:1.5}.ds-people-undo button{flex:none;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-people-undo button:hover:not(:disabled){background:#424c57}.ds-people-undo button:focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-people-undo button:disabled{opacity:.48;cursor:default}"
+    },
+    {
+      "name": "Face Label and Bulk Scope Controls",
+      "kind": "custom",
+      "refersTo": "face-control",
+      "description": "Local-person target and seed assignment extend Faces. Explicit bulk scope includes loaded rows or all matches plus source; runtime checkboxes stay independent of candidate preview. Snapshot changes clear scope with a notice.",
+      "html": "<section class=\"ds-face-labels\"><h3>Label selected face</h3><div class=\"ds-face-label-form\"><select aria-label=\"Person label\"><option>Choose person</option><option>Local person label</option></select><button type=\"button\" disabled>Assign selected face</button></div><p>Select a face and assign your own local person label.</p><div class=\"ds-face-bulk\"><button type=\"button\">Select loaded</button><button type=\"button\">All matches + source</button><button type=\"button\">Clear selection</button><span>0 selected</span><button type=\"button\" disabled>Assign selection</button><button type=\"button\" disabled>Exclude for person</button></div></section>",
+      "css": ".ds-face-labels{padding:10px 0 12px;margin:10px 0 12px;border-top:1px solid #414952;border-bottom:1px solid #414952;background:#202429;color:#eef2f6;color-scheme:dark;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-labels h3{margin:0 0 8px;font-size:13px;font-weight:600}.ds-face-label-form{display:flex;flex-wrap:wrap;gap:7px}.ds-face-label-form select{flex:1;min-width:160px;max-width:100%}.ds-face-labels button,.ds-face-labels select{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit}.ds-face-labels button{cursor:pointer}.ds-face-labels button:hover:not(:disabled),.ds-face-labels select:hover{background:#424c57}.ds-face-labels :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-labels button:disabled,.ds-face-labels select:disabled{opacity:.48;cursor:default}.ds-face-labels p{margin:7px 0 0;color:#b4bec8;font-size:11px;line-height:1.5}.ds-face-bulk{padding:12px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:7px}.ds-face-bulk>span{color:#b4bec8;font-size:11px;flex:1;min-width:130px}@media(forced-colors:active){.ds-face-labels{color-scheme:normal}}"
     }
   ],
   "narrative": {
     "northStar": "Graphite, Glass, Amber/Cyan",
-    "overview": "This system applies to DigUp's Tauri graph workspace, its face-investigation extension, and their active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; this is a scoped workspace system.\n\nA restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and emphasizes its unverified incident links; cyan distinguishes video cards. Green and muted red record the operator's confirmed and rejected link states. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the overlay inspector supplies readable file and match evidence.\n\nFace investigation reuses that graphite material, native type, quiet controls, and warm selection. A large source photograph or sampled video frame carries numbered cyan face boxes; the selected observation and crop adopt amber. Actual face crops, file names, cosine values, and reported video times make candidate review concrete. The indexing strip and persistent candidate-language footer remain part of the working surface.",
+    "overview": "**Creative North Star: \"Graphite, Glass, Amber/Cyan\"**\n\nThis system applies to DigUp's Tauri graph workspace, its face-investigation and People extensions, and their active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; this is a scoped workspace system.\n\nA restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and emphasizes its unverified incident links; cyan distinguishes video cards. Green and muted red record the operator's confirmed and rejected link states. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the overlay inspector supplies readable file and match evidence.\n\nFace investigation reuses that graphite material, native type, quiet controls, and warm selection. A large source photograph or sampled video frame carries numbered cyan face boxes; the selected observation and crop adopt amber. Actual face crops, file names, cosine values, and reported video times make candidate review concrete. The indexing strip and persistent candidate-language footer remain part of the working surface.\n\nPeople extends that working material into a compact label directory, observation list, and media preview. Cyan identifies the current person and inspected observation; separate native checkboxes identify the observations targeted by the bottom action bar. Assigned, Suggestions, Excluded, and Needs review remain explicit text groups. Local label changes expose a wrapping Undo strip, and persistent copy distinguishes the operator's labels from verified identities.",
     "keyCharacteristics": [
       "A world-anchored grid and stable file neighborhoods.",
       "Glass plates with small rounded corners and restrained state glows.",
       "Native sans typography, measured filename truncation, and modality/cosine pills.",
       "Visible search/index context, graph search and filters, a collapsible evidence inspector, and an operable minimap.",
-      "A source-led face workspace with local indexing controls, observation crops, paged candidates, and media evidence."
+      "A source-led face workspace with local indexing controls, observation crops, paged candidates, and media evidence.",
+      "A People directory with explicit review groups, independent preview and bulk selection, local label forms, and visible undo."
     ],
     "rules": [
       {
         "name": "The State Color Rule",
         "body": "In the graph, amber follows the selected card, active unverified links, and a requested shortest path; cyan identifies unselected video cards. In Faces, amber follows the selected source observation, while cyan identifies available face boxes and the active candidate row. Confirmed links retain green during ordinary selection; rejected links use muted red only when explicitly shown. Pair review colors with line patterns and inspector text.",
+        "section": "colors"
+      },
+      {
+        "name": "The Separate Selection Rule",
+        "body": "In People and face-result lists, the cyan row highlight chooses a preview. A separate checkbox chooses an observation for label actions. A preview highlight never implies that its checkbox is checked; Assigned and Suggestions remain separate labelled groups.",
         "section": "colors"
       },
       {
@@ -720,7 +778,7 @@
       }
     ],
     "dos": [
-      "**Do** keep this visual system scoped to the graph and face-investigation workspaces.",
+      "**Do** keep this visual system scoped to the graph, face-investigation, and People workspaces.",
       "**Do** preserve amber source selection and the scoped cyan video, face-box, and candidate meanings.",
       "**Do** pair confirmed/rejected colors with line patterns and readable local-review status.",
       "**Do** retain world-anchored grid, stable existing-node positions, and measured filename truncation.",
@@ -728,14 +786,18 @@
       "**Do** keep search/index context visible, inspector details scrollable, and camera controls keyboard accessible.",
       "**Do** preserve RU/EN labels, reduced-motion behavior, and forced-colors fallbacks.",
       "**Do** use real face crops, numbered source boxes, reported video times, and explicit paged candidate counts.",
-      "**Do** retain local indexing/device status, visible dark scrollbars, and candidate-not-identity language in Faces."
+      "**Do** retain local indexing/device status, visible dark scrollbars, and candidate-not-identity language in Faces.",
+      "**Do** keep preview highlights independent of checked observations, with the selected count and label actions in the People bottom bar.",
+      "**Do** retain explicit Assigned, Suggestions, Excluded, and Needs review groups, wrapping local-label forms, and the separate Undo strip.",
+      "**Do** keep bulk scope visible, including unloaded matches and the source when All matches + source is active."
     ],
     "donts": [
       "**Don't** extend the graph palette into the desktop launcher or normal search as an implicit rebrand.",
       "**Don't** encode cosine as physical distance or imply that only expanded links form a complete global graph.",
       "**Don't** replace real scores or thumbnails with decorative fabricated data.",
       "**Don't** present cosine as probability, an exact EXIF-date match as provenance proof, or unavailable analysis as detected evidence.",
-      "**Don't** use selection glow as the sole focus or state indicator."
+      "**Don't** use selection glow as the sole focus or state indicator.",
+      "**Don't** present local person labels or unconfirmed suggestions as verified identities."
     ]
   }
 }
