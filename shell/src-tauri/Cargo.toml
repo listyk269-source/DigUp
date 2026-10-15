@@ -23,6 +23,8 @@ tokio = { version = "1", features = ["sync", "time"] }
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "=0.39.1"
+windows = { version = "=0.62.2", features = ["Win32_System_Com", "Win32_UI_Shell"] }
 winreg = "=0.56.0"
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_Debug"] }
 

@@ -54,3 +54,14 @@ test('radial neighborhoods keep finite curved paths and separate coefficient lab
   for (const edge of model.edges.values()) { const curve = graphCurve(model.nodes.get(edge.from), model.nodes.get(edge.to), model.nodes.values(), labels); assert.ok(Number.isFinite(curve.label.x)); assert.ok(Number.isFinite(curve.label.y)); assert.ok(!/NaN|Infinity/.test(curve.drawing)); labels.push(curve.label); }
   for (let i=0;i<labels.length;i++) for(let j=i+1;j<labels.length;j++) assert.ok(Math.abs(labels[i].x-labels[j].x)>=56 || Math.abs(labels[i].y-labels[j].y)>=26);
 });
+test('initial six-neighbor view at 75% has perimeter air and stays clear of the minimap', () => {
+  const model = new GraphModel(); model.merge(reply('seed', ['a', 'b', 'c', 'd', 'e', 'f']));
+  // Actual 1280x900 desktop client with its 286px preview inspector open.
+  const width = 994, height = 627, zoom = .75, map = { left: width - 16 - 190, top: height - 16 - 165 };
+  for (const n of model.nodes.values()) {
+    const left = width / 2 + (n.x - GRAPH_CARD.width / 2) * zoom, right = left + GRAPH_CARD.width * zoom;
+    const top = height / 2 + (n.y - GRAPH_CARD.height / 2) * zoom, bottom = top + GRAPH_CARD.height * zoom;
+    assert.ok(left >= 24 && right <= width - 24 && top >= 24 && bottom <= height - 24, `clipped ${n.path}`);
+    assert.ok(right + 16 <= map.left || bottom + 16 <= map.top, `minimap obscures ${n.path}`);
+  }
+});

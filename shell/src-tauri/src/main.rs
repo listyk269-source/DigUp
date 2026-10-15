@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod autostart;
+mod capture;
 mod helper;
 mod index_status;
 mod options;
@@ -504,6 +505,32 @@ fn debug_setup_snapshot(shell: State<'_, Arc<Shell>>, report: Value) {
     }
 }
 
+/// Native pixels of the test WebView only; no desktop capture and no arbitrary destination.
+#[tauri::command]
+async fn debug_capture(
+    app: AppHandle,
+    shell: State<'_, Arc<Shell>>,
+    label: String,
+) -> Result<Value, String> {
+    if !shell.options.debug_isolated
+        || !shell.options.debug_ui_features
+        || !["documents", "media"].contains(&label.as_str())
+    {
+        return Err(
+            "Native capture requires the isolated UI feature smoke and a known phase".into(),
+        );
+    }
+    let path = shell
+        .options
+        .index
+        .as_ref()
+        .ok_or("Missing isolated index")?
+        .join(format!("capture-{label}.png"));
+    let window = app.get_webview_window("panel").ok_or("Missing panel")?;
+    capture::webview_png(window, path.clone()).await?;
+    Ok(json!({"path": path}))
+}
+
 /// Debug runs: what the page showed for the debug query, printed (and the shell quits, if asked).
 #[tauri::command]
 fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value) {
@@ -610,6 +637,7 @@ fn main() {
             debug_query,
             debug_search_options,
             debug_report,
+            debug_capture,
             debug_setup_snapshot,
             retry_model
         ])

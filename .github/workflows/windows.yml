@@ -149,6 +149,7 @@ jobs:
             build.noindex/windows/ui-features/*.json
             build.noindex/windows/ui-features/*.txt
             build.noindex/windows/ui-features/*.svg
+            build.noindex/windows/ui-features/*.png
             build.noindex/windows/gpu-policy-smoke/*.json
             build.noindex/windows/gpu-policy-smoke/*.jsonl
             build.noindex/windows/gpu-policy-smoke/*.txt

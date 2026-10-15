@@ -10,17 +10,17 @@ function settleGraph(nodes, edges, added) {
   const all = [...nodes.values()], moving = all.filter((n) => added.has(n.path));
   for (let tick = 0; tick < 40; tick++) {
     for (const node of moving) {
-      let fx = (node.anchor.x - node.x) * 0.035, fy = (node.anchor.y - node.y) * 0.035;
+      let fx = (node.anchor.x - node.x) * 0.08, fy = (node.anchor.y - node.y) * 0.08;
       for (const other of all) {
         if (other === node) continue;
         const dx = node.x - other.x, dy = node.y - other.y, d2 = Math.max(1600, dx * dx + dy * dy);
-        fx += dx * 1600 / d2; fy += dy * 1600 / d2;
+        fx += dx * 600 / d2; fy += dy * 600 / d2;
       }
       for (const edge of edges.values()) {
         const path = edge.from === node.path ? edge.to : edge.to === node.path ? edge.from : null;
         if (!path) continue;
         const other = nodes.get(path), dx = other.x - node.x, dy = other.y - node.y, distance = Math.hypot(dx, dy) || 1;
-        const spring = (distance - 380) * 0.015 / distance;
+        const spring = (distance - 350) * 0.03 / distance;
         fx += dx * spring; fy += dy * spring;
       }
       const cooling = 1 - tick / 50, magnitude = Math.max(1, Math.hypot(fx, fy) / 10);
@@ -383,6 +383,8 @@ class GraphView {
       thumbnails: [...this.svg.querySelectorAll(".graph-thumbnail")].map((node) => ({ loaded: node.dataset.loaded === "true", url: node.getAttribute("href") })),
       thumbnailSources: [...this.thumbnailCache.values()], minimapNodes: this.mini.querySelectorAll(".graph-map-node").length,
       camera: { zoom: this.zoom, center: { ...this.center }, ...this.camera }, inspectorOpen: this.inspectorOpen,
+      stageBounds: this.svg.getBoundingClientRect().toJSON(), minimapBounds: this.mini.closest("details").getBoundingClientRect().toJSON(),
+      cardBounds: [...this.svg.querySelectorAll(".graph-card")].map((node) => node.getBoundingClientRect().toJSON()),
       viewport: { width: this.svg.clientWidth, height: this.svg.clientHeight, windowHeight: window.innerHeight, windowWidth: window.innerWidth },
       minimap: new XMLSerializer().serializeToString(mini), svg: new XMLSerializer().serializeToString(clone) };
   }

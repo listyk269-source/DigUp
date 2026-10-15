@@ -960,6 +960,9 @@ async function exerciseUiFeatures() {
     if (!row) throw new Error("Fixture row is not reachable through the results DOM");
     row.click();
   };
+  // Existing indexed results can arrive before startup model verification finishes.
+  // Capture the settled real indexing state rather than its transient startup banner.
+  await wait(() => state.indexStatus?.stage === "idle");
   selectKind("doc");
   const snapshot = () => ({ groups: [...$list.querySelectorAll(".group-title")].map((node) => node.textContent), lang: document.documentElement.lang, query: $query.value,
     indexLabel: $("stats-toggle").textContent, graphLabel: $("graph-toggle").textContent,
@@ -983,6 +986,7 @@ async function exerciseUiFeatures() {
   $("graph-inspector-toggle").click(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   controls.inspectorRestored = graph.inspectorOpen;
   featureReport.controls = controls;
+  if (isWindows) featureReport.documentsCapture = await invoke("debug_capture", { label: "documents" });
   featureReport.graph = graph.debug();
   featureReport.graph.bounds = ["graph-scene", "graph-preview", "graph-detail"].map((id) => {
     const node = id === "graph-detail" ? document.querySelector(".graph-detail") : $(id), rect = node.getBoundingClientRect();
@@ -1009,6 +1013,7 @@ async function exerciseUiFeatures() {
   $("graph-toggle").click(); await wait(() => !graph.loading);
   await wait(() => !!$("graph-preview").querySelector("img")?.naturalWidth);
   await wait(() => graph.svg.querySelectorAll('.graph-thumbnail[data-loaded="true"]').length >= 2);
+  if (isWindows) featureReport.mediaCapture = await invoke("debug_capture", { label: "media" });
   featureReport.image = graph.debug();
   featureReport.image.assets = [...graph.model.nodes.values(), ...state.strong, ...state.weaker].map((hit) => ({ path: hit.path, url: fileURL(hit.path) }));
   const domClone = document.documentElement.cloneNode(true);

@@ -62,6 +62,27 @@ foreach ($pass in 'first','restart') {
     $report=Join-Path $testRoot "gui-$pass.json"
     $arguments=@('--index',$index,'--models',$modelsPath,'--settings',$settings,'--debug-isolated',
         '--debug-ui-features','--debug-query','UIFEATURE742','--debug-report',$report,'--debug-quit')
+    if ($pass -eq 'first' ) { $arguments+=@('--debug-setup','--offer',$fixture) }
+    Run-Private $gui $arguments "gui-$pass"
+    $ui=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    $f=$ui.features
+    foreach ($graph in @($f.graph, $f.image)) {
+        $stage=$graph.stageBounds; $map=$graph.minimapBounds
+        foreach ($card in $graph.cardBounds) {
+            if ($card.left -lt $stage.left + 24 -or $card.right -gt $stage.right - 24 -or
+                $card.top -lt $stage.top + 24 -or $card.bottom -gt $stage.bottom - 24 -or
+                !($card.right + 16 -le $map.left -or $card.bottom + 16 -le $map.top)) {
+                throw "Initial graph cards lack perimeter/minimap clearance ($pass)."
+            }
+        }
+    }
+    foreach ($phase in 'documents','media') {
+        $capture=if ($phase -eq 'documents') { $f.documentsCapture.path } else { $f.mediaCapture.path }
+        if ([IO.Path]::GetFullPath($capture) -ne (Join-Path $index "capture-$phase.png")) { throw 'Unexpected native capture path.' }
+        $bytes=[IO.File]::ReadAllBytes($capture)
+        if ($bytes.Length -lt 24 -or [Convert]::ToHexString($bytes[0..7]) -ne '89504E470D0A1A0A') { throw 'Invalid WebView PNG capture.' }
+        Copy-Item -LiteralPath $capture -Destination "$testRoot/capture-$pass-$phase.png"
+    }
     if ($f.controls.initialZoom -ne 0.75 -or $f.controls.zoomIn -le 0.75 -or $f.controls.sliderZoom -ne 0.75 -or
         $f.controls.zoomLabel -ne '75%' -or !$f.controls.inspectorRestored -or $f.controls.collapsedWidth -le $f.controls.beforeWidth -or
         ([Math]::Abs($f.controls.minimapCenter.x) + [Math]::Abs($f.controls.minimapCenter.y)) -lt 10 -or
@@ -69,10 +90,6 @@ foreach ($pass in 'first','restart') {
         $f.graph.labels.Count -ne $f.graph.links -or $f.graph.minimapNodes -ne $f.graph.files -or
         @($f.image.thumbnails | Where-Object loaded -eq $true).Count -lt 2 -or
         @($f.image.nodes | Where-Object kind -eq 'video').Count -lt 1) { throw 'Native graph camera/minimap/thumbnails/inspector controls failed.' }
-    if ($pass -eq 'first' ) { $arguments+=@('--debug-setup','--offer',$fixture) }
-    Run-Private $gui $arguments "gui-$pass"
-    $ui=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-    $f=$ui.features
     if ($ui.error -or $ui.savedLanguage -ne 'ru' -or $ui.language -ne 'ru' -or $f.initial.lang -ne 'ru' -or
         $f.english.action -ne 'Find similar' -or $f.russian.action -ne 'Найти похожие' -or
         'Documents' -notin $f.english.groups -or 'Документы' -notin $f.russian.groups -or
@@ -107,6 +124,6 @@ if ($saved.language -ne 'ru' -or $saved.folders.Count -ne 1 -or $saved.folders[0
     checks=@('setup Russian selector','RU/EN/RU live DOM','restart language persistence','queries and selected paths unchanged',
         'real graph text preview','real graph image preview','Find similar from graph and result',
         '40 then all similar files via Show more','no duplicate files or seed in neighbors','Back to original query',
-        'bounded inspector layout','75% initial camera','actual minimap click and recenter','zoom slider','collapsible inspector','real image and video card thumbnails','cosine labels','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |
+        'bounded inspector layout','75% initial camera','perimeter and minimap card clearance','native WebView PNG captures','actual minimap click and recenter','zoom slider','collapsible inspector','real image and video card thumbnails','cosine labels','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |
     ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Actual packaged UI refinements passed: $testRoot"
