@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="panel.css">
   <link rel="stylesheet" href="graph.css">
   <link rel="stylesheet" href="graph-investigation.css">
+  <link rel="stylesheet" href="faces.css">
 </head>
 <body>
   <main id="panel" class="panel">
@@ -17,6 +18,7 @@
              placeholder="Describe it: “payment error screenshot”, “zebra in a video”…" data-i18n-placeholder="Describe it: “payment error screenshot”, “zebra in a video”…">
       <button id="stats-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="index-overview" data-i18n="Index">Index</button>
       <button id="graph-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="graph-view" disabled title="Select a search result to explore related files" data-i18n-title="Select a search result to explore related files" data-i18n="Graph">Graph</button>
+      <button id="faces-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="faces-view" data-i18n="Faces">Faces</button>
       <select class="language-select" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="ru">Русский</option></select>
     </header>
     <p id="language-error" class="language-error" role="alert"></p>
@@ -74,7 +76,7 @@
           <div class="graph-inspector-heading"><h3 id="graph-inspector-heading" data-i18n="File inspector">File inspector</h3><button id="graph-inspector-close" class="quiet-button icon-button" type="button" aria-label="Close inspector" data-i18n-aria-label="Close inspector"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5L15 15 M15 5L5 15"/></svg></button></div>
           <div id="graph-node-inspection">
           <div id="graph-preview" class="graph-preview"></div><div class="graph-detail"><h3 id="graph-title"></h3><p id="graph-path"></p><p id="graph-basis"></p>
-            <div class="graph-actions"><button id="graph-similar" class="quiet-button" type="button" data-i18n="Find similar">Find similar</button><button id="graph-expand" class="quiet-button" type="button" data-i18n="Expand links">Expand links</button><button id="graph-start-here" class="quiet-button" type="button" data-i18n="Start here">Start here</button><button id="graph-open" class="quiet-button" type="button" data-i18n="Open">Open</button><button id="graph-reveal" class="quiet-button" type="button" data-i18n="Show in Explorer">Show in Explorer</button></div>
+            <div class="graph-actions"><button id="graph-similar" class="quiet-button" type="button" data-i18n="Find similar">Find similar</button><button id="graph-faces" class="quiet-button" type="button" data-i18n="Find faces">Find faces</button><button id="graph-expand" class="quiet-button" type="button" data-i18n="Expand links">Expand links</button><button id="graph-start-here" class="quiet-button" type="button" data-i18n="Start here">Start here</button><button id="graph-open" class="quiet-button" type="button" data-i18n="Open">Open</button><button id="graph-reveal" class="quiet-button" type="button" data-i18n="Show in Explorer">Show in Explorer</button></div>
             <div class="graph-evidence-heading"><h4 data-i18n="Indexed evidence">Indexed evidence</h4><button id="graph-hash" type="button" class="quiet-button" data-i18n="Compute SHA-256">Compute SHA-256</button></div><button id="graph-evidence-retry" type="button" class="quiet-button" data-i18n="Retry evidence" hidden>Retry evidence</button><dl id="graph-metadata" class="graph-metadata"></dl>
             <details id="graph-related-details" class="graph-related-details"><summary><span data-i18n="Connected files">Connected files</span><span id="graph-neighbor-count"></span></summary><div id="graph-neighbors" class="graph-neighbors" aria-label="Connected files" data-i18n-aria-label="Connected files"></div></details>
           </div>
@@ -84,6 +86,20 @@
         </aside>
       </div>
       <p class="graph-note"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 9V14 M10 6V6.5"/></svg><span data-i18n="Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.">Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.</span></p>
+    </section>
+    <section id="faces-view" class="faces-view" aria-label="Face search" data-i18n-aria-label="Face search" hidden>
+      <div class="faces-toolbar"><h2 data-i18n="Face search">Face search</h2><button id="face-refresh" class="quiet-button" type="button" data-i18n="Refresh">Refresh</button><button id="face-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></div>
+      <section class="face-index" aria-label="Face indexing progress" data-i18n-aria-label="Face indexing progress">
+        <div class="face-index-heading"><strong id="face-index-title" role="status" aria-live="polite" data-i18n="Checking the face index…">Checking the face index…</strong><span id="face-index-count"></span></div>
+        <progress id="face-index-progress" aria-label="Face indexing progress" data-i18n-aria-label="Face indexing progress" hidden></progress>
+        <p id="face-index-detail"></p>
+        <div class="face-index-controls"><label for="face-device"><span data-i18n="Face processing">Face processing</span><select id="face-device"><option value="auto" data-i18n="Auto · GPU with CPU fallback">Auto · GPU with CPU fallback</option><option value="cpu" data-i18n="CPU">CPU</option><option value="gpu" data-i18n="GPU · CPU fallback">GPU · CPU fallback</option></select></label><button id="face-start" class="quiet-button" type="button" data-i18n="Index faces">Index faces</button><button id="face-cancel" class="quiet-button" type="button" data-i18n="Pause indexing" hidden>Pause indexing</button><p id="face-device-status"></p></div>
+      </section>
+      <div class="faces-workspace">
+        <section class="face-source"><div class="face-source-heading"><h3 id="face-source-title" data-i18n="Choose a photo or video from search results">Choose a photo or video from search results</h3><span id="face-source-time"></span></div><div id="face-source-image" class="face-image-stage"></div><p id="face-file-message" class="face-selection-note" role="status" aria-live="polite"></p><div id="face-choices" class="face-choices" role="group" aria-label="Choose a face" data-i18n-aria-label="Choose a face"></div><button id="face-file-more" class="quiet-button" type="button" data-i18n="Show more faces" hidden>Show more faces</button></section>
+        <section class="face-results"><div class="face-results-heading"><h3 data-i18n="Face matches">Face matches</h3><label for="face-minimum"><span data-i18n="Minimum face cosine">Minimum face cosine</span><select id="face-minimum"><option value="0.363" data-i18n="0.363 · SFace baseline">0.363 · SFace baseline</option><option value="0.5" selected data-i18n="0.50 · Closer">0.50 · Closer</option><option value="0.65" data-i18n="0.65 · Stricter">0.65 · Stricter</option></select></label><button id="face-show-graph" class="quiet-button" type="button" data-i18n="Show in graph" disabled>Show in graph</button></div><p id="face-search-message" class="face-results-message" role="status" aria-live="polite" data-i18n="Select one face to find matching observations.">Select one face to find matching observations.</p><div class="face-match-body"><div id="face-results-list" class="face-results-list" role="group" aria-label="Face matches" data-i18n-aria-label="Face matches"></div><div id="face-match-preview" class="face-match-preview"></div></div><button id="face-search-more" class="quiet-button face-load-more" type="button" data-i18n="Show more" hidden>Show more</button></section>
+      </div>
+      <div class="face-disclaimer"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 9V14 M10 6V6.5"/></svg><p data-i18n="Face matches are candidates, not proof of identity. YuNet + SFace runs locally. Video is sampled; brief appearances can be missed.">Face matches are candidates, not proof of identity. YuNet + SFace runs locally. Video is sampled; brief appearances can be missed.</p></div>
     </section>
     <section id="similar-context" class="similar-context" hidden><span id="similar-title"></span><button id="similar-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></section>
     <section id="body" class="body" hidden>
@@ -102,6 +118,8 @@
   <script src="graph-state.js"></script>
   <script src="graph-tools.js"></script>
   <script src="graph.js"></script>
+  <script src="face-state.js"></script>
+  <script src="faces.js"></script>
   <script src="panel.js"></script>
 </body>
 </html>

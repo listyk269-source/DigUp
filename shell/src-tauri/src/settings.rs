@@ -70,6 +70,8 @@ pub struct Settings {
     pub hotkey: String,
     /// Inference device preference; Auto can fall back to CPU when a GPU cannot start.
     pub device: Device,
+    /// Independent ONNX face inference preference; GPU uses DirectML and may fall back to CPU.
+    pub face_device: Device,
     /// The shell's interface language; independent of search and document languages.
     pub language: Language,
     /// Onboarding is done: the shell starts in the tray.
@@ -121,6 +123,7 @@ mod tests {
         settings.save(&path).unwrap();
         settings.set_up = true;
         settings.device = Device::Gpu;
+        settings.face_device = Device::Cpu;
         settings.language = Language::Ru;
         settings.save(&path).unwrap();
         let loaded = Settings::load(&path);
@@ -128,6 +131,7 @@ mod tests {
         assert_eq!(loaded.code_roots, settings.code_roots);
         assert!(loaded.set_up);
         assert_eq!(loaded.device, Device::Gpu);
+        assert_eq!(loaded.face_device, Device::Cpu);
         assert_eq!(loaded.language, Language::Ru);
         assert!(!path.with_extension("json.new").exists());
         std::fs::remove_dir_all(temporary).unwrap();
@@ -142,6 +146,7 @@ mod tests {
         assert!(settings.hotkey.is_empty());
         assert!(settings.code_roots.is_empty());
         assert_eq!(settings.device, Device::Auto);
+        assert_eq!(settings.face_device, Device::Auto);
         assert_eq!(settings.language, Language::En);
     }
 

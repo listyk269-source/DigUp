@@ -86,7 +86,7 @@ foreach ($pass in 'first','restart') {
     $f=$ui.features
     $o=$f.osint
     if ($o.comparison.mode -ne 'edge' -or $o.comparison.previewCount -ne 2 -or $o.confirmed -ne 'confirmed' -or
-        !$o.rejectedHidden -or !$o.rejectedVisible -or $o.unverified -ne 'unverified' -or !$o.visualOnly -or !$o.faceDisabled -or
+        !$o.rejectedHidden -or !$o.rejectedVisible -or $o.unverified -ne 'unverified' -or !$o.visualOnly -or !$o.faceControlTruthful -or
         !$o.hidden -or !$o.restored -or $o.semantic.error -or $o.semantic.resultCount -lt 1 -or !$o.staleQueryIgnored -or $o.pathNodes.Count -lt 2 -or
         $o.expandAll.after -le $o.expandAll.before -or $o.expandAll.pageHasMore -or $o.final.inspectorWidth -ne 360 -or
         @($o.initial.counts | Where-Object unexpandedCount -gt 0).Count -lt 1 -or
@@ -162,7 +162,7 @@ if ($saved.language -ne 'ru' -or $saved.folders.Count -ne 1 -or $saved.folders[0
         'real graph text preview','real graph image preview','Find similar from graph and result',
         '40 then all similar files via Show more','no duplicate files or seed in neighbors','Back to original query',
         '360px overlay inspector','real visual/EXIF channel evidence','side-by-side real previews','confirm/reject/unverify','rejected-link visibility',
-        'persist reviews and pins across restart','real unexpanded counts','node context menu expand-all/hide/restore','real audio modality pivot and time buttons','shortest expanded path','filename dimming','positive real semantic graph search','stale semantic replies ignored','honest missing face analyzer','timeline keeps pinned coordinates','actual SHA-256',
+        'persist reviews and pins across restart','real unexpanded counts','node context menu expand-all/hide/restore','real audio modality pivot and time buttons','shortest expanded path','filename dimming','positive real semantic graph search','stale semantic replies ignored','face control follows real analyzer availability','timeline keeps pinned coordinates','actual SHA-256',
         'bounded inspector layout','75% initial camera','perimeter and minimap card clearance','native WebView PNG captures','actual minimap click and recenter','zoom slider','collapsible inspector','real image and video card thumbnails','cosine labels','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |
     ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Actual packaged UI refinements passed: $testRoot"

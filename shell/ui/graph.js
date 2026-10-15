@@ -131,8 +131,8 @@ function graphCurve(from, to, nodes, labels = [], labelWidth = 90) {
 }
 
 class GraphView {
-  constructor({ ask, invoke, nameOf, previewFor, thumbnailFor, onSimilar, onVisibility }) {
-    Object.assign(this, { ask, invoke, nameOf, previewFor, thumbnailFor, onSimilar, onVisibility });
+  constructor({ ask, invoke, nameOf, previewFor, thumbnailFor, onSimilar, onVisibility, onFaces }) {
+    Object.assign(this, { ask, invoke, nameOf, previewFor, thumbnailFor, onSimilar, onVisibility, onFaces });
     this.model = new GraphModel(); this.generation = 0; this.visible = false; this.loading = false;
     this.pages = new Map(); this.anchors = new Map(); this.selected = null; this.error = null;
     this.minimum = 0.75; this.zoom = .75; this.center = { x: 0, y: 0 }; this.trace = [];
@@ -143,11 +143,15 @@ class GraphView {
     this.el = (id) => document.getElementById(id); this.svg = this.el("graph-scene"); this.mini = this.el("graph-map");
     this.el("graph-back").onclick = () => this.close();
     this.el("graph-expand").onclick = () => this.expand();
-    this.el("graph-start-here").onclick = () => this.show(this.model.nodes.get(this.selected), this.code);
-    this.el("graph-refresh").onclick = () => this.show(this.rootSeed, this.code);
+    this.el("graph-start-here").onclick = () => this.faceMode ? this.showFaceMatches(this.model.nodes.get(this.selected), null, this.minimum) : this.show(this.model.nodes.get(this.selected), this.code);
+    this.el("graph-refresh").onclick = () => this.faceMode ? this.showFaceMatches(this.rootSeed, null, this.minimum) : this.show(this.rootSeed, this.code);
     this.el("graph-similar").onclick = () => this.onSimilar(this.model.nodes.get(this.selected), this.code);
+    this.el("graph-faces").onclick = () => this.onFaces?.(this.model.nodes.get(this.selected));
     this.el("graph-open").onclick = () => this.open("open_path"); this.el("graph-reveal").onclick = () => this.open("reveal");
-    this.el("graph-minimum").onchange = () => { this.minimum = Number(this.el("graph-minimum").value); this.show(this.rootSeed, this.code); };
+    this.el("graph-minimum").onchange = () => {
+      this.minimum = Number(this.el("graph-minimum").value);
+      if (this.faceMode) this.showFaceMatches(this.rootSeed, null, this.minimum); else this.show(this.rootSeed, this.code);
+    };
     this.el("graph-zoom-in").onclick = () => this.setZoom(this.zoom * 1.2);
     this.el("graph-zoom-out").onclick = () => this.setZoom(this.zoom / 1.2);
     this.el("graph-zoom").oninput = () => this.setZoom(Number(this.el("graph-zoom").value) / 100);
@@ -206,6 +210,12 @@ class GraphView {
   close() { this.stopInspectionMedia(); this.countGeneration++; this.searchGeneration++; this.hideContext(); this.generation++; if (this.cameraFrame) cancelAnimationFrame(this.cameraFrame); this.cameraFrame = null; this.visible = false; this.loading = false; this.onVisibility(false); }
   async show(seed, code) {
     if (!seed) return;
+    if (this.faceMode) {
+      this.modality = "all";
+      const faceOption = this.el("graph-minimum").querySelector('[data-face-threshold]');
+      if (faceOption) { faceOption.remove(); this.minimum = .75; this.el("graph-minimum").value = "0.75"; }
+    }
+    this.faceMode = false;
     const generation = ++this.generation;
     this.loading = true;
     await this.annotationsReady;
@@ -220,7 +230,53 @@ class GraphView {
     this.visible = true; this.zoom = .75; this.center = { x: 0, y: 0 }; this.onVisibility(true);
     return this.expand();
   }
+  async showFaceMatches(seed, page, minimum) {
+    const generation = ++this.generation; await this.annotationsReady;
+    if (generation !== this.generation) return;
+    this.stopInspectionMedia(); this.faceMode = true; this.faceGraphExpired = false; this.faceIndexRevision = page?.index_revision ?? null; this.code = false; this.minimum = minimum; this.modality = "face";
+    let option = this.el("graph-minimum").querySelector('[data-face-threshold]');
+    if (!option) { option = document.createElement("option"); option.dataset.faceThreshold = "true"; this.el("graph-minimum").prepend(option); }
+    option.value = String(minimum); option.textContent = t("{value} · Face cosine", { value: minimum.toFixed(3) }); this.el("graph-minimum").value = String(minimum);
+    this.semanticMatches = null; this.semanticThreshold = null; this.searchBusy = false; this.searchGeneration++; this.omnibar = ""; this.el("graph-omnibar").value = "";
+    this.model = new GraphModel(120, this.investigation, false); this.pages.clear(); this.anchors.clear(); this.trace = [];
+    this.selectedEdge = null; this.forcePositions = new Map(); this.pathResult = null; this.pathStart = null; this.el("graph-path-tools").hidden = true; this.countGeneration++;
+    this.error = null; this.countError = null; this.searchError = null; this.loading = false; this.rootSeed = { ...seed, face_id: seed.id ?? seed.face_id }; this.selected = seed.path;
+    this.model.nodes.set(seed.path, { ...this.rootSeed, x: 0, y: 0 }); this.model.applyAnnotation(this.model.nodes.get(seed.path));
+    this.visible = true; this.zoom = .75; this.center = { x: 0, y: 0 }; this.onVisibility(true);
+    if (page) {
+      const reply = FaceState.graphReply(this.rootSeed, page); this.model.merge(reply); this.pages.set(this.pageKey(seed.path, "face"), reply);
+      this.forcePositions = new Map([...this.model.nodes].map(([path, n]) => [path, { x: n.x, y: n.y }]));
+      this.applyLayout(); this.render();
+    } else return this.expandFaces(false);
+  }
+  async expandFaces(all = false, target = this.selected) {
+    if (this.loading || !this.visible) return;
+    if (this.faceGraphExpired) return this.showFaceMatches(this.rootSeed, null, this.minimum);
+    const node = this.model.nodes.get(target), generation = this.generation;
+    if (!node?.face_id) { this.onFaces?.(node); return; }
+    const key = this.pageKey(target, "face"), page = this.pages.get(key);
+    if (page && !page.has_more || this.model.nodes.size >= this.model.cap) return;
+    this.loading = true; this.error = null; this.render();
+    try {
+      const result = await this.ask({ op: "face_search", face_id: node.face_id, offset: page?.next_offset ?? 0, limit: 40, minimum_cosine: this.minimum,
+        ...(page?.next_offset > 0 ? { index_revision: page.index_revision } : {}) });
+      if (generation !== this.generation || !this.visible) return;
+      if (result.expired || (result.ok !== false && this.faceIndexRevision !== null && result.index_revision !== this.faceIndexRevision)) {
+        this.faceGraphExpired = true; throw new Error("Face index changed. Refresh this face graph to restart from the selected face.");
+      }
+      if (result.ok === false) throw new Error(result.error);
+      this.faceIndexRevision = result.index_revision;
+      const reply = FaceState.graphReply({ ...node, ...result.seed }, result);
+      if (this.layout === "timeline") this.restoreForce();
+      this.model.merge(reply); this.pages.set(key, reply);
+      this.forcePositions = new Map([...this.model.nodes].map(([path, n]) => [path, { x: n.x, y: n.y }])); this.applyLayout();
+    } catch (error) { if (generation === this.generation) this.error = String(error.message || error); }
+    finally { if (generation === this.generation) { this.loading = false; this.render(); } }
+    if (all && !this.error && this.pages.get(key)?.has_more && this.model.nodes.size < this.model.cap && generation === this.generation && this.visible) return this.expandFaces(true, target);
+  }
   async expand(all = false, modality = this.modality, target = this.selected) {
+    if (modality === "face" && !this.faceMode) { this.onFaces?.(this.model.nodes.get(target)); return; }
+    if (this.faceMode) return this.expandFaces(all, target);
     if (this.loading || !this.visible) return;
     const node = this.model.nodes.get(target), generation = this.generation;
     if (!node || (this.model.nodes.size >= this.model.cap && !this.pages.has(this.pageKey(node.path, modality)))) return;
@@ -252,17 +308,19 @@ class GraphView {
   }
   render() {
     this.el("graph-view").hidden = !this.visible;
-    const node = this.model.nodes.get(this.selected), page = this.pages.get(this.pageKey(this.selected));
+    const node = this.model.nodes.get(this.selected), page = this.pages.get(this.pageKey(this.selected, this.faceMode ? "face" : this.modality));
     this.el("graph-status").textContent = (this.error ? t(this.error) : null) || (this.loading ? t("Finding related files…") :
       t("{files} files · {links} similarity links", { files: [...this.model.nodes.values()].filter((n) => !n.hidden).length, links: GS.visibleEdges(this.model, this).length }) + (this.model.nodes.size >= this.model.cap ? t(" · View limit reached. Use Start here to explore further.") : ""));
     this.el("graph-title").textContent = node ? this.nameOf(node.path) : t("Related files");
     this.el("graph-path").textContent = node?.path ?? "";
-    this.el("graph-basis").textContent = page ? (page.basis === "matched_fragment" ? t("Based on the matched fragment") : t("Based on the file’s average meaning")) + t(" · {count} indexed neighbors above the threshold", { count: page.total }) : t("Select Expand links to explore this file");
+    this.el("graph-basis").textContent = page ? this.faceMode ? t("Based on the selected face") + t(" · {count} face observations above the threshold", { count: page.total }) :
+      (page.basis === "matched_fragment" ? t("Based on the matched fragment") : t("Based on the file’s average meaning")) + t(" · {count} indexed neighbors above the threshold", { count: page.total }) : t("Select Expand links to explore this file");
     this.el("graph-expand").textContent = page ? t("More links") : t("Expand links");
     for (const id of ["graph-refresh", "graph-minimum", "graph-start-here"]) this.el(id).disabled = this.loading;
     this.el("graph-expand").disabled = this.loading || !node || this.model.nodes.size >= this.model.cap || (page && !page.has_more);
     this.el("graph-similar").disabled = !node;
-    const previewKey = JSON.stringify([node?.path, node?.segment_id, this.code, I18n.language]);
+    this.el("graph-faces").hidden = !node || !["image", "screenshot", "video"].includes(node.kind);
+    const previewKey = JSON.stringify([node?.path, node?.segment_id, node?.face_id, node?.loc, this.code, I18n.language]);
     if (previewKey !== this.previewKey) {
       this.previewKey = previewKey;
       this.el("graph-preview").replaceChildren(...(node ? [this.previewFor(node, this.code)] : []));

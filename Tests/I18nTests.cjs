@@ -30,7 +30,7 @@ test("static UI annotations and literal translation calls have catalog entries",
       assert.ok(Object.hasOwn(i18n.catalog, decode(match[1])), `${filename}: ${match[1]}`);
     }
   }
-  for (const filename of ["panel.js", "graph.js", "graph-tools.js", "setup.js"]) {
+  for (const filename of ["panel.js", "graph.js", "graph-tools.js", "faces.js", "setup.js"]) {
     for (const match of readFileSync(path.join(ui, filename), "utf8").matchAll(/\bt\("([^"\\]+)"/g)) {
       assert.ok(Object.hasOwn(i18n.catalog, match[1]), `${filename}: ${match[1]}`);
     }

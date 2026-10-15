@@ -216,6 +216,11 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
         "graph_search",
         "file_evidence",
         "media_details",
+        "face_status",
+        "face_start",
+        "face_cancel",
+        "face_file",
+        "face_search",
         "embed_ahead",
         "text",
         "render",
@@ -265,6 +270,24 @@ fn set_language(
     }
     set_status(&app, "Index status is shown in the search panel");
     let _ = app.emit("language-changed", language);
+    Ok(())
+}
+
+#[tauri::command]
+fn face_device(shell: State<'_, Arc<Shell>>) -> settings::Device {
+    shell.settings.lock().unwrap().face_device
+}
+
+#[tauri::command]
+fn set_face_device(shell: State<'_, Arc<Shell>>, device: settings::Device) -> Result<(), String> {
+    let _configuration = shell.configuration.lock().unwrap();
+    let mut settings = shell.settings.lock().unwrap();
+    let mut updated = settings.clone();
+    updated.face_device = device;
+    updated
+        .save(&shell.settings_path)
+        .map_err(|e| e.to_string())?;
+    *settings = updated;
     Ok(())
 }
 
@@ -485,7 +508,7 @@ fn panel_height(app: AppHandle, height: f64, graph: Option<bool>) {
         // A canonical native WebView viewport makes isolated visual checks independent
         // of a CI runner's virtual desktop size. Normal windows still fit their monitor.
         let smoke_viewport = shell.options.debug_isolated
-            && shell.options.debug_ui_features
+            && (shell.options.debug_ui_features || shell.options.debug_faces)
             && graph.unwrap_or(false);
         let monitor = panel.current_monitor().ok().flatten();
         let scale = monitor
@@ -547,7 +570,7 @@ async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, Str
 
 #[tauri::command]
 fn debug_search_options(shell: State<'_, Arc<Shell>>) -> Value {
-    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features})
+    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features, "faces": shell.options.debug_faces})
 }
 
 #[tauri::command]
@@ -565,8 +588,18 @@ async fn debug_capture(
     label: String,
 ) -> Result<Value, String> {
     if !shell.options.debug_isolated
-        || !shell.options.debug_ui_features
-        || !["documents", "media", "comparison", "timeline", "context"].contains(&label.as_str())
+        || !(shell.options.debug_ui_features || shell.options.debug_faces)
+        || ![
+            "documents",
+            "media",
+            "comparison",
+            "timeline",
+            "context",
+            "faces-select",
+            "faces-matches",
+            "faces-video",
+        ]
+        .contains(&label.as_str())
     {
         return Err(
             "Native capture requires the isolated UI feature smoke and a known phase".into(),
@@ -678,6 +711,8 @@ fn main() {
             index_status,
             language,
             set_language,
+            face_device,
+            set_face_device,
             estimate,
             setup_info,
             pick_folders,

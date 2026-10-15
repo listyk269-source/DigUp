@@ -66,15 +66,30 @@ const progressHistory = [];
 let progressQueued = false;
 let debugOptions = {};
 const featureReport = {};
+let facesReturnGraph = false;
 const graph = new GraphView({ ask, invoke, nameOf, thumbnailFor: graphThumbnail, previewFor: (hit, code) => picture(hit, { code, query: "" }), onSimilar: findSimilar, onVisibility: (visible) => {
+  if (visible && faceSearch.visible) faceSearch.close(false);
   if (visible) state.statsOpen = false;
   render();
-} });
+}, onFaces: (hit) => openFaces(hit) });
+const faceSearch = new FaceSearchView({ ask, invoke, rendered, fileURL, picture, nameOf, clock, onVisibility: (visible, restore) => {
+  if (visible) {
+    if (graph.visible) { facesReturnGraph = true; graph.close(); }
+    state.statsOpen = false;
+  } else {
+    if (restore && facesReturnGraph) { graph.visible = true; graph.render(); }
+    facesReturnGraph = false;
+  }
+  render();
+}, onGraph: (seed, reply, minimum) => graph.showFaceMatches(seed, reply, minimum) });
+window.faceSearch = faceSearch;
+function openFaces(hit = selectedHit()) { return faceSearch.open(hit); }
 const debugPages = [];
 
 // MARK: Searching
 
 function queryChanged() {
+  if (faceSearch.visible) faceSearch.close(false);
   if (graph.visible || graph.loading) graph.close();
   state.related = null;
   const generation = ++state.generation;
@@ -325,17 +340,22 @@ function revealSelected() {
 
 function render() {
   const empty = state.phase === "empty";
+  const facesVisible = faceSearch.visible;
   document.querySelector(".panel").classList.toggle("graph-active", graph.visible);
+  document.querySelector(".panel").classList.toggle("faces-active", facesVisible);
   document.documentElement.classList.toggle("graph-mode", graph.visible);
-  const height = graph.visible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
+  document.documentElement.classList.toggle("faces-mode", facesVisible);
+  const height = graph.visible || facesVisible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
-    invoke("panel_height", { height, graph: graph.visible }).catch(() => {});
+    invoke("panel_height", { height, graph: graph.visible || facesVisible }).catch(() => {});
   }
-  $body.hidden = empty || state.statsOpen || graph.visible;
-  $footer.hidden = empty || state.statsOpen || graph.visible;
+  $body.hidden = empty || state.statsOpen || graph.visible || facesVisible;
+  $footer.hidden = empty || state.statsOpen || graph.visible || facesVisible;
   $("graph-view").hidden = !graph.visible;
-  $("similar-context").hidden = !state.related || graph.visible || state.statsOpen;
+  $("faces-view").hidden = !facesVisible;
+  $("faces-toggle").setAttribute("aria-expanded", String(facesVisible));
+  $("similar-context").hidden = !state.related || graph.visible || state.statsOpen || facesVisible;
   $("similar-title").textContent = state.related ? t("Similar to {name}", { name: nameOf(state.related.seed.path) }) : "";
   $("graph-toggle").disabled = !selectedHit();
   $("graph-toggle").setAttribute("aria-expanded", String(graph.visible));
@@ -441,8 +461,9 @@ function picture(hit, { code = state.isCode, query = state.text } = {}) {
   const frame = element("div", "picture");
   const image = element("img");
   image.alt = "";
-  const unavailable = () => frame.replaceChildren(element("p", "preview-unavailable", t("Preview unavailable. Open the file in its default app.")));
-  image.onerror = unavailable;
+  const unavailable = () => { frame.dataset.previewState = "unavailable"; frame.replaceChildren(element("p", "preview-unavailable", t("Preview unavailable. Open the file in its default app."))); };
+  // A late thumbnail failure must not remove a player that the user already opened.
+  image.onerror = () => { if (!frame.querySelector("video,audio")) unavailable(); };
   frame.append(image);
   switch (hit.kind) {
     case "image":
@@ -456,19 +477,28 @@ function picture(hit, { code = state.isCode, query = state.text } = {}) {
     case "video": {
       // The frame at the moment, its time on it; a click plays the video from there.
       const at = hit.loc ?? 0;
-      rendered(hit.path, "video", at, 1024).then((path) => { image.src = fileURL(path); }).catch(unavailable);
+      rendered(hit.path, "video", at, 1024).then((path) => { image.src = fileURL(path); }).catch(() => { if (!frame.querySelector("video")) unavailable(); });
       const moment = element("div", "moment");
       const play = element("div", "play");
       play.innerHTML = ICONS.play;
       moment.append(image, play, element("span", "at", clock(at)));
       frame.replaceChildren(moment);
       frame.onclick = () => {
+        if (frame.querySelector("video")) return;
         const video = element("video");
-        video.src = `${fileURL(hit.path)}#t=${at}`;
-        video.onerror = unavailable;
+        frame.dataset.mediaState = "loading"; delete frame.dataset.mediaErrorCode; delete frame.dataset.mediaError;
+        video.onerror = () => {
+          frame.dataset.mediaState = "error";
+          frame.dataset.mediaErrorCode = String(video.error?.code ?? 0);
+          frame.dataset.mediaError = video.error?.message || "Native media decoder failed";
+          video.pause(); unavailable();
+        };
+        video.onloadedmetadata = () => { frame.dataset.mediaState = "metadata"; };
+        video.onloadeddata = () => { frame.dataset.mediaState = "ready"; };
         video.controls = true;
         video.autoplay = true;
         frame.replaceChildren(video);
+        video.src = `${fileURL(hit.path)}#t=${at}`;
       };
       return frame;
     }
@@ -517,6 +547,9 @@ function facts(hit) {
   const similar = element("button", "", t("Find similar"));
   similar.className = "find-similar"; similar.onclick = () => findSimilar(hit);
   buttons.append(open, reveal, similar);
+  if (FaceState.isMedia(hit)) {
+    const faces = element("button", "find-faces", t("Find faces")); faces.type = "button"; faces.onclick = () => openFaces(hit); buttons.append(faces);
+  }
   box.append(buttons);
   return box;
 }
@@ -713,20 +746,24 @@ ICONS.screenshot = ICONS.image;
 $query.addEventListener("input", queryChanged);
 $("load-more").addEventListener("click", () => state.page?.expired ? queryChanged() : loadMore());
 $("stats-toggle").addEventListener("click", () => {
+  if (faceSearch.visible) faceSearch.close(false);
   if (graph.visible) graph.close();
   state.statsOpen = !state.statsOpen;
   render();
   if (state.statsOpen) refreshStats();
 });
 $("graph-toggle").addEventListener("click", () => graph.visible ? graph.close() : graph.show(selectedHit(), state.isCode));
+$("faces-toggle").addEventListener("click", () => faceSearch.visible ? faceSearch.close() : openFaces(graph.visible ? graph.model.nodes.get(graph.selected) : selectedHit()));
 $("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
 $("similar-back").onclick = backFromSimilar;
-tauri.event.listen("search-scope-changed", () => { if (graph.visible) graph.close(); if (state.related) queryChanged(); });
+tauri.event.listen("search-scope-changed", () => { if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
 $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys
+  if (faceSearch.visible && event.key === "Escape") { event.preventDefault(); faceSearch.close(); return; }
+  if (faceSearch.visible && event.target.closest?.("#faces-view")) return;
   if (graph.visible && event.key === "Escape") { event.preventDefault(); graph.close(); return; }
   if (graph.visible && event.target.closest?.("#graph-view")) return;
   if (event.target.closest?.("button, select")) return; // native Tab/Space/Enter behavior for page and overview controls
@@ -757,6 +794,7 @@ tauri.event.listen("panel-shown", () => {
   $query.select();
   ask({ op: "prewarm" }).catch(() => {});
   refreshIndexStatus();
+  faceSearch.status();
   if (state.statsOpen) refreshStats();
 });
 
@@ -850,6 +888,7 @@ document.addEventListener("ui-language-changed", () => {
   if (state.statsOpen) refreshStats();
 });
 render();
+faceSearch.status();
 
 tauri.path.homeDir().then((home) => { state.home = home.replace(/[\\/]$/, ""); }).catch(() => {});
 
@@ -866,6 +905,90 @@ Promise.all([invoke("debug_search_options"), invoke("debug_query"), I18n.ready])
   debugSearch(query);
 });
 tauri.event.listen("debug-query", ({ payload }) => debugSearch(payload));   // after setup's first index
+
+// Isolated, native face smoke. Every observation comes from the real worker/index.
+async function exerciseFaceSearchUi() {
+  const report = featureReport.faces = {};
+  const wait = async (predicate, milliseconds = 120000) => {
+    const deadline = Date.now() + milliseconds;
+    while (!predicate()) {
+      if (Date.now() >= deadline) throw new Error("Face UI smoke timed out");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  };
+  const photo = [...state.strong, ...state.weaker].find((hit) => ["image", "screenshot"].includes(hit.kind) && /crew/i.test(hit.path))
+    || [...state.strong, ...state.weaker].find((hit) => ["image", "screenshot"].includes(hit.kind));
+  if (!photo) throw new Error("Face smoke has no real indexed photograph");
+  state.selection = photo.path; state.navigated = true; render();
+  const action = $preview.querySelector(".find-faces"); if (!action) throw new Error("Face action missing from media preview");
+  action.click(); await wait(() => faceSearch.visible && !!faceSearch.index && !!faceSearch.fileReply && !faceSearch.fileBusy && faceSearch.deviceLoaded);
+  if (!faceSearch.index.worker_available) throw new Error("Packaged face worker unavailable");
+  $("face-device").value = "auto"; $("face-device").dispatchEvent(new Event("change", { bubbles: true }));
+  await wait(() => !faceSearch.deviceSaving);
+  if (faceSearch.deviceSaveError) throw new Error("Face device preference could not save");
+  $("face-start").click(); await wait(() => !faceSearch.actionBusy);
+  if (faceSearch.statusError) throw new Error(faceSearch.statusError);
+  await wait(() => ["completed", "error"].includes(faceSearch.index?.state), 900000);
+  if (faceSearch.index.state === "error") throw new Error(faceSearch.index.error || "Face indexing failed");
+  $("face-refresh").click(); await faceSearch.refreshTask;
+  await wait(() => !faceSearch.fileBusy && !!faceSearch.fileReply?.indexed && faceSearch.fileFaces.length > 0);
+  await wait(() => faceSearch.debug().sourceLoaded && $("face-source-image").querySelectorAll(".face-box").length > 0);
+  report.index = faceSearch.index; report.progressHistory = faceSearch.statusHistory; report.source = photo.path;
+  report.faceChoices = faceSearch.fileFaces.length; report.boxes = $("face-source-image").querySelectorAll(".face-box").length;
+  await invoke("debug_capture", { label: "faces-select" });
+  const first = faceSearch.fileFaces[0];
+  $("face-source-image").querySelector(".face-box")?.click();
+  await wait(() => !!faceSearch.selection.seed && !faceSearch.searchBusy);
+  if (faceSearch.searchError) throw new Error(faceSearch.searchError);
+  if (faceSearch.fileFaces.length > 1) {
+    const other = faceSearch.fileFaces[1];
+    const choose = (id) => [...$("face-choices").querySelectorAll("button")].find((button) => button.dataset.faceId === String(id))?.click();
+    choose(other.id); choose(first.id); await wait(() => !faceSearch.searchBusy);
+    report.selectionRacePreserved = FaceState.faceKey(faceSearch.selection.seed) === FaceState.faceKey(first);
+  }
+  report.selectedFace = faceSearch.selection.seed; report.firstPage = faceSearch.selection.hits.length;
+  while (faceSearch.selection.hasMore && faceSearch.selection.hits.length < 200) {
+    $("face-search-more").click(); await wait(() => !faceSearch.searchBusy);
+    if (faceSearch.searchError) throw new Error(faceSearch.searchError);
+  }
+  if (!faceSearch.selection.hits.length) throw new Error("Real SFace query returned no matching observations");
+  await wait(() => faceSearch.debug().loadedCrops > 1);
+  report.matches = faceSearch.selection.hits; report.total = faceSearch.selection.total;
+  await invoke("debug_capture", { label: "faces-matches" });
+  const video = faceSearch.selection.hits.find((hit) => hit.kind === "video" && Number.isFinite(hit.loc) && hit.loc > 0);
+  if (!video) throw new Error("Real face query has no matching video timestamp");
+  [...$("face-results-list").querySelectorAll("button")].find((button) => button.dataset.faceId === FaceState.faceKey(video))?.click();
+  const moment = $("face-match-preview").querySelector(".picture"); if (!moment) throw new Error("Video face preview missing");
+  moment.click();
+  const videoState = () => {
+    const player = moment.querySelector("video");
+    return { path: video.path, loc: video.loc, currentTime: player?.currentTime ?? null, source: player?.getAttribute("src") ?? null,
+      readyState: player?.readyState ?? null, networkState: player?.networkState ?? null,
+      mediaState: moment.dataset.mediaState, previewState: moment.dataset.previewState,
+      errorCode: player?.error?.code ?? moment.dataset.mediaErrorCode ?? null,
+      errorMessage: player?.error?.message || moment.dataset.mediaError || null,
+      playerPresent: !!player, fallbackVisible: !!moment.querySelector(".preview-unavailable") };
+  };
+  try {
+    await wait(() => { const player = moment.querySelector("video"); return player?.readyState >= 1 || !!player?.error || moment.dataset.mediaState === "error" || !!moment.querySelector(".preview-unavailable") || !player; }, 30000);
+  } catch (error) {
+    report.video = videoState(); await invoke("debug_capture", { label: "faces-video" }); throw error;
+  }
+  report.video = videoState();
+  const player = moment.querySelector("video");
+  if (!player || player.error || moment.dataset.mediaState === "error") {
+    await invoke("debug_capture", { label: "faces-video" });
+    throw new Error(`Native video face preview failed (MediaError ${report.video.errorCode ?? "unknown"}: ${report.video.errorMessage || "player unavailable"})`);
+  }
+  player.pause(); player.currentTime = video.loc;
+  await wait(() => Math.abs(player.currentTime - video.loc) < .25 && !player.seeking);
+  report.video = { path: video.path, loc: video.loc, currentTime: player.currentTime, source: player.getAttribute("src"), readyState: player.readyState };
+  await invoke("debug_capture", { label: "faces-video" });
+  $("face-show-graph").click(); await wait(() => graph.visible && !graph.loading);
+  report.graph = { faceMode: graph.faceMode, source: graph.model.source, files: graph.model.nodes.size,
+    edges: [...graph.model.edges.values()].map((edge) => ({ matchTypes: edge.matchTypes, evidence: edge.evidence })) };
+  if (!report.graph.edges.some((edge) => edge.matchTypes.includes("face"))) throw new Error("Face results did not create real face graph evidence");
+}
 
 async function completeDebugSearch() {
   debugPending = false;
@@ -900,6 +1023,10 @@ async function completeDebugSearch() {
   if (debugOptions.features) {
     try { await exerciseUiFeatures(); }
     catch (error) { state.error = String(error.message || error); featureReport.failureGraph = graph.debug(); }
+  }
+  if (debugOptions.faces) {
+    try { await exerciseFaceSearchUi(); }
+    catch (error) { state.error = String(error.message || error); featureReport.faces = { ...featureReport.faces, error: state.error, failure: faceSearch.debug() }; }
   }
   report();
 }
@@ -1078,7 +1205,11 @@ async function exerciseInvestigationUi(wait) {
   $("graph-omnibar").value = ""; $("graph-omnibar").dispatchEvent(new Event("input", { bubbles: true }));
   document.querySelector('[data-graph-modality="visual"]').click();
   report.visualOnly = graph.investigationDebug().visibleEdges.every((e) => e.matchTypes.includes("visual"));
-  document.querySelector('[data-graph-modality="face"]').click(); report.faceDisabled = document.querySelector('[data-graph-modality="face"]').disabled;
+  await faceSearch.status();
+  report.faceDisabled = document.querySelector('[data-graph-modality="face"]').disabled;
+  report.faceControlTruthful = report.faceDisabled === !(faceSearch.index?.models_ready && faceSearch.index?.worker_available);
+  // Face availability now depends on the real model/runtime, so this historical
+  // graph smoke checks the affordance without leaving its current workspace.
   document.querySelector('[data-graph-modality="all"]').click();
   const context = (path) => [...graph.svg.querySelectorAll("[data-path]")].find((n) => n.dataset.path === path).dispatchEvent(new MouseEvent("contextmenu", { clientX: 430, clientY: 420, bubbles: true, cancelable: true }));
   context(other.path); report.contextItems = [...$("graph-context").querySelectorAll("button")].map((n) => n.textContent);

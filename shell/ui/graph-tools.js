@@ -18,6 +18,7 @@ const GraphTools = {
       if (event.key === "Escape") { event.stopPropagation(); event.target.value = ""; event.target.dispatchEvent(new Event("input", { bubbles: true })); }
     };
     for (const button of document.querySelectorAll("[data-graph-modality]")) button.onclick = () => {
+      if (button.dataset.graphModality === "face" && !this.faceMode) { this.onFaces?.(this.model.nodes.get(this.selected)); return; }
       this.modality = button.dataset.graphModality; this.pathResult = null; this.render(); this.refreshCounts();
     };
     this.el("graph-show-rejected").onchange = (event) => { this.showRejected = event.target.checked; this.pathResult = null; this.render(); };
@@ -82,6 +83,7 @@ const GraphTools = {
     return this.saveQueue;
   },
   async refreshCounts() {
+    if (this.faceMode) return; // Face neighbors require a selected observation, not a whole-file mean.
     const token = ++this.countGeneration, generation = this.generation;
     const nodes = [...this.model.nodes.values()].filter((n) => !n.hidden);
     for (const node of nodes) node.unexpandedCount = undefined;
@@ -178,7 +180,8 @@ const GraphTools = {
     const expand = (type) => { this.select(path); this.modality = type; this.render(); this.expand(true, type); };
     add(t("Expand all links"), () => expand("all"), this.loading);
     const label = document.createElement("p"); label.textContent = t("Expand by modality"); menu.append(label);
-    for (const type of ["face", "visual", "audio", "ocr"]) add(this.modalityLabel(type), () => expand(type), type === "face" || this.loading);
+    for (const type of ["face", "visual", "audio", "ocr"]) add(this.modalityLabel(type), () => type === "face" ? this.onFaces?.(this.model.nodes.get(path)) : expand(type),
+      (type === "face" && !window.faceSearch?.index?.models_ready) || (this.faceMode && type !== "face") || this.loading);
     add(t("Find shortest path to…"), () => this.beginPath(path));
     add(t(Number.isFinite(this.model.nodes.get(path).fx) ? "Unpin node" : "Pin node"), () => this.togglePin(path));
     add(t("Hide node"), () => this.hideNode(path));
@@ -226,7 +229,10 @@ const GraphTools = {
     this.el("graph-inspector-heading").textContent = t(edge ? "Analyze overlap" : "File inspector");
     this.el("graph-search-submit").disabled = !!this.searchBusy;
     this.el("graph-show-rejected").checked = this.showRejected; this.el("graph-layout").value = this.layout;
-    for (const button of document.querySelectorAll("[data-graph-modality]")) button.setAttribute("aria-pressed", String(button.dataset.graphModality === this.modality));
+    for (const button of document.querySelectorAll("[data-graph-modality]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.graphModality === this.modality));
+      if (button.dataset.graphModality !== "face") button.disabled = this.faceMode && button.dataset.graphModality !== "all";
+    }
     const hidden = [...this.model.nodes.values()].filter((n) => n.hidden).length;
     this.el("graph-restore-hidden").hidden = !hidden; this.el("graph-restore-hidden").textContent = t("Restore hidden ({count})", { count: hidden });
     this.el("graph-state-message").textContent = this.storageError ? t("Annotations are not saved. {error}", { error: this.storageError }) : this.saving ? t("Saving locally…") : t("Annotations saved locally");
@@ -247,7 +253,7 @@ const GraphTools = {
     row("Resolution", info?.width && info?.height ? `${info.width} × ${info.height}` : null);
     row("EXIF capture date", info?.taken);
     row("SHA-256", this.hashCache.get(key) || t("Compute on demand"));
-    row("Objects", t("Not extracted by this index")); row("Faces", t("Not extracted by this index"));
+    row("Objects", t("Not extracted by this index")); row("Faces", t("Separate face index. Choose a face to compare observations."));
     row("Text / OCR", cached?.failed ? t("Could not load indexed evidence. Retry reading it.") : !cached || cached.loading ? t("Loading indexed evidence…") : cached.ocr?.map((item) => item.text).join("\n\n") || t("No indexed OCR text"));
     this.el("graph-evidence-retry").hidden = !cached?.failed;
     this.el("graph-hash").disabled = this.hashPending.has(key); this.el("graph-hash").textContent = t(this.hashPending.has(key) ? "Hashing locally…" : "Compute SHA-256");
