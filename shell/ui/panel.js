@@ -20,13 +20,13 @@ const isMac = /Mac/.test(navigator.platform);
 const isWindows = /Win/.test(navigator.platform);
 document.documentElement.classList.toggle("platform-windows", isWindows);
 const MOD = isMac ? "⌘" : "Ctrl+";
-const FILE_MANAGER = isMac ? "Finder" : isWindows ? "Explorer" : "Files";
+const fileManager = () => isMac ? "Finder" : isWindows ? (I18n.language === "ru" ? "Проводнике" : "Explorer") : t("Files");
 // Pictures every web view shows as they are; anything else (HEIC, TIFF, RAW…) comes as JPEG from the helper.
 const SHOWN_AS_IS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp"]);
-const GROUP_OF = { screenshot: "Screenshots", image: "Images", pdf: "Documents", doc: "Documents", video: "Video",
-                   audio: "Audio", code: "Code" };
-const KIND_TITLE = { screenshot: "Screenshot", image: "Image", pdf: "PDF", doc: "Document", audio: "Audio",
-                     video: "Video", code: "Code" };
+const GROUP_OF = { screenshot: t("Screenshots"), image: t("Images"), pdf: t("Documents"), doc: t("Documents"), video: t("Video"),
+                   audio: t("Audio"), code: t("Code") };
+const KIND_TITLE = { screenshot: t("Screenshot"), image: t("Image"), pdf: "PDF", doc: t("Document"), audio: t("Audio"),
+                     video: t("Video"), code: t("Code") };
 
 const $ = (id) => document.getElementById(id);
 const $query = $("query"), $body = $("body"), $list = $("list"), $preview = $("preview");
@@ -56,6 +56,7 @@ const state = {
   page: null,
   loadingMore: false,
   pageError: null,
+  related: null,
   statsOpen: false,
   stats: null,
   statsGeneration: 0,
@@ -64,7 +65,8 @@ let debugPending = false;
 const progressHistory = [];
 let progressQueued = false;
 let debugOptions = {};
-const graph = new GraphView({ ask, invoke, nameOf, onVisibility: (visible) => {
+const featureReport = {};
+const graph = new GraphView({ ask, invoke, nameOf, previewFor: (hit, code) => picture(hit, { code, query: "" }), onSimilar: findSimilar, onVisibility: (visible) => {
   if (visible) state.statsOpen = false;
   render();
 } });
@@ -74,6 +76,7 @@ const debugPages = [];
 
 function queryChanged() {
   if (graph.visible) graph.close();
+  state.related = null;
   const generation = ++state.generation;
   clearTimeout(state.timer);
   state.navigated = false;
@@ -106,7 +109,7 @@ function queryChanged() {
         if (generation !== state.generation) return;
         state.finalGeneration = generation;
         show(reply, text, reply.meaning ? "meaning" : "wordsOnly");
-        if (debugPending) completeDebugSearch();
+        if (debugPending) completeDebugSearch().catch(failed);
       })
       .catch((error) => { if (generation === state.generation) failed(error); });
   }, TYPING_PAUSE);
@@ -144,7 +147,13 @@ async function loadMore() {
   state.pageError = null;
   renderPaging();
   try {
-    const reply = await ask({ op: "search_page", cursor: page.cursor, offset: page.offset, limit: PAGE_SIZE });
+    const reply = await ask(state.related
+      ? { op: "related_files", ...state.related.request, offset: page.offset, limit: PAGE_SIZE }
+      : { op: "search_page", cursor: page.cursor, offset: page.offset, limit: PAGE_SIZE });
+    if (state.related && reply.ok !== false) {
+      reply.cursor = page.cursor; reply.strong = (reply.hits || []).length;
+      if (reply.vector_source !== state.related.source) throw new Error(t("The index model changed. Start a new graph."));
+    }
     if (generation !== state.generation || state.page?.cursor !== page.cursor) return;
     if (reply.ok === false) { state.pageError = reply.error; state.page.expired = !!reply.expired; return; }
     const seen = new Set([...state.strong, ...state.weaker].map((hit) => hit.path));
@@ -158,24 +167,53 @@ async function loadMore() {
     state.selection = selected;
     $list.scrollTop = scroll;
   } catch (error) {
-    if (generation === state.generation) state.pageError = String(error);
+    if (generation === state.generation) state.pageError = String(error.message || error);
   } finally {
     if (generation === state.generation) { state.loadingMore = false; renderPaging(); renderFooter(); }
   }
+}
+
+async function findSimilar(seed, code = state.isCode) {
+  if (!seed) return;
+  if (graph.visible) graph.close();
+  const previous = state.related?.previous ?? { value: $query.value, selection: state.selection };
+  const generation = ++state.generation;
+  clearTimeout(state.timer);
+  state.finalGeneration = generation;
+  state.related = { seed, previous, request: { path: seed.path, segment: seed.segment_id, code, minimum_cosine: 0.55 } };
+  state.isCode = code; state.statsOpen = false; state.error = null; state.loadingMore = false; state.pageError = null;
+  state.strong = []; state.weaker = []; state.groups = []; state.page = null; state.selection = null;
+  state.phase = "similar"; state.text = ""; render();
+  $("similar-title").textContent = t("Finding related files…");
+  try {
+    const reply = await ask({ op: "related_files", ...state.related.request, offset: 0, limit: PAGE_SIZE });
+    if (generation !== state.generation) return;
+    if (reply.ok === false) throw new Error(t(reply.error));
+    state.related.source = reply.vector_source;
+    // Keep the same matched-fragment/file-mean basis for subsequent pages.
+    if (reply.basis === "file_mean") delete state.related.request.segment;
+    state.navigated = false;
+    show({ ...reply, cursor: `related-${generation}`, strong: reply.hits.length }, "", "similar");
+  } catch (error) { if (generation === state.generation) failed(error); }
+}
+function backFromSimilar() {
+  const previous = state.related?.previous;
+  if (!previous) return;
+  $query.value = previous.value; queryChanged(); $query.focus();
 }
 
 function renderPaging() {
   const page = state.page;
   $("more-controls").hidden = !page?.hasMore;
   $("load-more").disabled = state.loadingMore;
-  $("load-more").textContent = state.loadingMore ? "Loading…" : page?.expired ? "Refresh results" : "Show more";
-  $("page-status").textContent = state.pageError || (page ? `${state.strong.length + state.weaker.length} of ${page.total.toLocaleString()} matches loaded` : "");
+  $("load-more").textContent = state.loadingMore ? t("Loading…") : page?.expired ? t("Refresh results") : t("Show more");
+  $("page-status").textContent = (state.pageError ? t(state.pageError) : null) || (page ? t("{loaded} of {total} matches loaded", { loaded: state.strong.length + state.weaker.length, total: page.total.toLocaleString(I18n.locale()) }) : "");
 }
 
 async function refreshStats() {
   const generation = ++state.statsGeneration;
   $("stats-refresh").disabled = true;
-  $("stats-message").textContent = "Loading index statistics…";
+  $("stats-message").textContent = t("Loading index statistics…");
   try {
     const reply = await ask({ op: "index_stats" });
     if (generation !== state.statsGeneration) return;
@@ -195,19 +233,19 @@ async function refreshStats() {
       totals.raw += index.unsupported_raw || 0;
       for (const key of ["bytes", "vectors", "segments"]) totals[key] += index[key] || 0;
     }
-    const n = (value) => value.toLocaleString();
+    const n = (value) => value.toLocaleString(I18n.locale());
     $("stats-totals").replaceChildren();
-    for (const [label, value] of [["Searchable files", n(totals.searchable)], ["Waiting to index", n(totals.pending)],
-      ["Long files still being read", n(totals.partial)], ["Unsupported RAW files", n(totals.raw)],
-      ["Other failed files", n(Math.max(0, totals.failed - totals.raw))], ["Skipped files", n(totals.skipped)],
-      ["Indexed fragments / vectors", `${n(totals.segments)} / ${n(totals.vectors)}`],
-      ["Database storage (including retained files)", formatBytes(totals.bytes)]]) {
+    for (const [label, value] of [[t("Searchable files"), n(totals.searchable)], [t("Waiting to index"), n(totals.pending)],
+      [t("Long files still being read"), n(totals.partial)], [t("Unsupported RAW files"), n(totals.raw)],
+      [t("Other failed files"), n(Math.max(0, totals.failed - totals.raw))], [t("Skipped files"), n(totals.skipped)],
+      [t("Indexed fragments / vectors"), `${n(totals.segments)} / ${n(totals.vectors)}`],
+      [t("Database storage (including retained files)"), formatBytes(totals.bytes)]]) {
       $("stats-totals").append(element("dt", "", label), element("dd", "", value));
     }
     $("stats-kinds").replaceChildren();
     for (const [kind, values] of [...kinds].sort((a, b) => b[1].searchable - a[1].searchable || a[0].localeCompare(b[0]))) {
       const row = element("tr", "");
-      row.append(element("th", "", KIND_TITLE[kind] || kind));
+      row.append(element("th", "", t(KIND_TITLE[kind] || kind)));
       for (const key of ["searchable", "pending", "issues"]) row.append(element("td", "", n(values[key])));
       $("stats-kinds").append(row);
     }
@@ -221,14 +259,14 @@ async function refreshStats() {
       button.onclick = () => invoke("open_path", { path: file.path }).catch((error) => { $("stats-message").textContent = String(error); });
       $("stats-recent").append(button);
     }
-    $("stats-message").textContent = kinds.size ? `${n(reply.folders + reply.code_folders)} selected folders · ${state.indexStatus?.stage === "idle" ? "Watching for changes" : "Indexing status shown above"}` : "No files in the selected folders have reached the index yet.";
-    if (!recent.length) $("stats-recent").append(element("p", "overview-note", "No indexed files yet."));
+    $("stats-message").textContent = kinds.size ? t("{count} selected folders · {status}", { count: n(reply.folders + reply.code_folders), status: state.indexStatus?.stage === "idle" ? t("Watching for changes") : t("Indexing status shown above") }) : t("No files in the selected folders have reached the index yet.");
+    if (!recent.length) $("stats-recent").append(element("p", "overview-note", t("No indexed files yet.")));
     const latest = Math.max(0, ...(reply.indexes || []).map((index) => index.last_indexed || 0));
-    $("stats-stamp").textContent = `Updated ${new Date(reply.sampled_at * 1000).toLocaleTimeString()}`
-      + (latest ? ` · Last file indexed ${new Date(latest * 1000).toLocaleString()}` : "")
-      + ". Counts cover selected folders; database storage covers the whole saved index.";
+    $("stats-stamp").textContent = t("Updated {time}", { time: new Date(reply.sampled_at * 1000).toLocaleTimeString(I18n.locale()) })
+      + (latest ? t(" · Last file indexed {time}", { time: new Date(latest * 1000).toLocaleString(I18n.locale()) }) : "")
+      + t(". Counts cover selected folders; database storage covers the whole saved index.");
   } catch (error) {
-    if (generation === state.statsGeneration) $("stats-message").textContent = `Statistics unavailable: ${String(error)}. Try Refresh.`;
+    if (generation === state.statsGeneration) $("stats-message").textContent = t("Statistics unavailable: {error}. Try Refresh.", { error: t(String(error.message || error)) });
   } finally {
     if (generation === state.statsGeneration) $("stats-refresh").disabled = false;
   }
@@ -241,7 +279,7 @@ function formatBytes(value) {
 }
 
 function failed(error) {
-  state.error = String(error);
+  state.error = String(error.message || error);
   renderFooter();
   if (debugPending) report();
 }
@@ -295,6 +333,8 @@ function render() {
   $body.hidden = empty || state.statsOpen || graph.visible;
   $footer.hidden = empty || state.statsOpen || graph.visible;
   $("graph-view").hidden = !graph.visible;
+  $("similar-context").hidden = !state.related || graph.visible || state.statsOpen;
+  $("similar-title").textContent = state.related ? t("Similar to {name}", { name: nameOf(state.related.seed.path) }) : "";
   $("graph-toggle").disabled = !selectedHit();
   $("graph-toggle").setAttribute("aria-expanded", String(graph.visible));
   $("index-overview").hidden = !state.statsOpen;
@@ -312,14 +352,14 @@ function renderList() {
   $list.hidden = nothing;
   if (nothing) return;
   for (const group of state.groups) {
-    $list.append(element("div", "group-title", group.title));
+    $list.append(element("div", "group-title", t(group.title)));
     for (const hit of group.rows) $list.append(row(hit));
   }
   if (state.weaker.length) {
     const fold = element("div", "weaker" + (state.showWeaker ? " open" : "") + (state.selection === WEAKER ? " selected" : ""));
     fold.innerHTML = ICONS.chevron;
     const count = state.weaker.length;
-    fold.append(state.showWeaker ? "Weaker matches" : `${count} weaker ${count === 1 ? "match" : "matches"}`);
+    fold.append(state.showWeaker ? t("Weaker matches") : t("{count} weaker matches", { count }));
     fold.onclick = toggleWeaker;
     $list.append(fold);
     if (state.showWeaker) for (const hit of state.weaker) $list.append(row(hit));
@@ -372,21 +412,20 @@ function renderPreview() {
   $preview.replaceChildren();
   if (!state.strong.length && !state.weaker.length) {
     if (state.phase === "codeHint") {
-      $preview.append(message("Search your code", "Say what the code does, or type a name that's in it."));
+      $preview.append(message(t("Search your code"), t("Say what the code does, or type a name that's in it.")));
     } else if (state.indexing) {
-      $preview.append(message("Nothing yet", "Still indexing. Until a file is read, "
-        + "DigUp finds it only by its name."));
+      $preview.append(message(t("Nothing yet"), t("Still indexing. Until a file is read, DigUp finds it only by its name.")));
     } else if (state.isCode) {
-      $preview.append(message("No good matches in your code", "Try saying what the code does, or a name that's in it."));
+      $preview.append(message(t("No good matches in your code"), t("Try saying what the code does, or a name that's in it.")));
     } else {
-      $preview.append(message("No good matches", "Try what you'd see or hear in it, or words you remember from it."));
+      $preview.append(message(t("No good matches"), t("Try what you'd see or hear in it, or words you remember from it.")));
     }
     return;
   }
   if (state.selection === WEAKER) {
     const count = state.weaker.length;
-    $preview.append(message(state.showWeaker ? "Weaker matches" : `${count} weaker ${count === 1 ? "match" : "matches"}`,
-      "They match much less well than the results above. Press Return to " + (state.showWeaker ? "fold them away." : "show them.")));
+    $preview.append(message(state.showWeaker ? t("Weaker matches") : t("{count} weaker matches", { count }),
+      t("They match much less well than the results above. Press Return to {action}.", { action: state.showWeaker ? t("fold them away") : t("show them") })));
     return;
   }
   const hit = selectedHit();
@@ -396,24 +435,26 @@ function renderPreview() {
 
 /// The big picture: the photo or screenshot, the frame at the moment (it plays from there), the page, what's heard
 /// at the moment, or the passage that matched.
-function picture(hit) {
+function picture(hit, { code = state.isCode, query = state.text } = {}) {
   const frame = element("div", "picture");
   const image = element("img");
   image.alt = "";
+  const unavailable = () => frame.replaceChildren(element("p", "preview-unavailable", t("Preview unavailable. Open the file in its default app.")));
+  image.onerror = unavailable;
   frame.append(image);
   switch (hit.kind) {
     case "image":
     case "screenshot":
       if (SHOWN_AS_IS.has(extensionOf(hit.path))) image.src = fileURL(hit.path);
-      else rendered(hit.path, "image", null, 1024).then((path) => { image.src = fileURL(path); }).catch(() => {});
+      else rendered(hit.path, "image", null, 1024).then((path) => { image.src = fileURL(path); }).catch(unavailable);
       return frame;
     case "pdf":
-      rendered(hit.path, "pdf", hit.loc ?? 1, 1024).then((path) => { image.src = fileURL(path); }).catch(() => {});
+      rendered(hit.path, "pdf", hit.loc ?? 1, 1024).then((path) => { image.src = fileURL(path); }).catch(unavailable);
       return frame;
     case "video": {
       // The frame at the moment, its time on it; a click plays the video from there.
       const at = hit.loc ?? 0;
-      rendered(hit.path, "video", at, 1024).then((path) => { image.src = fileURL(path); }).catch(() => {});
+      rendered(hit.path, "video", at, 1024).then((path) => { image.src = fileURL(path); }).catch(unavailable);
       const moment = element("div", "moment");
       const play = element("div", "play");
       play.innerHTML = ICONS.play;
@@ -422,6 +463,7 @@ function picture(hit) {
       frame.onclick = () => {
         const video = element("video");
         video.src = `${fileURL(hit.path)}#t=${at}`;
+        video.onerror = unavailable;
         video.controls = true;
         video.autoplay = true;
         frame.replaceChildren(video);
@@ -433,6 +475,7 @@ function picture(hit) {
       audio.innerHTML = ICONS.audio;
       const player = element("audio");
       player.src = `${fileURL(hit.path)}#t=${hit.loc ?? 0}`;
+      player.onerror = unavailable;
       player.controls = true;
       player.preload = "metadata";
       audio.append(player);
@@ -441,10 +484,11 @@ function picture(hit) {
     }
     default: {
       const passage = element("div", "passage" + (hit.kind === "code" ? " code" : ""));
-      passage.textContent = (hit.excerpt ?? "").replace(/[«»]/g, "");
-      ask({ op: "text", segment: hit.segment_id, path: hit.path, code: state.isCode })
-        .then((reply) => { if (reply.text) passage.innerHTML = highlighted(reply.text, state.text); })
-        .catch(() => {});
+      passage.textContent = (hit.excerpt ?? t("Loading preview…")).replace(/[«»]/g, "");
+      ask({ op: "text", segment: hit.segment_id, path: hit.path, code })
+        .then((reply) => { if (reply.text) passage.innerHTML = highlighted(reply.text, query);
+          else if (!hit.excerpt) passage.textContent = t("Preview unavailable. Open the file in its default app."); })
+        .catch(() => { if (!hit.excerpt) passage.textContent = t("Preview unavailable. Open the file in its default app."); });
       return passage;
     }
   }
@@ -464,11 +508,13 @@ function facts(hit) {
     box.append(words);
   }
   const buttons = element("div", "buttons");
-  const open = element("button", "", "Open");
+  const open = element("button", "", t("Open"));
   open.onclick = openSelected;
-  const reveal = element("button", "", `Show in ${FILE_MANAGER}`);
+  const reveal = element("button", "", t("Show in {manager}", { manager: fileManager() }));
   reveal.onclick = revealSelected;
-  buttons.append(open, reveal);
+  const similar = element("button", "", t("Find similar"));
+  similar.className = "find-similar"; similar.onclick = () => findSimilar(hit);
+  buttons.append(open, reveal, similar);
   box.append(buttons);
   return box;
 }
@@ -476,18 +522,18 @@ function facts(hit) {
 function renderFooter() {
   const strong = state.strong.length, weaker = state.weaker.length;
   let summary;
-  if (state.error) summary = `DigUp's helper: ${state.error}`;
+  if (state.error) summary = t("DigUp's helper: {error}", { error: t(state.error) });
   else if (state.phase === "words") {
-    summary = state.encoder === "starting" ? "Matching words; meaning search is warming up…" : "Matching words…";
-  } else if (state.phase === "wordsOnly") summary = "Words only: meaning search isn't available";
-  else if (state.phase === "codeHint") summary = "Searching your code";
-  else summary = state.page ? `${strong + weaker} of ${state.page.total.toLocaleString()} matches loaded`
-    : `${strong} ${strong === 1 ? "result" : "results"}` + (weaker ? ` · ${weaker} weaker` : "");
+    summary = state.encoder === "starting" ? t("Matching words; meaning search is warming up…") : t("Matching words…");
+  } else if (state.phase === "wordsOnly") summary = t("Words only: meaning search isn't available");
+  else if (state.phase === "codeHint") summary = t("Searching your code");
+  else summary = state.page ? t("{loaded} of {total} matches loaded", { loaded: strong + weaker, total: state.page.total.toLocaleString(I18n.locale()) })
+    : t("{count} results", { count: strong }) + (weaker ? t(" · {count} weaker", { count: weaker }) : "");
   // Results while indexing are partial: say so where they're counted.
-  if (state.indexing && !state.error) summary += " · indexing is still in progress";
+  if (state.indexing && !state.error) summary += t(" · indexing is still in progress");
   $summary.textContent = summary;
-  $summary.title = state.page ? "Matches are ranked from the index at query time. Run the query again to include newer changes." : "";
-  $keys.textContent = `↩ Open   ${MOD}↩ Show in ${FILE_MANAGER}`;
+  $summary.title = state.page ? t("Matches are ranked from the index at query time. Run the query again to include newer changes.") : "";
+  $keys.textContent = t("↩ Open   {mod}↩ Show in {manager}", { mod: MOD, manager: fileManager() });
 }
 
 function message(title, text) {
@@ -503,7 +549,7 @@ function placeOf(hit) {
   if (hit.loc == null) return null;
   switch (hit.segment) {
     case "page":
-    case "page_image": return `p. ${Math.trunc(hit.loc)}`;
+    case "page_image": return t("p. {page}", { page: Math.trunc(hit.loc) });
     case "frame": return clock(hit.loc);
     case "audio": return hit.kind === "video" ? `♪ ${clock(hit.loc)}` : clock(hit.loc);
     case "lines": {
@@ -518,41 +564,42 @@ function placeOf(hit) {
 function span(hit) {
   if (hit.loc == null) return null;
   const first = Math.trunc(hit.loc), last = Math.trunc(hit.loc_end ?? hit.loc);
-  const what = hit.segment === "cells" ? ["cell", "cells"] : ["line", "lines"];
-  return first === last ? `${what[0]} ${first}` : `${what[1]} ${first}–${last}`;
+  return t(hit.segment === "cells" ? (first === last ? "cell {first}" : "cells {first}–{last}")
+    : (first === last ? "line {first}" : "lines {first}–{last}"), { first, last });
 }
 
-/// Why it's here, in a few words: "Matches the picture", "Matches the frame at 0:06".
+/// Why it's here, in a few words: t("Matches the picture"), "Matches the frame at 0:06".
 function reasonOf(hit) {
+  if (state.related && Number.isFinite(hit.cosine)) return t("Similarity {value} · indexed content", { value: hit.cosine.toFixed(3) });
   const meaning = (hit.z ?? 0) >= 2, words = hit.keyword_rank != null;
-  if (!meaning) return words ? "Has your words" : "Matches its name";
+  if (!meaning) return words ? t("Has your words") : t("Matches its name");
   const at = hit.loc != null ? clock(hit.loc) : "";
-  const page = hit.loc != null ? `page ${Math.trunc(hit.loc)}` : "a page";
+  const page = hit.loc != null ? t("page {page}", { page: Math.trunc(hit.loc) }) : t("a page");
   switch (hit.segment) {
-    case "image": return hit.kind === "screenshot" ? "Matches what's on screen" : "Matches the picture";
-    case "ocr": return "Matches the text in it";
-    case "frame": return `Matches the frame at ${at}`;
-    case "audio": return hit.kind === "video" ? `Matches the sound at ${at}` : `Matches what's heard at ${at}`;
-    case "page": return `Matches the text on ${page}`;
-    case "page_image": return `Matches ${page}`;
-    case "chunk": return "Matches its text";
+    case "image": return hit.kind === "screenshot" ? t("Matches what's on screen") : t("Matches the picture");
+    case "ocr": return t("Matches the text in it");
+    case "frame": return t("Matches the frame at {at}", { at });
+    case "audio": return hit.kind === "video" ? t("Matches the sound at {at}", { at }) : t("Matches what's heard at {at}", { at });
+    case "page": return t("Matches the text on {page}", { page });
+    case "page_image": return t("Matches {page}", { page });
+    case "chunk": return t("Matches its text");
     case "lines":
-    case "cells": return `Matches ${span(hit) ?? "the code"}`;
-    default: return "Matches its name";
+    case "cells": return t("Matches {span}", { span: span(hit) ?? t("the code") });
+    default: return t("Matches its name");
   }
 }
 
 /// "Screenshot · Oct 7, 2026 · 1440 × 900 · 62 KB", "PDF · … · 463 pages, 120 read so far · 23 MB"
 function details(hit) {
   const info = hit.info || {};
-  const parts = [KIND_TITLE[hit.kind] || "File", dateOf(hit.modified)];
+  const parts = [t(KIND_TITLE[hit.kind] || "File"), dateOf(hit.modified)];
   if (info.width && info.height) parts.push(`${info.width} × ${info.height}`);
   const readTo = info.read_to != null ? Number(info.read_to) : null;
   if (info.pages) {
     const pages = Number(info.pages);
-    parts.push((pages === 1 ? "1 page" : `${pages.toLocaleString()} pages`) + (readTo != null ? `, ${readTo} read so far` : ""));
-  } else if (readTo != null) parts.push("partly read so far");
-  if (info.lines) parts.push(Number(info.lines) === 1 ? "1 line" : `${Number(info.lines).toLocaleString()} lines`);
+    parts.push(t("{count} pages", { count: pages.toLocaleString(I18n.locale()) }) + (readTo != null ? t(", {count} read so far", { count: readTo }) : ""));
+  } else if (readTo != null) parts.push(t("partly read so far"));
+  if (info.lines) parts.push(t("{count} lines", { count: Number(info.lines).toLocaleString(I18n.locale()) }));
   if (info.duration) parts.push(clock(Number(info.duration)));
   if (hit.size > 0) parts.push(bytes(hit.size));
   return parts.join(" · ");
@@ -587,12 +634,12 @@ function clock(seconds) {
 }
 
 function dateOf(seconds) {
-  return new Date(seconds * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return new Date(seconds * 1000).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" });
 }
 
 /// Sizes the way file managers count them (1 KB = 1,000 bytes): "62 KB", "2.1 MB".
 function bytes(count) {
-  if (count < 1000) return `${count} bytes`;
+  if (count < 1000) return t("{count} bytes", { count });
   const units = ["KB", "MB", "GB", "TB"];
   let value = count / 1000, unit = 0;
   while (value >= 1000 && unit < units.length - 1) { value /= 1000; unit += 1; }
@@ -662,8 +709,9 @@ $("stats-toggle").addEventListener("click", () => {
   if (state.statsOpen) refreshStats();
 });
 $("graph-toggle").addEventListener("click", () => graph.visible ? graph.close() : graph.show(selectedHit(), state.isCode));
-$("graph-reveal").textContent = `Show in ${FILE_MANAGER}`;
-tauri.event.listen("search-scope-changed", () => { if (graph.visible) graph.close(); });
+$("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
+$("similar-back").onclick = backFromSimilar;
+tauri.event.listen("search-scope-changed", () => { if (graph.visible) graph.close(); if (state.related) queryChanged(); });
 $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
@@ -671,7 +719,7 @@ document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys
   if (graph.visible && event.key === "Escape") { event.preventDefault(); graph.close(); return; }
   if (graph.visible && event.target.closest?.("#graph-view")) return;
-  if (event.target.closest?.("button")) return; // native Tab/Space/Enter behavior for page and overview controls
+  if (event.target.closest?.("button, select")) return; // native Tab/Space/Enter behavior for page and overview controls
   const modifier = isMac ? event.metaKey : event.ctrlKey;
   switch (event.key) {
     case "Escape":
@@ -721,8 +769,8 @@ function refreshIndexStatus() {
 
 function indexStatusFailed() {
   if (state.indexStatus) return;
-  $indexTitle.textContent = "Index status unavailable";
-  $indexDetail.textContent = "Close and reopen the search panel to check again.";
+  $indexTitle.textContent = t("Index status unavailable");
+  $indexDetail.textContent = t("Close and reopen the search panel to check again.");
 }
 
 function showIndexStatus(status) {
@@ -744,38 +792,38 @@ function renderIndexStatus() {
   const s = state.indexStatus;
   if (!s) return;
   const titles = {
-    starting: "Starting indexing…", scanning: s.code ? "Scanning code folders…" : "Scanning folders…",
-    indexing: s.code ? "Indexing source code" : "Indexing files", rest: "Reading the rest of long files",
-    idle: s.failed || s.unavailable || s.message ? "Indexing finished with issues" : "Indexing complete",
-    paused: "Indexing paused", waiting: "Waiting for the model", error: "Indexing needs attention",
-    stopped: "Indexing stopped", "no-folders": "No folders selected",
+    starting: t("Starting indexing…"), scanning: s.code ? t("Scanning code folders…") : t("Scanning folders…"),
+    indexing: s.code ? t("Indexing source code") : t("Indexing files"), rest: t("Reading the rest of long files"),
+    idle: s.failed || s.unavailable || s.message ? t("Indexing finished with issues") : t("Indexing complete"),
+    paused: t("Indexing paused"), waiting: t("Waiting for the model"), error: t("Indexing needs attention"),
+    stopped: t("Indexing stopped"), "no-folders": t("No folders selected"),
   };
   const details = {
-    starting: "Preparing the local index. Files already indexed remain searchable.",
-    scanning: "Checking for new, changed and deleted files. Earlier results stay searchable.",
-    indexing: "Files become searchable as they are indexed. Counts are for this pass.",
-    rest: "Long files are read in parts. Counts are for the remaining parts in this pass.",
-    idle: "Watching the selected folders for changes.",
-    paused: "Choose Index Now / Resume in the tray to continue. Your index is saved.",
-    waiting: "Indexing starts when the local model is ready.",
-    error: "Check folder access and the processing device, then resume from the tray.",
-    stopped: "Choose Index Now / Resume in the tray to try again.",
-    "no-folders": "Choose Folders… in the tray to start indexing.",
+    starting: t("Preparing the local index. Files already indexed remain searchable."),
+    scanning: t("Checking for new, changed and deleted files. Earlier results stay searchable."),
+    indexing: t("Files become searchable as they are indexed. Counts are for this pass."),
+    rest: t("Long files are read in parts. Counts are for the remaining parts in this pass."),
+    idle: t("Watching the selected folders for changes."),
+    paused: t("Choose Index Now / Resume in the tray to continue. Your index is saved."),
+    waiting: t("Indexing starts when the local model is ready."),
+    error: t("Check folder access and the processing device, then resume from the tray."),
+    stopped: t("Choose Index Now / Resume in the tray to try again."),
+    "no-folders": t("Choose Folders… in the tray to start indexing."),
   };
-  const number = (n) => n.toLocaleString();
+  const number = (n) => n.toLocaleString(I18n.locale());
   const counted = Number.isFinite(s.done) && Number.isFinite(s.total);
-  const overall = [s.searchable != null ? `${number(s.searchable)} files searchable` : "",
-    s.pending != null ? `${number(s.pending)} remaining` : ""].filter(Boolean).join(" · ");
+  const overall = [s.searchable != null ? t("{count} files searchable", { count: number(s.searchable) }) : "",
+    s.pending != null ? t("{count} remaining", { count: number(s.pending) }) : ""].filter(Boolean).join(" · ");
   const raw = Math.min(s.failed || 0, s.unsupported_raw || 0);
   const failedFiles = Math.max(0, (s.failed || 0) - raw);
   $indexStatus.dataset.stage = s.stage;
-  $indexTitle.textContent = titles[s.stage] || "Indexing";
-  $indexCount.textContent = counted ? `${number(s.done)} of ${number(s.total)} ${s.unit} processed this pass` : overall;
-  const problems = [failedFiles ? `${number(failedFiles)} ${failedFiles === 1 ? "file" : "files"} couldn't be indexed` : "",
-    raw ? `${number(raw)} RAW ${raw === 1 ? "file" : "files"} not supported` : "",
-    s.skipped ? `${number(s.skipped)} files skipped` : "",
-    s.unavailable ? `${number(s.unavailable)} folders unavailable` : ""].filter(Boolean).join(" · ");
-  $indexDetail.textContent = [problems, s.message, counted ? overall : "", s.message ? "" : details[s.stage]]
+  $indexTitle.textContent = titles[s.stage] || t("Indexing");
+  $indexCount.textContent = counted ? t("{done} of {total} {unit} processed this pass", { done: number(s.done), total: number(s.total), unit: t(s.unit) }) : overall;
+  const problems = [failedFiles ? t("{count} files couldn't be indexed", { count: number(failedFiles) }) : "",
+    raw ? t("{count} RAW files not supported", { count: number(raw) }) : "",
+    s.skipped ? t("{count} files skipped", { count: number(s.skipped) }) : "",
+    s.unavailable ? t("{count} folders unavailable", { count: number(s.unavailable) }) : ""].filter(Boolean).join(" · ");
+  $indexDetail.textContent = [problems, s.message ? t(s.message) : "", counted ? overall : "", s.message ? "" : details[s.stage]]
     .filter(Boolean).join(" · ");
   $indexDetail.title = $indexDetail.textContent;
   $indexProgress.hidden = !counted || s.total === 0 || s.done > s.total || !["indexing", "rest"].includes(s.stage);
@@ -786,6 +834,11 @@ function renderIndexStatus() {
   }
 }
 
+document.addEventListener("ui-language-changed", () => {
+  $("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
+  renderIndexStatus(); render(); if (graph.visible) graph.render();
+  if (state.statsOpen) refreshStats();
+});
 render();
 
 tauri.path.homeDir().then((home) => { state.home = home.replace(/[\\/]$/, ""); }).catch(() => {});
@@ -798,13 +851,14 @@ function debugSearch(query) {
   $query.value = query;
   queryChanged();
 }
-Promise.all([invoke("debug_search_options"), invoke("debug_query")]).then(([options, query]) => {
+Promise.all([invoke("debug_search_options"), invoke("debug_query"), I18n.ready]).then(([options, query]) => {
   debugOptions = options;
   debugSearch(query);
 });
 tauri.event.listen("debug-query", ({ payload }) => debugSearch(payload));   // after setup's first index
 
 async function completeDebugSearch() {
+  debugPending = false;
   if (debugOptions.loadAll) {
     const deadline = Date.now() + 60000;
     const record = () => debugPages.push({ loaded: state.strong.length + state.weaker.length,
@@ -832,6 +886,7 @@ async function completeDebugSearch() {
     graph.debugFirst = first;
     if (Date.now() >= deadline) state.error = "Graph smoke timed out";
   }
+  if (debugOptions.features) await exerciseUiFeatures();
   report();
 }
 
@@ -843,6 +898,8 @@ function report() {
     invoke("debug_report", {
       report: {
         query: $query.value,
+        features: featureReport,
+        language: I18n.language,
         graph: debugOptions.graph ? { ...graph.debug(), first: graph.debugFirst } : null,
         appearance: { panelRadius: getComputedStyle(document.querySelector(".panel")).borderRadius,
           bodyBackground: getComputedStyle(document.body).backgroundColor },
@@ -871,4 +928,54 @@ function report() {
       },
     }).catch(() => {});
   }, 1500);
+}
+
+// Isolated release smoke: actual WebView controls, real helpers and persisted settings.
+async function exerciseUiFeatures() {
+  const wait = async (predicate) => {
+    const deadline = Date.now() + 60000;
+    while (!predicate() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+    if (!predicate()) throw new Error("UI feature smoke timed out");
+  };
+  const language = async (value) => {
+    const select = document.querySelector(".language-select");
+    select.value = value; select.dispatchEvent(new Event("change", { bubbles: true }));
+    await wait(() => !select.disabled && I18n.language === value);
+  };
+  const snapshot = () => ({ lang: document.documentElement.lang, query: $query.value,
+    indexLabel: $("stats-toggle").textContent, graphLabel: $("graph-toggle").textContent,
+    action: $preview.querySelector(".find-similar")?.textContent, selected: selectedHit()?.path });
+  featureReport.initial = snapshot();
+  await language("en"); featureReport.english = snapshot();
+  await language("ru"); featureReport.russian = snapshot();
+  $("graph-toggle").click(); await wait(() => !graph.loading);
+  await wait(() => !!$("graph-preview").querySelector(".passage")?.textContent.includes("UIFEATURE742"));
+  featureReport.graph = graph.debug();
+  featureReport.graph.bounds = ["graph-scene", "graph-preview", "graph-detail"].map((id) => {
+    const node = id === "graph-detail" ? document.querySelector(".graph-detail") : $(id), rect = node.getBoundingClientRect();
+    return { id, x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom };
+  });
+  $("graph-similar").click(); await wait(() => state.phase === "similar" && !!state.page || !!state.error);
+  featureReport.similarFirst = { total: state.page?.total, loaded: state.strong.length, title: $("similar-title").textContent };
+  while (state.page?.hasMore && !state.pageError) {
+    $("load-more").click(); await wait(() => !state.loadingMore);
+  }
+  featureReport.similarAll = { total: state.page?.total, loaded: state.strong.length,
+    paths: state.strong.map((hit) => hit.path), error: state.pageError || state.error,
+    cosine: state.strong.map((hit) => hit.cosine), seed: state.related?.seed.path };
+  $preview.querySelector(".find-similar").click();
+  await wait(() => !!state.page && state.page.cursor !== `related-${state.generation - 1}`);
+  featureReport.fromResult = { seed: state.related?.seed.path, selected: selectedHit()?.path, total: state.page?.total };
+  $("similar-back").click();
+  await wait(() => state.finalGeneration === state.generation && state.phase !== "similar");
+  featureReport.back = snapshot();
+  // Re-query the image fixture by its unique filename, then use the same graph button.
+  $query.value = "UIFEATURE742-preview"; queryChanged();
+  await wait(() => state.finalGeneration === state.generation);
+  $("graph-toggle").click(); await wait(() => !graph.loading);
+  await wait(() => !!$("graph-preview").querySelector("img")?.naturalWidth);
+  featureReport.image = graph.debug(); graph.close();
+  await language("en"); featureReport.englishAgain = snapshot();
+  await language("ru");
+  featureReport.final = snapshot();
 }

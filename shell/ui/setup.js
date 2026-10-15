@@ -18,6 +18,7 @@ let applying = false;
 let info = { offered: [], chosen: [], hotkey: "", model: { state: "checking" }, auto: false };
 
 async function start() {
+  await I18n.ready;
   info = await invoke("setup_info");
   // The usual folders, then any chosen before (Choose Folders… after setup). On a first launch they start checked,
   // all but Downloads (much of what lands there is passing through).
@@ -50,7 +51,7 @@ async function start() {
 function render() {
   PAGES.forEach((name, index) => { $(name).hidden = index !== page; });
   $("back").hidden = page === 0;
-  $("next").textContent = page === PAGES.length - 1 ? "Start" : "Continue";
+  $("next").textContent = page === PAGES.length - 1 ? t("Start") : t("Continue");
   $("next").disabled = page === 1 && !chosenFolders().length && !chosenCodeFolders().length;
 }
 
@@ -61,7 +62,7 @@ $("next").addEventListener("click", async () => {
     return;
   }
   $("next").disabled = true;
-  $("next").textContent = "Applying…";
+  $("next").textContent = t("Applying…");
   $("back").disabled = true;
   applying = true;
   ++estimateGeneration;
@@ -71,6 +72,7 @@ $("next").addEventListener("click", async () => {
         reconfigure: !!info.debugReconfigure,
         folders: [...folders].map(([path, folder]) => ({ path, checked: folder.checked,
           counts: folder.counts.textContent, estimate: folder.estimate || null })),
+        language: I18n.language, startLabel: $("next").textContent,
         codeRoots: chosenCodeFolders(), device: $("device").value,
       } });
     }
@@ -108,6 +110,13 @@ async function clickThrough() {
     $("next").click();
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
+  if (info.debugUiFeatures) {
+    const select = document.querySelector(".language-select");
+    select.value = "ru"; select.dispatchEvent(new Event("change", { bubbles: true }));
+    const deadline = Date.now() + 10000;
+    while ((I18n.language !== "ru" || select.disabled) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+    if (I18n.language !== "ru") throw new Error("Setup language switch failed");
+  }
   // Exercise the same select and finish_setup path as a person using the installed WebView.
   if (info.debugDevice) {
     if ($("device").disabled) throw new Error("A launch override prevents the device selection smoke test");
@@ -141,7 +150,7 @@ function addFolder(path, checked, forCode = false) {
   text.append(name, where);
   const counts = document.createElement("div");
   counts.className = "counts";
-  counts.textContent = forCode ? "Search with code:" : "Counting…";
+  counts.textContent = forCode ? t("Search with code:") : t("Counting…");
   row.append(box, text, counts);
   $(forCode ? "code-folder-list" : "folder-list").append(row);
   collection.set(path, { checked, row, counts });
@@ -157,7 +166,7 @@ function chosenCodeFolders() {
 
 async function estimate() {
   if (applying) return;
-  // A new request cancels the previous helper. Include its unfinished rows so none stay at "Counting…".
+  // A new request cancels the previous helper. Include its unfinished rows so none stay at t("Counting…").
   const paths = [...folders].filter(([, folder]) => !folder.estimate).map(([path]) => path);
   if (!paths.length) return;
   const generation = ++estimateGeneration;
@@ -166,7 +175,7 @@ async function estimate() {
     answers = await invoke("estimate", { folders: paths });
   } catch (error) {
     if (generation !== estimateGeneration || applying) return;
-    for (const path of paths) folders.get(path).counts.textContent = "Couldn't read folder";
+    for (const path of paths) folders.get(path).counts.textContent = t("Couldn't read folder");
     $("model").textContent = String(error);
     return;
   }
@@ -174,23 +183,23 @@ async function estimate() {
   for (const path of paths) {
     const answer = answers.find((item) => item.requestedFolder === path);
     folders.get(path).estimate = answer;
-    folders.get(path).counts.textContent = answer ? countsText(answer) : "Couldn't match this folder's estimate";
+    folders.get(path).counts.textContent = answer ? countsText(answer) : t("Couldn't match this folder's estimate");
   }
 }
 
 /// "1,204 pictures · 37 PDFs · 12 documents · 3 videos"
 function countsText(answer) {
-  if (answer.readable === false) return "Can't read it";
+  if (answer.readable === false) return t("Can't read it");
   const files = answer.files || {};
-  const part = (count, one, many) => (count ? `${count.toLocaleString()} ${count === 1 ? one : many}` : null);
+  const part = (count, key) => count ? t(key, { count: count.toLocaleString(I18n.locale()) }) : null;
   const parts = [
-    part((files.image || 0) + (files.screenshot || 0), "picture", "pictures"),
-    part(files.pdf, "PDF", "PDFs"),
-    part(files.doc, "document", "documents"),
-    part(files.audio, "recording", "recordings"),
-    part(files.video, "video", "videos"),
+    part((files.image || 0) + (files.screenshot || 0), "{count} pictures"),
+    part(files.pdf, "{count} PDFs"),
+    part(files.doc, "{count} documents"),
+    part(files.audio, "{count} recordings"),
+    part(files.video, "{count} videos"),
   ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "Nothing DigUp searches in it";
+  return parts.length ? parts.join(" · ") : t("Nothing DigUp searches in it");
 }
 
 $("add-folder").addEventListener("click", async () => {
@@ -217,13 +226,13 @@ $("add-code-folder").addEventListener("click", async () => {
 
 function showDevice() {
   const descriptions = {
-    auto: "Uses an available GPU and falls back to CPU if it cannot start.",
-    cpu: "Uses the processor. No compatible graphics driver is needed.",
-    gpu: "Requires a compatible GPU. If it cannot start, choose Auto or CPU.",
+    auto: t("Uses an available GPU and falls back to CPU if it cannot start."),
+    cpu: t("Uses the processor. No compatible graphics driver is needed."),
+    gpu: t("Requires a compatible GPU. If it cannot start, choose Auto or CPU."),
   };
   $("device-help").textContent = info.deviceOverridden
-    ? "The processing device is fixed for this launch. Restart without the device override to change it."
-    : `${descriptions[$("device").value]} Changing this restarts processing and keeps your index.`;
+    ? t("The processing device is fixed for this launch. Restart without the device override to change it.")
+    : descriptions[$("device").value] + t(" Changing this restarts processing and keeps your index.");
 }
 
 $("device").addEventListener("change", showDevice);
@@ -237,23 +246,24 @@ function showKeys(hotkey) {
     return cap;
   }));
   $("reveal-key").textContent = isMac ? "⌘↩" : "Ctrl+↩";
-  $("reveal-text").textContent = isMac ? "shows it in Finder" : isWindows ? "shows it in Explorer" : "shows it in its folder";
+  $("reveal-text").textContent = isMac ? t("shows it in Finder") : isWindows ? t("shows it in Explorer") : t("shows it in its folder");
 }
 
 function showModel(model) {
-  const megabytes = (bytes) => Math.round(bytes / 1e6).toLocaleString();
+  info.model = model;
+  const megabytes = (bytes) => Math.round(bytes / 1e6).toLocaleString(I18n.locale());
   const lines = {
-    checking: "Checking the model…",
-    waiting: "Waiting for the network to download the model",
-    ready: "Model ready",
-    failed: `The model couldn't download: ${model.message || "unknown error"}`,
+    checking: t("Checking the model…"),
+    waiting: t("Waiting for the network to download the model"),
+    ready: t("Model ready"),
+    failed: t("The model couldn't download: {error}", { error: model.message || t("unknown error") }),
   };
   let text = lines[model.state] || "";
   if (model.state === "downloading") {
     text = model.total
-      ? `Downloading the model · ${Math.floor((100 * model.bytes) / model.total)}% of ${megabytes(model.total)} MB`
-      : "Downloading the model…";
-    if (model.problem) text += ` (${model.problem}, trying again)`;
+      ? t("Downloading the model · {percent}% of {size} MB", { percent: Math.floor((100 * model.bytes) / model.total), size: megabytes(model.total) })
+      : t("Downloading the model…");
+    if (model.problem) text += t(" ({problem}, trying again)", { problem: model.problem });
   }
   $("model").textContent = text;
   $("retry-model").hidden = model.state !== "failed";
@@ -263,4 +273,9 @@ $("retry-model").addEventListener("click", () => invoke("retry_model").catch((er
   $("model").textContent = String(error);
 }));
 
+document.addEventListener("ui-language-changed", () => {
+  render(); showModel(info.model); showDevice(); showKeys(info.hotkey);
+  for (const folder of folders.values()) folder.counts.textContent = folder.estimate ? countsText(folder.estimate) : t("Counting…");
+  for (const folder of codeFolders.values()) folder.counts.textContent = t("Search with code:");
+});
 start().catch((error) => { $("model").textContent = String(error); });

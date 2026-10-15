@@ -36,8 +36,8 @@ class GraphModel {
 }
 
 class GraphView {
-  constructor({ ask, invoke, nameOf, onVisibility }) {
-    Object.assign(this, { ask, invoke, nameOf, onVisibility });
+  constructor({ ask, invoke, nameOf, previewFor, onSimilar, onVisibility }) {
+    Object.assign(this, { ask, invoke, nameOf, previewFor, onSimilar, onVisibility });
     this.model = new GraphModel(); this.generation = 0; this.visible = false; this.loading = false;
     this.pages = new Map(); this.anchors = new Map(); this.selected = null; this.error = null;
     this.minimum = 0.55; this.zoom = 1; this.center = { x: 0, y: 0 }; this.trace = [];
@@ -47,6 +47,7 @@ class GraphView {
     this.el("graph-expand").onclick = () => this.expand();
     this.el("graph-start-here").onclick = () => this.show(this.model.nodes.get(this.selected), this.code);
     this.el("graph-refresh").onclick = () => this.show(this.rootSeed, this.code);
+    this.el("graph-similar").onclick = () => this.onSimilar(this.model.nodes.get(this.selected), this.code);
     this.el("graph-open").onclick = () => this.open("open_path");
     this.el("graph-reveal").onclick = () => this.open("reveal");
     this.el("graph-minimum").onchange = () => { this.minimum = Number(this.el("graph-minimum").value); this.show(this.rootSeed, this.code); };
@@ -71,7 +72,7 @@ class GraphView {
       }
     });
   }
-  close() { this.generation++; this.visible = false; this.loading = false; this.onVisibility(false); }
+  close() { this.el("graph-preview").querySelectorAll("audio,video").forEach((player) => player.pause()); this.generation++; this.visible = false; this.loading = false; this.onVisibility(false); }
   async show(seed, code) {
     if (!seed) return;
     this.generation++; this.model = new GraphModel(); this.pages.clear(); this.anchors.clear(); this.trace = [];
@@ -107,37 +108,43 @@ class GraphView {
   render() {
     this.el("graph-view").hidden = !this.visible;
     const node = this.model.nodes.get(this.selected), page = this.pages.get(this.selected);
-    this.el("graph-status").textContent = this.error || (this.loading ? "Finding related files…" :
-      `${this.model.nodes.size} files · ${this.model.edges.size} similarity links${this.model.nodes.size >= this.model.cap ? " · View limit reached. Use Start here to explore further." : ""}`);
-    this.el("graph-title").textContent = node ? this.nameOf(node.path) : "Related files";
+    this.el("graph-status").textContent = (this.error ? t(this.error) : null) || (this.loading ? t("Finding related files…") :
+      t("{files} files · {links} similarity links", { files: this.model.nodes.size, links: this.model.edges.size }) + (this.model.nodes.size >= this.model.cap ? t(" · View limit reached. Use Start here to explore further.") : ""));
+    this.el("graph-title").textContent = node ? this.nameOf(node.path) : t("Related files");
     this.el("graph-path").textContent = node?.path ?? "";
-    this.el("graph-basis").textContent = page ? (page.basis === "matched_fragment" ? "Based on the matched fragment" : "Based on the file’s average meaning") + ` · ${page.total} indexed neighbors above the threshold` : "Select Expand links to explore this file";
-    this.el("graph-expand").textContent = page ? "More links" : "Expand links";
+    this.el("graph-basis").textContent = page ? (page.basis === "matched_fragment" ? t("Based on the matched fragment") : t("Based on the file’s average meaning")) + t(" · {count} indexed neighbors above the threshold", { count: page.total }) : t("Select Expand links to explore this file");
+    this.el("graph-expand").textContent = page ? t("More links") : t("Expand links");
     for (const id of ["graph-refresh", "graph-minimum", "graph-start-here"]) this.el(id).disabled = this.loading;
     this.el("graph-expand").disabled = this.loading || !node || this.model.nodes.size >= this.model.cap || (page && !page.has_more);
+    this.el("graph-similar").disabled = !node;
+    const previewKey = JSON.stringify([node?.path, node?.segment_id, this.code, I18n.language]);
+    if (previewKey !== this.previewKey) {
+      this.previewKey = previewKey;
+      this.el("graph-preview").replaceChildren(...(node ? [this.previewFor(node, this.code)] : []));
+    }
     this.el("graph-open").disabled = !node; this.el("graph-reveal").disabled = !node;
     const list = this.el("graph-neighbors"); list.replaceChildren();
     for (const edge of [...this.model.edges.values()].filter((e) => e.from === this.selected || e.to === this.selected).sort((a, b) => b.cosine - a.cosine)) {
       const path = edge.from === this.selected ? edge.to : edge.from;
       const button = document.createElement("button"); button.type = "button";
-      button.textContent = `${this.nameOf(path)} · ${edge.cosine.toFixed(3)} similarity`; button.title = path;
+      button.textContent = `${this.nameOf(path)} · ${t("{value} similarity", { value: edge.cosine.toFixed(3) })}`; button.title = path;
       button.onclick = () => this.select(path); list.append(button);
     }
-    if (!list.children.length && !this.loading) { const text = document.createElement("p"); text.textContent = "No links at this threshold. Try a lower minimum similarity."; list.append(text); }
+    if (!list.children.length && !this.loading) { const text = document.createElement("p"); text.textContent = t("No links at this threshold. Try a lower minimum similarity."); list.append(text); }
     this.draw();
   }
   draw() {
     const svg = this.svg, ns = "http://www.w3.org/2000/svg";
     const create = (tag, attributes, text) => { const node = document.createElementNS(ns, tag); for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value); if (text !== undefined) node.textContent = text; return node; };
     svg.setAttribute("viewBox", `${this.center.x - 360 / this.zoom} ${this.center.y - 125 / this.zoom} ${720 / this.zoom} ${250 / this.zoom}`);
-    svg.replaceChildren(create("title", {}, "Local file similarity graph. Select a file, expand its links, or pan the background."));
+    svg.replaceChildren(create("title", {}, t("Local file similarity graph. Select a file, expand its links, or pan the background.")));
     for (const edge of this.model.edges.values()) {
       const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to);
       const dx = to.x - from.x, dy = to.y - from.y;
       const end = Math.min(dx ? 72 / Math.abs(dx) : Infinity, dy ? 24 / Math.abs(dy) : Infinity);
       const line = create("line", { x1: from.x + dx * end, y1: from.y + dy * end,
         x2: to.x - dx * end, y2: to.y - dy * end, class: "graph-edge", "stroke-width": 1 + Math.max(0, edge.cosine) * 2 });
-      line.append(create("title", {}, `Similarity ${edge.cosine.toFixed(3)}`)); svg.append(line);
+      line.append(create("title", {}, t("Similarity {value}", { value: edge.cosine.toFixed(3) }))); svg.append(line);
     }
     for (const node of this.model.nodes.values()) {
       const group = create("g", { transform: `translate(${node.x},${node.y})`, class: "graph-node" + (node.path === this.selected ? " selected" : ""),
@@ -146,7 +153,7 @@ class GraphView {
       const name = this.nameOf(node.path), letters = [...name];
       const short = letters.length > 16 ? letters.slice(0, 8).join("") + "…" + letters.slice(-7).join("") : name;
       group.append(create("text", { x: 0, y: -2, "text-anchor": "middle", class: "graph-node-name" }, short),
-        create("text", { x: 0, y: 14, "text-anchor": "middle", class: "graph-node-kind" }, node.kind));
+        create("text", { x: 0, y: 14, "text-anchor": "middle", class: "graph-node-kind" }, t(({ image: "Image", screenshot: "Screenshot", doc: "Document", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)));
       group.onclick = () => this.select(node.path);
       group.onkeydown = (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); this.select(node.path); } };
       svg.append(group);
@@ -158,7 +165,7 @@ class GraphView {
     clone.setAttribute("style", `background:${getComputedStyle(document.documentElement).getPropertyValue("--surface").trim()}`);
     const originals = this.svg.querySelectorAll("*"), copies = clone.querySelectorAll("*");
     originals.forEach((node, i) => { const css = getComputedStyle(node); for (const key of ["fill", "stroke", "font-size", "font-family", "font-weight"]) copies[i].setAttribute(key, css.getPropertyValue(key)); });
-    return { visible: this.visible, loading: this.loading, error: this.error, files: this.model.nodes.size, links: this.model.edges.size,
+    return { visible: this.visible, preview: { text: this.el("graph-preview").textContent, tag: this.el("graph-preview").querySelector("img,video,audio,.passage")?.tagName, loaded: !!this.el("graph-preview").querySelector("img")?.naturalWidth }, loading: this.loading, error: this.error, files: this.model.nodes.size, links: this.model.edges.size,
       nodes: [...this.model.nodes.values()], edges: [...this.model.edges.values()], trace: this.trace,
       drawnNodes: this.svg.querySelectorAll(".graph-node").length, drawnLinks: this.svg.querySelectorAll(".graph-edge").length,
       viewport: { width: this.svg.clientWidth, height: this.svg.clientHeight, windowHeight: window.innerHeight },

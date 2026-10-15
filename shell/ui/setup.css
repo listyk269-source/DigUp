@@ -119,3 +119,8 @@ footer {
 }
 .device-option select:focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; }
 .device-option .note { font-size: 12px; margin: 8px 0 0; line-height: 1.45; }
+
+.language-bar { display: flex; flex: none; justify-content: flex-end; gap: 12px; align-items: center; padding: 10px 24px 0; font-size: 12px; }
+.language-select { font: inherit; padding: 5px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.language-select:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+::selection { background: var(--accent); color: white; }

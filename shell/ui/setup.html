@@ -2,82 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Set Up DigUp</title>
+  <title data-i18n="Set Up DigUp">Set Up DigUp</title>
   <link rel="stylesheet" href="setup.css">
 </head>
 <body>
+  <div class="language-bar"><select class="language-select" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="ru">Русский</option></select><span id="language-error" role="alert"></span></div>
   <main>
     <section class="page" id="welcome">
       <div class="hero">
         <img class="icon" src="icon.png" alt="">
         <h1>DigUp</h1>
-        <p class="tagline">Describe it. Dig it up.</p>
+        <p class="tagline" data-i18n="Describe it. Dig it up.">Describe it. Dig it up.</p>
       </div>
       <ul class="features">
-        <li><span class="tile"><svg viewBox="0 0 24 24"><path d="M4 5 H20 V19 H4 Z M4 16 L9 11 L13 15 L16 12 L20 16"/></svg></span><div><b>Screenshots and photos</b>
-          <span>“that payment error”, “the zebra”, “whiteboard from Tuesday”</span></div></li>
-        <li><span class="tile"><svg viewBox="0 0 24 24"><path d="M6 3 H14 L19 8 V21 H6 Z M14 3 V8 H19 M9 12 H16 M9 15 H16 M9 18 H13"/></svg></span><div><b>PDFs and documents</b>
-          <span>“the clause about pets in the lease”, “flight receipt”</span></div></li>
-        <li><span class="tile"><svg viewBox="0 0 24 24"><path d="M3 12 H5 M7 8 V16 M10 5 V19 M13 9 V15 M16 6 V18 M19 10 V14 M21 12 H22"/></svg></span><div><b>Moments inside audio and video</b>
-          <span>“where they talk about sleep”, “the part with the drums”</span></div></li>
+        <li><span class="tile"><svg viewBox="0 0 24 24"><path d="M4 5 H20 V19 H4 Z M4 16 L9 11 L13 15 L16 12 L20 16"/></svg></span><div><b data-i18n="Screenshots and photos">Screenshots and photos</b>
+          <span data-i18n="“that payment error”, “the zebra”, “whiteboard from Tuesday”">“that payment error”, “the zebra”, “whiteboard from Tuesday”</span></div></li>
+        <li><span class="tile"><svg viewBox="0 0 24 24"><path d="M6 3 H14 L19 8 V21 H6 Z M14 3 V8 H19 M9 12 H16 M9 15 H16 M9 18 H13"/></svg></span><div><b data-i18n="PDFs and documents">PDFs and documents</b>
+          <span data-i18n="“the clause about pets in the lease”, “flight receipt”">“the clause about pets in the lease”, “flight receipt”</span></div></li>
+        <li><span class="tile"><svg viewBox="0 0 24 24"><path d="M3 12 H5 M7 8 V16 M10 5 V19 M13 9 V15 M16 6 V18 M19 10 V14 M21 12 H22"/></svg></span><div><b data-i18n="Moments inside audio and video">Moments inside audio and video</b>
+          <span data-i18n="“where they talk about sleep”, “the part with the drums”">“where they talk about sleep”, “the part with the drums”</span></div></li>
       </ul>
-      <p class="privacy">Everything is indexed and searched on this computer. DigUp downloads its AI model (865 MB)
+      <p class="privacy" data-i18n="Everything is indexed and searched on this computer. DigUp downloads its AI model (865 MB) once; after that it works offline, and nothing you index ever leaves your computer.">Everything is indexed and searched on this computer. DigUp downloads its AI model (865 MB)
         once; after that it works offline, and nothing you index ever leaves your computer.</p>
     </section>
 
     <section class="page" id="folders" hidden>
-      <h2>What should DigUp search?</h2>
-      <p class="subtitle">Pick folders. You can change this anytime from the tray: Choose Folders…</p>
+      <h2 data-i18n="What should DigUp search?">What should DigUp search?</h2>
+      <p class="subtitle" data-i18n="Pick folders. You can change this anytime from the tray: Choose Folders…">Pick folders. You can change this anytime from the tray: Choose Folders…</p>
       <div class="folders" id="folder-list"></div>
-      <button class="link" id="add-folder">Add Folder…</button>
-      <h3>Source code (optional)</h3>
+      <button class="link" id="add-folder" data-i18n="Add Folder…">Add Folder…</button>
+      <h3 data-i18n="Source code (optional)">Source code (optional)</h3>
       <div class="folders" id="code-folder-list"></div>
-      <button class="link" id="add-code-folder">Add Code Folder…</button>
-      <p class="note">Search these folders with <b>code:</b> followed by your query. Code is read as text and never executed.</p>
-      <p class="note">DigUp only reads files: it never changes, moves or uploads them.</p>
+      <button class="link" id="add-code-folder" data-i18n="Add Code Folder…">Add Code Folder…</button>
+      <p class="note" data-i18n="Search these folders with code: followed by your query. Code is read as text and never executed.">Search these folders with code: followed by your query. Code is read as text and never executed.</p>
+      <p class="note" data-i18n="DigUp only reads files: it never changes, moves or uploads them.">DigUp only reads files: it never changes, moves or uploads them.</p>
     </section>
 
     <section class="page" id="shortcut" hidden>
-      <h2>Search from anywhere</h2>
-      <p class="subtitle">Press the shortcut in any app to open the search panel, and describe what you remember.</p>
+      <h2 data-i18n="Search from anywhere">Search from anywhere</h2>
+      <p class="subtitle" data-i18n="Press the shortcut in any app to open the search panel, and describe what you remember.">Press the shortcut in any app to open the search panel, and describe what you remember.</p>
       <div class="keys" id="keys"></div>
-      <h3>In the search panel</h3>
+      <h3 data-i18n="In the search panel">In the search panel</h3>
       <dl class="panel-keys">
-        <dt>↩</dt><dd>opens the file in its default app</dd>
-        <dt id="reveal-key">Ctrl+↩</dt><dd id="reveal-text">shows it in its folder</dd>
-        <dt>↑ ↓</dt><dd>move between results</dd>
-        <dt>Esc</dt><dd>closes the panel</dd>
+        <dt>↩</dt><dd data-i18n="opens the file in its default app">opens the file in its default app</dd>
+        <dt id="reveal-key">Ctrl+↩</dt><dd id="reveal-text" data-i18n="shows it in its folder">shows it in its folder</dd>
+        <dt>↑ ↓</dt><dd data-i18n="move between results">move between results</dd>
+        <dt>Esc</dt><dd data-i18n="closes the panel">closes the panel</dd>
       </dl>
     </section>
 
     <section class="page" id="ready" hidden>
       <div class="hero">
         <img class="icon" src="icon.png" alt="">
-        <h2>You're all set</h2>
+        <h2 data-i18n="You&#x27;re all set">You're all set</h2>
       </div>
-      <p class="subtitle centered" id="ready-text">The search panel will show indexing progress after you press Start.
+      <p class="subtitle centered" id="ready-text" data-i18n="The search panel will show indexing progress after you press Start. Files become searchable as they are indexed. Open the panel anytime from the tray or with your shortcut.">The search panel will show indexing progress after you press Start.
         Files become searchable as they are indexed. Open the panel anytime from the tray or with your shortcut.</p>
       <div class="device-option">
-        <label for="device">Processing device</label>
+        <label for="device" data-i18n="Processing device">Processing device</label>
         <select id="device" aria-describedby="device-help">
-          <option value="auto">Auto (recommended)</option>
+          <option value="auto" data-i18n="Auto (recommended)">Auto (recommended)</option>
           <option value="cpu">CPU</option>
           <option value="gpu">GPU</option>
         </select>
         <p class="note" id="device-help" aria-live="polite"></p>
       </div>
-      <label class="startup" id="startup-option" hidden><input type="checkbox" id="launch-at-login"> Start DigUp when I sign in to Windows</label>
+      <label class="startup" id="startup-option" hidden><input type="checkbox" id="launch-at-login"> <span data-i18n="Start DigUp when I sign in to Windows">Start DigUp when I sign in to Windows</span></label>
     </section>
   </main>
 
   <footer>
     <span class="model" id="model"></span>
-    <button id="retry-model" hidden>Retry download</button>
+    <button id="retry-model" hidden data-i18n="Retry download">Retry download</button>
     <span class="buttons">
-      <button id="back" hidden>Back</button>
-      <button class="primary" id="next">Continue</button>
+      <button id="back" hidden data-i18n="Back">Back</button>
+      <button class="primary" id="next" data-i18n="Continue">Continue</button>
     </span>
   </footer>
+  <script src="i18n.js"></script>
   <script src="setup.js"></script>
 </body>
 </html>

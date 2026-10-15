@@ -56,10 +56,9 @@ html, body {
   overflow: hidden;
 }
 
-/* Windows uses an opaque rectangular native window. Fill its corners as well as the panel,
-   so the desktop cannot show through a second rounded web surface inside the frame. */
+/* Windows clips the opaque surface once, with DWM or a DPI-scaled Windows 10 region. */
 html.platform-windows, html.platform-windows body { background: var(--surface); }
-.platform-windows .panel { border-radius: 0; }
+.platform-windows .panel { border-radius: 8px; border: 0; }
 
 /* The field */
 
@@ -178,7 +177,7 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .graph-node-name { fill: var(--text); font-size: 13px; font-weight: 600; }
 .graph-node-kind { fill: var(--secondary); font-size: 12px; }
 .graph-note { margin: 2px 0 8px; color: var(--secondary); font-size: 12px; line-height: 1.4; }
-.graph-detail { min-height: 120px; max-height: 190px; flex: 1 1 140px; overflow: auto; border-top: 1px solid var(--line); padding: 8px 0 12px; }
+.graph-detail { min-width: 0; min-height: 0; flex: 1; overflow: auto; border-top: 1px solid var(--line); padding: 8px 0 12px; }
 .graph-detail h3 { font-size: 14px; margin: 0; }
 #graph-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 3px 0; color: var(--secondary); font-size: 12px; }
 #graph-basis { margin: 4px 0 8px; font-size: 12px; color: var(--secondary); }
@@ -426,3 +425,23 @@ button:disabled { opacity: 0.6; cursor: wait; }
 
 .summary { color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .keys { color: var(--tertiary); white-space: pre; }
+
+/* Selected-file inspector: real preview and actions remain visible below the graph. */
+.graph-inspector { display: flex; gap: 14px; min-height: 155px; height: 200px; flex: 0 1 200px; border-top: 1px solid var(--line); }
+.graph-preview { width: 220px; min-width: 150px; overflow: auto; display: flex; padding: 10px 0; }
+.graph-preview .picture { width: 100%; min-height: 0; }
+.graph-preview .passage { overflow: auto; }
+.graph-preview img, .graph-preview video { max-height: 175px; }
+.graph-detail { border-top: 0; }
+.graph-controls { flex-wrap: wrap; }
+.graph-scene { min-height: 130px; }
+.buttons { flex-wrap: wrap; }
+.language-select { font: inherit; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 3px; max-width: 88px; }
+.language-select:focus-visible, select:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.language-error { margin: 0 18px; font-size: 12px; }
+.language-error:empty { display: none; }
+.similar-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 16px; border-top: 1px solid var(--line); }
+#similar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-unavailable { color: var(--secondary); line-height: 1.5; }
+html[lang="ru"] #query { font-size: 20px; }
+::selection { background: var(--selected); color: var(--text); }
