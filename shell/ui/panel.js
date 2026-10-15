@@ -75,7 +75,7 @@ const debugPages = [];
 // MARK: Searching
 
 function queryChanged() {
-  if (graph.visible) graph.close();
+  if (graph.visible || graph.loading) graph.close();
   state.related = null;
   const generation = ++state.generation;
   clearTimeout(state.timer);

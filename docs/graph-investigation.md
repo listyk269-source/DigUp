@@ -61,7 +61,8 @@ New operations use the existing scoped local helper protocol and Rust allowlist:
 Folder exclusions and the code/non-code index boundary still apply. Path and realpath scope checks
 precede file access. Related-count batches reload vectors once, and counts are refreshed after expansion.
 They describe the current index; a deleted file may remain counted until normal index reconciliation.
-Stale expansion/search responses cannot overwrite a newer view.
+Stale opening/expansion/search responses cannot overwrite a newer view. Opening marks the view busy
+before annotation I/O; closing or changing the main query cancels a pending opening.
 
 Filename search folds Unicode with NFKC/lowercase and dims nonmatches to opacity 0.25. Enter runs
 semantic highlighting on the current canvas, independently of the main search cursor. Its raw cosine

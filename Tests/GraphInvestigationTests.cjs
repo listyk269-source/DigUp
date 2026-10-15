@@ -44,3 +44,36 @@ test('timeline orders real dates, separates equal-date cards and preserves expli
   assert.deepEqual(layout.get('f0'),{x:-1000,y:140});
   for(let i=1;i<40;i++) for(let j=i+1;j<40;j++) { assert.ok(separated(layout.get('f'+i),layout.get('f'+j))); if(nodes[i].modified<nodes[j].modified) assert.ok(layout.get('f'+i).x<layout.get('f'+j).x); }
 });
+test('opening waits for annotation IO and only the newest seed becomes visible', async () => {
+  const { GraphView } = require('../shell/ui/graph.js');
+  let ready;
+  const view = Object.assign(Object.create(GraphView.prototype), {
+    generation: 0, searchGeneration: 0, countGeneration: 0,
+    annotationsReady: new Promise((resolve) => { ready = resolve; }),
+    pages: new Map(), anchors: new Map(), el: () => ({}),
+    onVisibility: () => {}, expand: async () => {},
+  });
+  const older = view.show({ path: 'Фото/old.jpg' }, false);
+  assert.equal(view.loading, true);
+  const newer = view.show({ path: 'Фото/new.jpg' }, false);
+  ready(); await Promise.all([older, newer]);
+  assert.equal(view.selected, 'Фото/new.jpg');
+  assert.equal(view.visible, true);
+  assert.deepEqual([...view.model.nodes.keys()], ['Фото/new.jpg']);
+});
+
+test('closing while annotations load prevents the delayed graph from reopening', async () => {
+  const { GraphView } = require('../shell/ui/graph.js');
+  let ready, reopened = false;
+  const view = Object.assign(Object.create(GraphView.prototype), {
+    generation: 0, countGeneration: 0, searchGeneration: 0,
+    annotationsReady: new Promise((resolve) => { ready = resolve; }),
+    stopInspectionMedia: () => {}, hideContext: () => {},
+    onVisibility: (visible) => { reopened ||= visible; },
+  });
+  const opening = view.show({ path: 'Фото/closed.jpg' }, false);
+  view.close(); ready(); await opening;
+  assert.equal(view.visible, false);
+  assert.equal(view.loading, false);
+  assert.equal(reopened, false);
+});

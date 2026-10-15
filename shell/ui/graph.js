@@ -206,10 +206,13 @@ class GraphView {
   close() { this.stopInspectionMedia(); this.countGeneration++; this.searchGeneration++; this.hideContext(); this.generation++; if (this.cameraFrame) cancelAnimationFrame(this.cameraFrame); this.cameraFrame = null; this.visible = false; this.loading = false; this.onVisibility(false); }
   async show(seed, code) {
     if (!seed) return;
+    const generation = ++this.generation;
+    this.loading = true;
     await this.annotationsReady;
+    if (generation !== this.generation) return;
     this.semanticMatches = null; this.semanticThreshold = null; this.searchBusy = false; this.searchGeneration++;
     this.omnibar = ""; this.el("graph-omnibar").value = ""; this.pathStart = null; this.el("graph-path-tools").hidden = true;
-    this.generation++; this.model = new GraphModel(120, this.investigation, code); this.pages.clear(); this.anchors.clear(); this.trace = [];
+    this.model = new GraphModel(120, this.investigation, code); this.pages.clear(); this.anchors.clear(); this.trace = [];
     this.selectedEdge = null; this.forcePositions = new Map(); this.pathResult = null; this.countGeneration++;
     this.error = null; this.loading = false; this.selected = seed.path; this.rootSeed = seed; this.code = code;
     this.anchors.set(seed.path, seed.segment_id); this.model.nodes.set(seed.path, { ...seed, x: 0, y: 0 });
@@ -448,4 +451,4 @@ class GraphView {
   }
 }
 if (typeof window !== "undefined") Object.assign(GraphView.prototype, GraphTools);
-if (typeof module !== "undefined") module.exports = { GraphModel, GRAPH_CARD, separated, graphBounds, graphCurve, curvePoint };
+if (typeof module !== "undefined") module.exports = { GraphView, GraphModel, GRAPH_CARD, separated, graphBounds, graphCurve, curvePoint };
