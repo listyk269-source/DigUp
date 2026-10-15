@@ -43,7 +43,7 @@ jobs:
           node-version: 22.22.0
       - name: Frontend model and localization tests
         run: |
-          node --test Tests/GraphModelTests.cjs Tests/I18nTests.cjs
+          node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/I18nTests.cjs
           if ($LASTEXITCODE) { throw 'Frontend tests failed' }
       - name: Install pinned Swift and Rust
         id: toolchains

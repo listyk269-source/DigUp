@@ -1,4 +1,5 @@
 "use strict";
+const GS = typeof module !== "undefined" ? require("./graph-state.js") : GraphState;
 
 const GRAPH_CARD = Object.freeze({ width: 244, height: 72, gapX: 76, gapY: 52 });
 const separated = (a, b, pad = true) => Math.abs(a.x - b.x) >= GRAPH_CARD.width + (pad ? GRAPH_CARD.gapX : 0)
@@ -7,7 +8,7 @@ const separated = (a, b, pad = true) => Math.abs(a.x - b.x) >= GRAPH_CARD.width 
 // Bounded force relaxation with radial anchors; existing nodes stay pinned between expansions.
 // Positions are topology, never a metric interpretation of cosine similarity.
 function settleGraph(nodes, edges, added) {
-  const all = [...nodes.values()], moving = all.filter((n) => added.has(n.path));
+  const all = [...nodes.values()], moving = all.filter((n) => added.has(n.path) && !Number.isFinite(n.fx));
   for (let tick = 0; tick < 40; tick++) {
     for (const node of moving) {
       let fx = (node.anchor.x - node.x) * 0.08, fy = (node.anchor.y - node.y) * 0.08;
@@ -28,7 +29,7 @@ function settleGraph(nodes, edges, added) {
     }
   }
   // Hard separation after relaxation. This also handles dense/cyclic neighborhoods deterministically.
-  const placed = all.filter((n) => !added.has(n.path));
+  const placed = all.filter((n) => !added.has(n.path) || Number.isFinite(n.fx));
   for (const node of moving) {
     if (placed.some((other) => !separated(node, other))) {
       for (let step = 0; step < 4000; step++) {
@@ -42,7 +43,15 @@ function settleGraph(nodes, edges, added) {
 }
 
 class GraphModel {
-  constructor(cap = 120) { this.cap = cap; this.nodes = new Map(); this.edges = new Map(); this.source = undefined; this.omitted = 0; }
+  constructor(cap = 120, investigation = new GS.InvestigationState(), code = false) {
+    this.cap = cap; this.nodes = new Map(); this.edges = new Map(); this.source = undefined; this.omitted = 0;
+    this.investigation = investigation; this.code = code;
+  }
+  applyAnnotation(node) {
+    const annotation = this.investigation.annotation(node, this.code);
+    node.hidden = !!annotation?.hidden; node.fx = annotation?.pinned?.x; node.fy = annotation?.pinned?.y;
+    if (Number.isFinite(node.fx) && Number.isFinite(node.fy)) { node.x = node.fx; node.y = node.fy; }
+  }
   merge(reply) {
     if (this.source !== undefined && this.source !== reply.vector_source) throw new Error("The index model changed. Start a new graph.");
     this.source = reply.vector_source;
@@ -50,6 +59,7 @@ class GraphModel {
     if (!root) throw new Error("This file has no indexed vectors yet.");
     const previousRoot = this.nodes.get(root.path) || { x: 0, y: 0, depth: 0 };
     this.nodes.set(root.path, { ...previousRoot, ...root, x: previousRoot.x, y: previousRoot.y });
+    this.applyAnnotation(this.nodes.get(root.path));
     const origin = this.nodes.get(root.path), added = new Set();
     reply.hits.forEach((hit, index) => {
       if (!Number.isFinite(hit.cosine) || hit.path === root.path) return;
@@ -62,8 +72,14 @@ class GraphModel {
         const position = this.nodes.get(hit.path);
         this.nodes.set(hit.path, { ...position, ...hit, x: position.x, y: position.y });
       }
-      const pair = [root.path, hit.path].sort(), key = JSON.stringify(pair), previous = this.edges.get(key);
-      if (!previous || previous.cosine < hit.cosine) this.edges.set(key, { from: pair[0], to: pair[1], cosine: hit.cosine });
+      this.applyAnnotation(this.nodes.get(hit.path));
+      const pair = [root.path, hit.path].sort(), key = GS.pairKey(...pair), previous = this.edges.get(key);
+      const evidence = GS.evidenceOf(hit), edge = { id: key, from: pair[0], to: pair[1], cosine: hit.cosine, similarityScore: hit.cosine,
+        evidence, evidenceFrom: root.path, anchorSegment: reply.basis === "matched_fragment" ? root.segment_id : null,
+        matchTypes: [...new Set(evidence.map((e) => e.type))], status: "unverified" };
+      edge.reviewKey = GS.reviewKey(edge, this.nodes, this.source, this.code);
+      edge.status = this.investigation.status(edge.reviewKey);
+      if (!previous || previous.cosine < hit.cosine || previous.reviewKey !== edge.reviewKey) this.edges.set(key, edge);
     });
     settleGraph(this.nodes, this.edges, added);
   }
@@ -86,7 +102,7 @@ function insideCard(point, node, padding = 10) {
   return Math.abs(point.x - node.x) < GRAPH_CARD.width / 2 + padding && Math.abs(point.y - node.y) < GRAPH_CARD.height / 2 + padding;
 }
 // Choose a smooth route around other cards; reserve a legible gap for the real cosine label.
-function graphCurve(from, to, nodes, labels = []) {
+function graphCurve(from, to, nodes, labels = [], labelWidth = 90) {
   const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy) || 1;
   const port = Math.min(dx ? (GRAPH_CARD.width / 2 + 7) / Math.abs(dx) : Infinity,
     dy ? (GRAPH_CARD.height / 2 + 7) / Math.abs(dy) : Infinity);
@@ -100,10 +116,11 @@ function graphCurve(from, to, nodes, labels = []) {
       c: { x: d.x - (d.x - a.x) / 3 + nx, y: d.y - (d.y - a.y) / 3 + ny }, d };
     let score = 0;
     for (let i = 1; i < 24; i++) score += others.filter((n) => insideCard(curvePoint(curve, i / 24), n)).length * 100;
-    for (const t of [.5, .38, .62, .26, .74]) {
+    for (const t of [.5]) {
       const point = curvePoint(curve, t);
-      const collides = all.some((n) => insideCard(point, n, 28)) || labels.some((l) => Math.abs(l.x - point.x) < 56 && Math.abs(l.y - point.y) < 26);
-      if (!collides) { curve.label = point; break; }
+      const collides = all.some((n) => Math.abs(point.x - n.x) < GRAPH_CARD.width / 2 + labelWidth / 2 + 8 && Math.abs(point.y - n.y) < GRAPH_CARD.height / 2 + 20)
+        || labels.some((l) => Math.abs(l.x - point.x) < (labelWidth + (l.width || 90)) / 2 + 8 && Math.abs(l.y - point.y) < 28);
+      if (!collides) { curve.label = { ...point, width: labelWidth }; break; }
     }
     if (!curve.label) { curve.label = curvePoint(curve, .5); score += 10000; }
     if (!best || score < best.score) best = { ...curve, score };
@@ -136,10 +153,10 @@ class GraphView {
     this.el("graph-zoom").oninput = () => this.setZoom(Number(this.el("graph-zoom").value) / 100);
     this.el("graph-center").onclick = () => { const node = this.model.nodes.get(this.selected); if (node) this.center = { x: node.x, y: node.y }; this.updateCamera(); };
     this.el("graph-inspector-toggle").onclick = () => {
-      this.inspectorOpen = !this.inspectorOpen; this.renderInspectorVisibility();
+      this.inspectorOpen = !this.inspectorOpen; if (!this.inspectorOpen) this.stopInspectionMedia(); this.renderInspectorVisibility();
     };
     this.svg.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.target.closest("[data-node]")) return;
+      if (event.button !== 0 || event.target.closest("[data-node],[data-edge]")) return;
       this.drag = { x: event.clientX, y: event.clientY, center: { ...this.center } }; this.svg.setPointerCapture(event.pointerId);
     });
     this.svg.addEventListener("pointermove", (event) => {
@@ -150,7 +167,7 @@ class GraphView {
     for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) this.svg.addEventListener(event, () => { this.drag = null; });
     this.svg.addEventListener("wheel", (event) => {
       event.preventDefault();
-      const rect = this.svg.getBoundingClientRect(), x = event.clientX - rect.x - rect.width / 2, y = event.clientY - rect.y - rect.height / 2;
+      const rect = this.svg.getBoundingClientRect(), x = event.clientX - rect.x - this.availableWidth() / 2, y = event.clientY - rect.y - rect.height / 2;
       const before = this.zoom, after = Math.min(2, Math.max(.2, before * Math.exp(-event.deltaY * .001)));
       this.center.x += x / before - x / after; this.center.y += y / before - y / after; this.setZoom(after);
     }, { passive: false });
@@ -171,6 +188,7 @@ class GraphView {
     this.mini.addEventListener("pointermove", (event) => { if (this.miniDrag) moveMini(event); });
     for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) this.mini.addEventListener(event, () => { this.miniDrag = false; });
     this.resizeObserver = new ResizeObserver(() => { if (this.visible) this.updateCamera(); }); this.resizeObserver.observe(this.svg);
+    this.initInvestigation();
   }
   scheduleCamera() {
     if (this.cameraFrame) return;
@@ -181,47 +199,59 @@ class GraphView {
     this.el("graph-inspector").hidden = !this.inspectorOpen;
     this.el("graph-inspector-toggle").setAttribute("aria-expanded", String(this.inspectorOpen));
     this.el("graph-inspector-toggle").classList.toggle("active", this.inspectorOpen);
+    this.el("graph-view").classList.toggle("has-inspector", this.inspectorOpen);
     this.scheduleCamera();
   }
 
-  close() { this.el("graph-preview").querySelectorAll("audio,video").forEach((player) => player.pause()); this.generation++; if (this.cameraFrame) cancelAnimationFrame(this.cameraFrame); this.cameraFrame = null; this.visible = false; this.loading = false; this.onVisibility(false); }
+  close() { this.stopInspectionMedia(); this.countGeneration++; this.searchGeneration++; this.hideContext(); this.generation++; if (this.cameraFrame) cancelAnimationFrame(this.cameraFrame); this.cameraFrame = null; this.visible = false; this.loading = false; this.onVisibility(false); }
   async show(seed, code) {
     if (!seed) return;
-    this.generation++; this.model = new GraphModel(); this.pages.clear(); this.anchors.clear(); this.trace = [];
+    await this.annotationsReady;
+    this.semanticMatches = null; this.semanticThreshold = null; this.searchBusy = false; this.searchGeneration++;
+    this.omnibar = ""; this.el("graph-omnibar").value = ""; this.pathStart = null; this.el("graph-path-tools").hidden = true;
+    this.generation++; this.model = new GraphModel(120, this.investigation, code); this.pages.clear(); this.anchors.clear(); this.trace = [];
+    this.selectedEdge = null; this.forcePositions = new Map(); this.pathResult = null; this.countGeneration++;
     this.error = null; this.loading = false; this.selected = seed.path; this.rootSeed = seed; this.code = code;
     this.anchors.set(seed.path, seed.segment_id); this.model.nodes.set(seed.path, { ...seed, x: 0, y: 0 });
+    this.model.applyAnnotation(this.model.nodes.get(seed.path));
     this.visible = true; this.zoom = .75; this.center = { x: 0, y: 0 }; this.onVisibility(true);
     return this.expand();
   }
-  async expand() {
+  async expand(all = false, modality = this.modality, target = this.selected) {
     if (this.loading || !this.visible) return;
-    const node = this.model.nodes.get(this.selected), generation = this.generation;
-    if (!node || (this.model.nodes.size >= this.model.cap && !this.pages.has(node.path))) return;
-    const page = this.pages.get(node.path);
+    const node = this.model.nodes.get(target), generation = this.generation;
+    if (!node || (this.model.nodes.size >= this.model.cap && !this.pages.has(this.pageKey(node.path, modality)))) return;
+    const pageKey = this.pageKey(node.path, modality), page = this.pages.get(pageKey);
     if (page && !page.has_more) return;
     this.loading = true; this.error = null; this.render();
     try {
       const reply = await this.ask({ op: "related_files", path: node.path, code: this.code,
         segment: this.anchors.has(node.path) ? this.anchors.get(node.path) : node.segment_id,
-        offset: page?.next_offset ?? 0, limit: 6, minimum_cosine: this.minimum });
+        offset: page?.next_offset ?? 0, limit: all ? 40 : 6, minimum_cosine: this.minimum,
+        ...(modality === "all" ? {} : { match_types: [modality] }) });
       if (generation !== this.generation || !this.visible) return;
       if (reply.ok === false) throw new Error(reply.error);
-      this.model.merge(reply); this.pages.set(node.path, reply);
+      if (this.layout === "timeline") this.restoreForce();
+      this.model.merge(reply); this.pages.set(pageKey, reply);
+      this.forcePositions = new Map([...this.model.nodes].map(([path, n]) => [path, { x: n.x, y: n.y }]));
+      this.applyLayout();
       this.anchors.set(node.path, reply.basis === "file_mean" ? undefined : reply.seed.segment_id);
       this.trace.push({ files: this.model.nodes.size, links: this.model.edges.size, total: reply.total, basis: reply.basis });
     } catch (error) { if (generation === this.generation) this.error = String(error.message || error); }
     finally { if (generation === this.generation) { this.loading = false; this.render(); } }
+    if (all && !this.error && this.pages.get(pageKey)?.has_more && this.model.nodes.size < this.model.cap && generation === this.generation && this.visible) return this.expand(true, modality, target);
+    if (generation === this.generation && this.visible) this.refreshCounts();
   }
-  select(path) { if (!this.model.nodes.has(path)) return; this.selected = path; this.inspectorOpen = true; this.render(); }
+  select(path) { if (!this.model.nodes.has(path) || this.model.nodes.get(path).hidden) return; this.stopInspectionMedia(); this.selectedEdge = null; this.selected = path; this.inspectorOpen = true; this.render(); }
   open(command) {
     const node = this.model.nodes.get(this.selected);
     if (node) this.invoke(command, { path: node.path }).catch((error) => { this.error = String(error); this.render(); });
   }
   render() {
     this.el("graph-view").hidden = !this.visible;
-    const node = this.model.nodes.get(this.selected), page = this.pages.get(this.selected);
+    const node = this.model.nodes.get(this.selected), page = this.pages.get(this.pageKey(this.selected));
     this.el("graph-status").textContent = (this.error ? t(this.error) : null) || (this.loading ? t("Finding related files…") :
-      t("{files} files · {links} similarity links", { files: this.model.nodes.size, links: this.model.edges.size }) + (this.model.nodes.size >= this.model.cap ? t(" · View limit reached. Use Start here to explore further.") : ""));
+      t("{files} files · {links} similarity links", { files: [...this.model.nodes.values()].filter((n) => !n.hidden).length, links: GS.visibleEdges(this.model, this).length }) + (this.model.nodes.size >= this.model.cap ? t(" · View limit reached. Use Start here to explore further.") : ""));
     this.el("graph-title").textContent = node ? this.nameOf(node.path) : t("Related files");
     this.el("graph-path").textContent = node?.path ?? "";
     this.el("graph-basis").textContent = page ? (page.basis === "matched_fragment" ? t("Based on the matched fragment") : t("Based on the file’s average meaning")) + t(" · {count} indexed neighbors above the threshold", { count: page.total }) : t("Select Expand links to explore this file");
@@ -236,14 +266,16 @@ class GraphView {
     }
     this.el("graph-open").disabled = !node; this.el("graph-reveal").disabled = !node;
     const list = this.el("graph-neighbors"); list.replaceChildren();
-    for (const edge of [...this.model.edges.values()].filter((e) => e.from === this.selected || e.to === this.selected).sort((a, b) => b.cosine - a.cosine)) {
+    for (const edge of GS.visibleEdges(this.model, this).filter((e) => e.from === this.selected || e.to === this.selected).sort((a, b) => b.cosine - a.cosine)) {
       const path = edge.from === this.selected ? edge.to : edge.from;
       const button = document.createElement("button"); button.type = "button";
       button.textContent = `${this.nameOf(path)} · ${t("{value} similarity", { value: edge.cosine.toFixed(3) })}`; button.title = path;
       button.onclick = () => this.select(path); list.append(button);
     }
     if (!list.children.length && !this.loading) { const text = document.createElement("p"); text.textContent = t("No links at this threshold. Try a lower minimum similarity."); list.append(text); }
+    this.el("graph-neighbor-count").textContent = String(list.querySelectorAll("button").length);
     this.draw();
+    this.renderInvestigation();
   }
 
   queueThumbnail(hit, image) {
@@ -272,7 +304,7 @@ class GraphView {
   }
   updateCamera() {
     const width = Math.max(1, this.svg.clientWidth), height = Math.max(1, this.svg.clientHeight);
-    this.camera = { x: this.center.x - width / (2 * this.zoom), y: this.center.y - height / (2 * this.zoom), width: width / this.zoom, height: height / this.zoom };
+    this.camera = { x: this.center.x - this.availableWidth() / (2 * this.zoom), y: this.center.y - height / (2 * this.zoom), width: width / this.zoom, height: height / this.zoom };
     this.svg.setAttribute("viewBox", `${this.camera.x} ${this.camera.y} ${this.camera.width} ${this.camera.height}`);
     for (const node of this.svg.querySelectorAll(".graph-backdrop")) {
       for (const [name, value] of Object.entries(this.camera)) node.setAttribute(name, value);
@@ -284,6 +316,7 @@ class GraphView {
   }
   draw() {
     const ns = "http://www.w3.org/2000/svg", svg = this.svg;
+    const focus = document.activeElement?.closest?.("[data-node],[data-edge]"), focusPath = focus?.dataset.path, focusEdge = focus?.dataset.edge;
     const create = (tag, attributes = {}, text) => {
       const node = document.createElementNS(ns, tag);
       for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
@@ -303,24 +336,41 @@ class GraphView {
     }
     svg.replaceChildren(create("title", {}, t("Local file similarity graph. Select a file, expand its links, or pan the background.")), defs,
       create("rect", { class: "graph-backdrop", fill: "#202429" }), create("rect", { class: "graph-backdrop", fill: "url(#graph-grid)" }));
-    const labels = [], nodes = [...this.model.nodes.values()]; this.routes = [];
+    const labels = [], nodes = [...this.model.nodes.values()].filter((n) => !n.hidden), edges = GS.visibleEdges(this.model, this);
+    const geometryKey = JSON.stringify([nodes.map((n) => [n.path, n.x, n.y]), edges.map((e) => [e.id, e.matchTypes.length])]);
+    const cachedRoutes = this.routeCache?.key === geometryKey ? this.routeCache.curves : new Map();
+    this.routeCache = { key: geometryKey, curves: cachedRoutes };
+    this.routes = [];
     let edgeIndex = 0;
-    for (const edge of this.model.edges.values()) {
-      const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to), curve = graphCurve(from, to, nodes, labels);
-      const active = edge.from === this.selected || edge.to === this.selected;
-      let stroke = "#8d979f";
-      if (active) {
+    for (const edge of edges) {
+      const icons = edge.matchTypes.length ? edge.matchTypes : ["semantic"], badgeWidth = 48 + icons.length * 18;
+      const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to);
+      const curve = cachedRoutes.get(edge.id) || graphCurve(from, to, nodes, labels, badgeWidth); cachedRoutes.set(edge.id, curve);
+      const active = edge.id === this.selectedEdge || edge.from === this.selected || edge.to === this.selected;
+      let stroke = edge.status === "confirmed" ? "#83cda2" : edge.status === "rejected" ? "#d99c99" : "#8d979f";
+      if (active && edge.status === "unverified") {
         const selected = edge.from === this.selected ? from : to, other = selected === from ? to : from;
         const id = `graph-link-${edgeIndex}`, gradient = create("linearGradient", { id, gradientUnits: "userSpaceOnUse", x1: selected.x, y1: selected.y, x2: other.x, y2: other.y });
         gradient.append(create("stop", { offset: 0, "stop-color": "#f2a34a" }), create("stop", { offset: 1, "stop-color": "#a18c72", "stop-opacity": .6 })); defs.append(gradient); stroke = `url(#${id})`;
       }
-      const path = create("path", { d: curve.drawing, class: "graph-edge" + (active ? " active" : ""), fill: "none", stroke,
-        "stroke-width": active ? 2.4 : 1.7, "stroke-opacity": active ? .95 : .5 });
-      path.append(create("title", {}, t("Similarity {value}", { value: edge.cosine.toFixed(3) }))); svg.append(path);
+      const routed = this.pathResult?.edges.has(edge.id), width = edge.status === "confirmed" || routed ? 3 : 1.5;
+      const group = create("g", { "data-edge": edge.id, class: `graph-connection ${edge.status}`, tabindex: "0", role: "button",
+        "aria-label": `${t("Analyze overlap")}: ${this.nameOf(edge.from)} / ${this.nameOf(edge.to)}, ${t(edge.status)}, ${edge.cosine.toFixed(3)}` });
+      group.append(create("path", { d: curve.drawing, class: "graph-edge-hit", fill: "none", stroke: "transparent", "stroke-width": 18 }));
+      const path = create("path", { d: curve.drawing, class: "graph-edge" + (active ? " active" : ""), fill: "none", stroke: routed ? "#f0a048" : stroke,
+        "stroke-width": width, "stroke-opacity": edge.status === "confirmed" ? .95 : active ? .85 : .45,
+        "stroke-dasharray": edge.status === "confirmed" ? "none" : edge.status === "rejected" ? "2 7" : "6 6" });
+      path.append(create("title", {}, t("Similarity {value}", { value: edge.cosine.toFixed(3) }))); group.append(path);
       const label = create("g", { transform: `translate(${curve.label.x},${curve.label.y})`, class: "graph-score", "data-cosine": edge.cosine });
-      label.append(create("rect", { x: -21, y: -10, width: 42, height: 20, rx: 4, fill: "#202429" }),
-        create("text", { x: 0, y: 4, "text-anchor": "middle", fill: active ? "#e6bd8c" : "#b4bdc6", "font-size": 12, "font-family": "Segoe UI, sans-serif" }, edge.cosine.toFixed(2)));
-      svg.append(label); labels.push(curve.label); this.routes.push({ from: edge.from, to: edge.to, score: curve.score, label: curve.label }); edgeIndex++;
+      label.append(create("rect", { x: -badgeWidth / 2, y: -12, width: badgeWidth, height: 24, rx: 12, fill: "#293039", stroke: edge.status === "confirmed" ? "#83cda2" : "#65717d", "stroke-width": .8 }));
+      icons.forEach((type, i) => label.append(create("path", { d: this.modalityIcon(type), transform: `translate(${-badgeWidth / 2 + 8 + i * 18},-7)`,
+        fill: "none", stroke: edge.status === "confirmed" ? "#a5dfbe" : "#c2ccd6", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-linejoin": "round" })));
+      label.append(create("text", { x: badgeWidth / 2 - 8, y: 4, "text-anchor": "end", fill: active ? "#e6bd8c" : "#d2dbe4", "font-size": 11, "font-family": "Segoe UI, sans-serif" }, edge.cosine.toFixed(2)));
+      label.append(create("title", {}, `${icons.map((type) => this.modalityLabel(type)).join(", ")} · ${t(edge.status)}`));
+      group.append(label); group.onclick = () => this.selectEdge(edge.id);
+      group.onkeydown = (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); this.selectEdge(edge.id); } };
+      svg.append(group);
+      labels.push(curve.label); this.routes.push({ from: edge.from, to: edge.to, score: curve.score, label: curve.label }); edgeIndex++;
     }
     let nodeIndex = 0;
     const iconPaths = {
@@ -333,7 +383,7 @@ class GraphView {
     for (const node of nodes) {
       const selected = node.path === this.selected, video = node.kind === "video", color = selected ? "#efa246" : video ? "#82bbd6" : "#c0c8d1";
       const group = create("g", { transform: `translate(${node.x},${node.y})`, class: "graph-node" + (selected ? " selected" : "") + (video ? " video" : ""),
-        "data-node": "true", tabindex: "0", role: "button", "aria-label": `${this.nameOf(node.path)}, ${t(({ image: "Image", screenshot: "Screenshot", doc: "Document", pdf: "PDF", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)}` });
+        "data-node": "true", "data-path": node.path, tabindex: "0", role: "button", "aria-label": `${this.nameOf(node.path)}, ${t(({ image: "Image", screenshot: "Screenshot", doc: "Document", pdf: "PDF", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)}` });
       group.append(create("title", {}, node.path));
       const rect = create("rect", { class: "graph-card", x: -122, y: -36, width: 244, height: 72, rx: 10,
         fill: selected ? "#483827" : video ? "#293b47" : "url(#graph-plate)", stroke: selected ? "#f0a048" : video ? "#77acc5" : "#969da5",
@@ -354,15 +404,20 @@ class GraphView {
       }
       group.append(create("text", { x: -60, y: -5, class: "graph-node-name", fill: "#f0f2f5", "font-size": 14, "font-family": "Segoe UI, sans-serif", "font-weight": 500 }, short),
         create("text", { x: -60, y: 17, class: "graph-node-kind", fill: selected ? "#d6bd9b" : video ? "#a9cadc" : "#afb8c1", "font-size": 12.5, "font-family": "Segoe UI, sans-serif" }, t(({ image: "Image", screenshot: "Screenshot", doc: "Document", pdf: "PDF", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)));
-      group.onclick = () => this.select(node.path);
-      group.onkeydown = (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); this.select(node.path); } };
+      this.appendNodeTools(group, node, create);
+      group.onclick = () => { if (performance.now() - (this.lastNodeDrag || -1000) > 150) this.select(node.path); };
+      group.oncontextmenu = (event) => { event.preventDefault(); this.showContext(node.path, event.clientX, event.clientY); };
+      group.onkeydown = (event) => {
+        if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") { event.preventDefault(); const r = group.getBoundingClientRect(); this.showContext(node.path, r.left, r.bottom); }
+        else if (["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); this.select(node.path); }
+      };
       svg.append(group); nodeIndex++;
     }
     // Newly appended images are now connected; process only two local render requests at a time.
     this.pumpThumbnails();
     const bounds = graphBounds(nodes); this.mini.setAttribute("viewBox", `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
     this.mini.replaceChildren(create("title", {}, t("Minimap. Click to move the camera.")));
-    for (const edge of this.model.edges.values()) {
+    for (const edge of edges) {
       const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to);
       this.mini.append(create("line", { x1: from.x, y1: from.y, x2: to.x, y2: to.y, stroke: "#77828c", "stroke-width": 9, "stroke-opacity": .6 }));
     }
@@ -370,6 +425,8 @@ class GraphView {
       fill: node.path === this.selected ? "#f0a048" : node.kind === "video" ? "#82bbd6" : "#a5b0bc" }));
     this.mini.append(create("rect", { class: "graph-map-viewport", fill: "#c5d8ed", "fill-opacity": .07, stroke: "#b7cce3", "stroke-width": 8 }));
     this.renderInspectorVisibility(); this.updateCamera();
+    this.applySearchDimming();
+    if (focusPath || focusEdge) [...svg.querySelectorAll("[data-node],[data-edge]")].find((n) => focusPath ? n.dataset.path === focusPath : n.dataset.edge === focusEdge)?.focus({ preventScroll: true });
   }
   debug() {
     const clone = this.svg.cloneNode(true); clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -383,10 +440,12 @@ class GraphView {
       thumbnails: [...this.svg.querySelectorAll(".graph-thumbnail")].map((node) => ({ loaded: node.dataset.loaded === "true", url: node.getAttribute("href") })),
       thumbnailSources: [...this.thumbnailCache.values()], minimapNodes: this.mini.querySelectorAll(".graph-map-node").length,
       camera: { zoom: this.zoom, center: { ...this.center }, ...this.camera }, inspectorOpen: this.inspectorOpen,
+      investigation: this.investigationDebug(),
       stageBounds: this.svg.getBoundingClientRect().toJSON(), minimapBounds: this.mini.closest("details").getBoundingClientRect().toJSON(),
       cardBounds: [...this.svg.querySelectorAll(".graph-card")].map((node) => node.getBoundingClientRect().toJSON()),
       viewport: { width: this.svg.clientWidth, height: this.svg.clientHeight, windowHeight: window.innerHeight, windowWidth: window.innerWidth },
       minimap: new XMLSerializer().serializeToString(mini), svg: new XMLSerializer().serializeToString(clone) };
   }
 }
+if (typeof window !== "undefined") Object.assign(GraphView.prototype, GraphTools);
 if (typeof module !== "undefined") module.exports = { GraphModel, GRAPH_CARD, separated, graphBounds, graphCurve, curvePoint };

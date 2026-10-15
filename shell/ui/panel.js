@@ -890,13 +890,17 @@ async function completeDebugSearch() {
     $("graph-toggle").click();
     while (graph.loading && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
     const first = graph.debug();
+    if (!$('graph-related-details').open) $('graph-related-details').querySelector('summary').click();
     $("graph-neighbors").querySelector("button")?.click();
     $("graph-expand").click();
     while (graph.loading && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
     graph.debugFirst = first;
     if (Date.now() >= deadline) state.error = "Graph smoke timed out";
   }
-  if (debugOptions.features) await exerciseUiFeatures();
+  if (debugOptions.features) {
+    try { await exerciseUiFeatures(); }
+    catch (error) { state.error = String(error.message || error); featureReport.failureGraph = graph.debug(); }
+  }
   report();
 }
 
@@ -980,15 +984,15 @@ async function exerciseUiFeatures() {
   $("graph-map").dispatchEvent(new MouseEvent("click", { clientX: mapRect.x + mapRect.width * .7, clientY: mapRect.y + mapRect.height * .65, bubbles: true }));
   controls.minimapCenter = { ...graph.center };
   $("graph-center").click(); controls.centered = { ...graph.center };
-  const beforeInspector = graph.svg.clientWidth;
+  const beforeInspector = graph.availableWidth();
   $("graph-inspector-toggle").click(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  controls.collapsedWidth = graph.svg.clientWidth; controls.beforeWidth = beforeInspector;
+  controls.collapsedWidth = graph.availableWidth(); controls.beforeWidth = beforeInspector;
   $("graph-inspector-toggle").click(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   controls.inspectorRestored = graph.inspectorOpen;
   featureReport.controls = controls;
   if (isWindows) featureReport.documentsCapture = await invoke("debug_capture", { label: "documents" });
   featureReport.graph = graph.debug();
-  featureReport.graph.bounds = ["graph-scene", "graph-preview", "graph-detail"].map((id) => {
+  featureReport.graph.bounds = ["graph-scene", "graph-preview", "graph-inspector"].map((id) => {
     const node = id === "graph-detail" ? document.querySelector(".graph-detail") : $(id), rect = node.getBoundingClientRect();
     return { id, x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: rect.bottom };
   });
@@ -1022,8 +1026,82 @@ async function exerciseUiFeatures() {
   domClone.querySelectorAll("input").forEach((node, index) => node.setAttribute("value", inputs[index].value));
   domClone.querySelectorAll("select").forEach((node, index) => [...node.options].forEach((option, i) => option.toggleAttribute("selected", selects[index].selectedIndex === i)));
   featureReport.image.htmlSnapshot = "<!doctype html>" + domClone.outerHTML;
+  featureReport.osint = await exerciseInvestigationUi(wait);
   graph.close();
   await language("en"); featureReport.englishAgain = snapshot();
   await language("ru");
   featureReport.final = snapshot();
+}
+
+// This drives real DOM controls with the actual indexed fixtures; backend responses are never stubbed.
+async function exerciseInvestigationUi(wait) {
+  const report = {}, seed = graph.selected;
+  await wait(() => [...graph.model.nodes.values()].every((n) => n.unexpandedCount !== undefined));
+  report.initial = graph.investigationDebug();
+  const edge = [...graph.model.edges.values()].find((e) => e.matchTypes.includes("metadata") && e.matchTypes.includes("visual"));
+  if (!edge) throw new Error("Missing real visual/EXIF fixture comparison");
+  report.initialStatus = edge.status; report.initialPin = Number.isFinite(graph.model.nodes.get(seed).fx);
+  const clickEdge = () => [...graph.svg.querySelectorAll("[data-edge]")].find((n) => n.dataset.edge === edge.id)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  clickEdge();
+  await wait(() => [...$("graph-match-previews").querySelectorAll("img")].filter((img) => img.naturalWidth).length === 2);
+  report.comparison = { mode: graph.investigationDebug().mode, evidence: edge.evidence, previewCount: $("graph-match-previews").children.length };
+  if (edge.status !== "confirmed") $("graph-confirm").click(); await graph.saveQueue;
+  report.confirmed = edge.status;
+  if (isWindows) report.comparisonCapture = await invoke("debug_capture", { label: "comparison" });
+  $("graph-reject").click(); await graph.saveQueue;
+  report.rejectedHidden = ![...graph.svg.querySelectorAll("[data-edge]")].some((n) => n.dataset.edge === edge.id);
+  $("graph-show-rejected").checked = true; $("graph-show-rejected").dispatchEvent(new Event("change", { bubbles: true }));
+  report.rejectedVisible = [...graph.svg.querySelectorAll("[data-edge]")].some((n) => n.dataset.edge === edge.id && n.classList.contains("rejected"));
+  $("graph-unverify").click(); await graph.saveQueue; report.unverified = edge.status;
+  $("graph-confirm").click(); await graph.saveQueue;
+  $("graph-show-rejected").checked = false; $("graph-show-rejected").dispatchEvent(new Event("change", { bubbles: true }));
+  const clickNode = (path) => [...graph.svg.querySelectorAll("[data-path]")].find((n) => n.dataset.path === path)?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  clickNode(seed);
+  if (!Number.isFinite(graph.model.nodes.get(seed).fx)) {
+    [...graph.svg.querySelectorAll("[data-path]")].find((n) => n.dataset.path === seed).querySelector("[data-node-tool]").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }
+  await graph.saveQueue; report.pinned = { x: graph.model.nodes.get(seed).fx, y: graph.model.nodes.get(seed).fy };
+  $("graph-layout").value = "timeline"; $("graph-layout").dispatchEvent(new Event("change", { bubbles: true }));
+  report.timeline = { pinned: { x: graph.model.nodes.get(seed).x, y: graph.model.nodes.get(seed).y }, nodes: [...graph.model.nodes.values()].map(({ path, x, y, modified }) => ({ path, x, y, modified })) };
+  if (isWindows) report.timelineCapture = await invoke("debug_capture", { label: "timeline" });
+  $("graph-layout").value = "force"; $("graph-layout").dispatchEvent(new Event("change", { bubbles: true }));
+  const other = [...graph.model.nodes.values()].find((n) => n.path !== seed);
+  $("graph-omnibar").value = nameOf(other.path); $("graph-omnibar").dispatchEvent(new Event("input", { bubbles: true }));
+  report.filenameFilter = [...graph.svg.querySelectorAll("[data-path]")].map((n) => ({ path: n.dataset.path, opacity: n.style.opacity }));
+  $("graph-omnibar").value = "green hills and a tree beneath the sun"; $("graph-omnibar").dispatchEvent(new Event("input", { bubbles: true }));
+  $("graph-search-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  await wait(() => !graph.searchBusy); report.semantic = { error: graph.searchError, resultCount: graph.semanticMatches?.size, threshold: graph.semanticThreshold };
+  $("graph-omnibar").value = "tree"; $("graph-omnibar").dispatchEvent(new Event("input", { bubbles: true }));
+  $("graph-search-form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  $("graph-omnibar").value = "new filename query"; $("graph-omnibar").dispatchEvent(new Event("input", { bubbles: true }));
+  await graph.semanticTask; report.staleQueryIgnored = graph.omnibar === "new filename query" && graph.semanticMatches === null && !graph.searchBusy;
+  $("graph-omnibar").value = ""; $("graph-omnibar").dispatchEvent(new Event("input", { bubbles: true }));
+  document.querySelector('[data-graph-modality="visual"]').click();
+  report.visualOnly = graph.investigationDebug().visibleEdges.every((e) => e.matchTypes.includes("visual"));
+  document.querySelector('[data-graph-modality="face"]').click(); report.faceDisabled = document.querySelector('[data-graph-modality="face"]').disabled;
+  document.querySelector('[data-graph-modality="all"]').click();
+  const context = (path) => [...graph.svg.querySelectorAll("[data-path]")].find((n) => n.dataset.path === path).dispatchEvent(new MouseEvent("contextmenu", { clientX: 430, clientY: 420, bubbles: true, cancelable: true }));
+  context(other.path); report.contextItems = [...$("graph-context").querySelectorAll("button")].map((n) => n.textContent);
+  if (isWindows) report.contextCapture = await invoke("debug_capture", { label: "context" });
+  [...$("graph-context").querySelectorAll("button")].find((n) => n.textContent === t("Hide node")).click();
+  report.hidden = graph.model.nodes.get(other.path).hidden && ![...graph.svg.querySelectorAll("[data-path]")].some((n) => n.dataset.path === other.path);
+  $("graph-restore-hidden").click(); await graph.saveQueue; report.restored = !graph.model.nodes.get(other.path).hidden;
+  context(seed); [...$("graph-context").querySelectorAll("button")].find((n) => n.textContent === t("Find shortest path to…")).click();
+  $("graph-path-target").value = other.path; $("graph-path-find").click(); report.path = $("graph-path-result").textContent;
+  report.pathNodes = graph.pathResult ? [...graph.pathResult.nodes] : null; $("graph-path-cancel").click();
+  clickNode(seed); $("graph-hash").click(); await wait(() => !graph.hashPending.size); report.hash = graph.investigationDebug().hash;
+  const initialFiles = graph.model.nodes.size;
+  context(seed); [...$("graph-context").querySelectorAll("button")].find((n) => n.textContent === t("Expand all links")).click();
+  await wait(() => !graph.loading); report.expandAll = { before: initialFiles, after: graph.model.nodes.size, pageHasMore: graph.pages.get(graph.pageKey(seed))?.has_more };
+  const video = [...graph.model.nodes.values()].find((n) => n.kind === "video");
+  context(video.path); [...$("graph-context").querySelectorAll("button")].find((n) => n.textContent === t("Audio")).click();
+  await wait(() => !graph.loading);
+  const audioEdge = [...graph.model.edges.values()].find((e) => e.matchTypes.includes("audio") && (e.from === video.path || e.to === video.path));
+  if (!audioEdge) throw new Error("No actual audio evidence for the video fixtures");
+  [...graph.svg.querySelectorAll("[data-edge]")].find((n) => n.dataset.edge === audioEdge.id).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  report.audioAnalysis = { evidence: audioEdge.evidence, mode: graph.investigationDebug().mode,
+    timeButtons: [...$("graph-match-evidence").querySelectorAll("button")].filter((b) => !b.disabled).length };
+  document.querySelector('[data-graph-modality="all"]').click(); clickNode(seed);
+  await graph.saveQueue; report.saved = await invoke("graph_annotations"); report.final = graph.investigationDebug();
+  return report;
 }

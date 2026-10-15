@@ -141,8 +141,14 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             }
             guard let selected = code ? codeSearcher : searcher else { throw CLIError("This index is not available.") }
             guard encoder?.info.vectorSource == selected.vectorSource else { throw CLIError("The index model changed. Start a new graph.") }
-            let page = try selected.snapshot(text, queryVector: vector, acceptsPath: { allowed.contains(Data($0.utf8)) })
-            return ["ok": true, "hits": try page.page(offset: 0, limit: 120).map(hitFields), "meaning": true, "total": page.total]
+            // A homogeneous neighborhood has no statistical outliers. Global z-gating would hide even identical
+            // images here, so graph focus uses raw cosines: a 0.2 floor and 85% of the best current-canvas score.
+            let page = try selected.snapshot(text, queryVector: vector, zGate: -.infinity, wordWeight: 0,
+                acceptsPath: { allowed.contains(Data($0.utf8)) })
+            let candidates = try page.page(offset: 0, limit: 120)
+            let threshold = max(0.2, (candidates.compactMap(\.cosine).max() ?? 0) * 0.85)
+            let hits = candidates.filter { ($0.cosine ?? -.infinity) >= threshold }.sorted { ($0.cosine ?? 0) > ($1.cosine ?? 0) }
+            return ["ok": true, "hits": hits.map(hitFields), "meaning": true, "total": hits.count, "minimum_cosine": threshold]
         case "file_evidence":
             let code = request["code"] as? Bool ?? false
             guard let path = request["path"] as? String, accepts(path, code: code),

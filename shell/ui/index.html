@@ -5,6 +5,7 @@
   <title>DigUp</title>
   <link rel="stylesheet" href="panel.css">
   <link rel="stylesheet" href="graph.css">
+  <link rel="stylesheet" href="graph-investigation.css">
 </head>
 <body>
   <main id="panel" class="panel">
@@ -39,7 +40,9 @@
       <p id="stats-stamp" class="overview-note"></p>
     </section>
     <section id="graph-view" class="graph-view" aria-label="Related files graph" data-i18n-aria-label="Related files graph" hidden>
-      <div class="graph-toolbar"><h2 data-i18n="Related files">Related files</h2><p id="graph-status" role="status" aria-live="polite"></p><button id="graph-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></div>
+      <div class="graph-toolbar"><h2 data-i18n="Related files">Related files</h2><p id="graph-status" role="status" aria-live="polite"></p>
+        <form id="graph-search-form" class="graph-search-form" role="search"><label for="graph-omnibar" class="sr-only" data-i18n="Search this graph">Search this graph</label><input id="graph-omnibar" type="search" autocomplete="off" placeholder="Filename filter · Enter for semantic search" data-i18n-placeholder="Filename filter · Enter for semantic search"><button id="graph-search-submit" class="quiet-button icon-button" type="submit" aria-label="Semantic search" data-i18n-aria-label="Semantic search" title="Semantic search" data-i18n-title="Semantic search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8" cy="8" r="5"/><path d="M12 12L17 17"/></svg></button></form>
+        <button id="graph-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></div>
       <div class="graph-controls">
         <label class="graph-threshold"><span data-i18n="Minimum similarity">Minimum similarity</span><select id="graph-minimum"><option value="0.35" data-i18n="0.35 · Broader">0.35 · Broader</option><option value="0.55" data-i18n="0.55 · Balanced">0.55 · Balanced</option><option value="0.75" selected data-i18n="0.75 · Closer">0.75 · Closer</option></select></label>
         <div class="graph-navigation">
@@ -50,8 +53,17 @@
           <button id="graph-inspector-toggle" class="quiet-button active" type="button" aria-controls="graph-inspector" aria-expanded="true"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M11 4V16"/></svg><span data-i18n="Preview">Preview</span></button>
         </div>
       </div>
+      <div class="graph-filterbar" role="group" aria-label="Link filters" data-i18n-aria-label="Link filters">
+        <div class="graph-modality-chips"><button type="button" data-graph-modality="all" aria-pressed="true" data-i18n="All">All</button><button type="button" data-graph-modality="face" aria-pressed="false" disabled title="Face recognition is not available in this index" data-i18n-title="Face recognition is not available in this index" data-i18n="Faces">Faces</button><button type="button" data-graph-modality="visual" aria-pressed="false" data-i18n="Scene">Scene</button><button type="button" data-graph-modality="audio" aria-pressed="false" data-i18n="Audio">Audio</button><button type="button" data-graph-modality="ocr" aria-pressed="false" data-i18n="Text / OCR">Text / OCR</button><button type="button" data-graph-modality="metadata" aria-pressed="false" data-i18n="EXIF">EXIF</button></div>
+        <label class="graph-check"><input id="graph-show-rejected" type="checkbox"><span data-i18n="Show rejected">Show rejected</span></label>
+        <label class="graph-layout-control"><span data-i18n="Layout">Layout</span><select id="graph-layout"><option value="force" data-i18n="Force graph">Force graph</option><option value="timeline" data-i18n="Timeline">Timeline</option></select></label>
+        <button id="graph-restore-hidden" class="quiet-button" type="button" hidden></button>
+      </div>
+      <div class="graph-feedback"><span id="graph-search-status" role="status"></span><span id="graph-analysis-message" role="status"></span><span id="graph-state-message" role="status"></span><button id="graph-retry-save" type="button" class="quiet-button" data-i18n="Retry save" hidden>Retry save</button></div>
+      <div id="graph-path-tools" class="graph-path-tools" hidden><span id="graph-path-source"></span><label for="graph-path-target" data-i18n="Find shortest path to…">Find shortest path to…</label><select id="graph-path-target"></select><button id="graph-path-find" class="quiet-button" type="button" data-i18n="Find path">Find path</button><button id="graph-path-cancel" class="quiet-button" type="button" data-i18n="Clear path">Clear path</button><span id="graph-path-result" role="status"></span></div>
       <div class="graph-workspace">
         <div class="graph-stage">
+          <p id="graph-timeline-legend" class="graph-timeline-legend" hidden></p>
           <svg id="graph-scene" class="graph-scene" tabindex="0" role="group" aria-label="File similarity graph. Drag background or use arrow keys to pan." data-i18n-aria-label="File similarity graph. Drag background or use arrow keys to pan."></svg>
           <details class="graph-minimap" open><summary><span data-i18n="Minimap">Minimap</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 9L8 6L11 9"/></svg></summary>
             <svg id="graph-map" tabindex="0" role="group" aria-label="Minimap. Click to move the camera." data-i18n-aria-label="Minimap. Click to move the camera." preserveAspectRatio="xMidYMid meet"></svg>
@@ -59,9 +71,15 @@
           </details>
         </div>
         <aside id="graph-inspector" class="graph-inspector" aria-label="Preview" data-i18n-aria-label="Preview">
+          <div class="graph-inspector-heading"><h3 id="graph-inspector-heading" data-i18n="File inspector">File inspector</h3><button id="graph-inspector-close" class="quiet-button icon-button" type="button" aria-label="Close inspector" data-i18n-aria-label="Close inspector"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5L15 15 M15 5L5 15"/></svg></button></div>
+          <div id="graph-node-inspection">
           <div id="graph-preview" class="graph-preview"></div><div class="graph-detail"><h3 id="graph-title"></h3><p id="graph-path"></p><p id="graph-basis"></p>
             <div class="graph-actions"><button id="graph-similar" class="quiet-button" type="button" data-i18n="Find similar">Find similar</button><button id="graph-expand" class="quiet-button" type="button" data-i18n="Expand links">Expand links</button><button id="graph-start-here" class="quiet-button" type="button" data-i18n="Start here">Start here</button><button id="graph-open" class="quiet-button" type="button" data-i18n="Open">Open</button><button id="graph-reveal" class="quiet-button" type="button" data-i18n="Show in Explorer">Show in Explorer</button></div>
-            <div id="graph-neighbors" class="graph-neighbors" aria-label="Connected files" data-i18n-aria-label="Connected files"></div>
+            <div class="graph-evidence-heading"><h4 data-i18n="Indexed evidence">Indexed evidence</h4><button id="graph-hash" type="button" class="quiet-button" data-i18n="Compute SHA-256">Compute SHA-256</button></div><button id="graph-evidence-retry" type="button" class="quiet-button" data-i18n="Retry evidence" hidden>Retry evidence</button><dl id="graph-metadata" class="graph-metadata"></dl>
+            <details id="graph-related-details" class="graph-related-details"><summary><span data-i18n="Connected files">Connected files</span><span id="graph-neighbor-count"></span></summary><div id="graph-neighbors" class="graph-neighbors" aria-label="Connected files" data-i18n-aria-label="Connected files"></div></details>
+          </div>
+          </div>
+          <div id="graph-match-inspection" hidden><div id="graph-match-previews" class="graph-match-previews"></div><p id="graph-match-status" class="graph-match-status"></p><div id="graph-match-evidence" class="graph-match-evidence"></div><div class="graph-verification"><button id="graph-confirm" class="quiet-button" type="button" data-i18n="Confirm link">Confirm link</button><button id="graph-reject" class="quiet-button" type="button" data-i18n="False positive">False positive</button><button id="graph-unverify" class="quiet-button" type="button" data-i18n="Mark unverified">Mark unverified</button></div><p class="graph-verification-note" data-i18n="Verification is your local assessment, not an automated finding.">Verification is your local assessment, not an automated finding.</p>
           </div>
         </aside>
       </div>
@@ -80,6 +98,9 @@
     </footer>
   </main>
   <script src="i18n.js"></script>
+  <div id="graph-context" class="graph-context" role="menu" aria-label="File actions" data-i18n-aria-label="File actions" hidden></div>
+  <script src="graph-state.js"></script>
+  <script src="graph-tools.js"></script>
   <script src="graph.js"></script>
   <script src="panel.js"></script>
 </body>

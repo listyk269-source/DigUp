@@ -54,9 +54,26 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label) {
 for ($number=1; $number -le 5; $number++) {
     Copy-Item -LiteralPath "$script:Repo/Tests/LlamaRuntimeTests/Reference/photo.jpg" -Destination (Join-Path $fixture "UIFEATURE742-IMG_2018_000$number.jpg")
 }
+# Genuine JPEG EXIF DateTimeOriginal, written only to disposable fixtures. No extractor is mocked.
+foreach ($photo in Get-ChildItem -LiteralPath $fixture -Filter '*.jpg') {
+    $tiff=[IO.MemoryStream]::new(); $writer=[IO.BinaryWriter]::new($tiff)
+    $writer.Write([byte[]](0x49,0x49)); $writer.Write([uint16]42); $writer.Write([uint32]8)
+    $writer.Write([uint16]1); $writer.Write([uint16]0x8769); $writer.Write([uint16]4); $writer.Write([uint32]1); $writer.Write([uint32]26); $writer.Write([uint32]0)
+    $writer.Write([uint16]1); $writer.Write([uint16]0x9003); $writer.Write([uint16]2); $writer.Write([uint32]20); $writer.Write([uint32]44); $writer.Write([uint32]0)
+    $writer.Write([Text.Encoding]::ASCII.GetBytes("2026:10:15 12:34:56`0")); $writer.Flush()
+    $payload=[byte[]]([Text.Encoding]::ASCII.GetBytes("Exif`0`0") + $tiff.ToArray()); $writer.Dispose(); $tiff.Dispose()
+    $original=[IO.File]::ReadAllBytes($photo.FullName); $length=$payload.Length+2
+    [IO.File]::WriteAllBytes($photo.FullName,[byte[]](@(0xff,0xd8,0xff,0xe1,($length -shr 8),($length -band 255)) + $payload + $original[2..($original.Length-1)]))
+}
 Run-Private (Join-Path $package 'helper/ffmpeg.exe') @('-v','error','-nostdin','-y','-loop','1','-framerate','1',
-    '-i',"$script:Repo/Tests/LlamaRuntimeTests/Reference/photo.jpg",'-t','2','-c:v','mpeg4','-q:v','4','-pix_fmt','yuv420p','-an',
+    '-i',"$script:Repo/Tests/LlamaRuntimeTests/Reference/photo.jpg",'-f','lavfi','-i','sine=frequency=440:duration=2',
+    '-t','2','-c:v','mpeg4','-q:v','4','-pix_fmt','yuv420p','-c:a','aac','-shortest',
     (Join-Path $fixture 'UIFEATURE742-preview.mp4')) 'fixture-video'
+for ($number=1; $number -le 3; $number++) { Copy-Item -LiteralPath (Join-Path $fixture 'UIFEATURE742-preview.mp4') -Destination (Join-Path $fixture "UIFEATURE742-VID_2019_000$number.mp4") }
+$date=[DateTime]::new(2026,10,1,12,0,0,[DateTimeKind]::Utc); $ordinal=0
+foreach ($media in Get-ChildItem -LiteralPath $fixture -File | Where-Object Extension -in '.jpg','.mp4' | Sort-Object Name) {
+    [IO.File]::SetLastWriteTimeUtc($media.FullName,$date.AddDays($ordinal)); $ordinal++
+}
 $gui=Join-Path $package 'DigUp.exe'
 foreach ($pass in 'first','restart') {
     $report=Join-Path $testRoot "gui-$pass.json"
@@ -65,7 +82,27 @@ foreach ($pass in 'first','restart') {
     if ($pass -eq 'first' ) { $arguments+=@('--debug-setup','--offer',$fixture) }
     Run-Private $gui $arguments "gui-$pass"
     $ui=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+    if ($ui.error) { throw "Native UI scenario failed ($pass): $($ui.error); inspect $report" }
     $f=$ui.features
+    $o=$f.osint
+    if ($o.comparison.mode -ne 'edge' -or $o.comparison.previewCount -ne 2 -or $o.confirmed -ne 'confirmed' -or
+        !$o.rejectedHidden -or !$o.rejectedVisible -or $o.unverified -ne 'unverified' -or !$o.visualOnly -or !$o.faceDisabled -or
+        !$o.hidden -or !$o.restored -or $o.semantic.error -or $o.semantic.resultCount -lt 1 -or !$o.staleQueryIgnored -or $o.pathNodes.Count -lt 2 -or
+        $o.expandAll.after -le $o.expandAll.before -or $o.expandAll.pageHasMore -or $o.final.inspectorWidth -ne 360 -or
+        @($o.initial.counts | Where-Object unexpandedCount -gt 0).Count -lt 1 -or
+        @($o.filenameFilter | Where-Object opacity -eq '0.25').Count -lt 1 -or
+        @($o.filenameFilter | Where-Object opacity -eq '1').Count -lt 1 -or
+        $o.audioAnalysis.mode -ne 'edge' -or $o.audioAnalysis.timeButtons -lt 2 -or
+        @($o.audioAnalysis.evidence | Where-Object type -eq 'audio').Count -lt 1 -or
+        $o.timeline.pinned.x -ne $o.pinned.x -or $o.timeline.pinned.y -ne $o.pinned.y -or
+        $o.hash -ne (Get-FileHash -LiteralPath $f.image.nodes[0].path).Hash.ToLowerInvariant() -or
+        @($o.saved.edges.PSObject.Properties | Where-Object Value -eq 'confirmed').Count -lt 1) {
+        throw "Real investigation controls/evidence/local persistence failed ($pass)."
+    }
+    if ($pass -eq 'restart' -and ($o.initialStatus -ne 'confirmed' -or !$o.initialPin)) { throw 'Review status/pin did not survive restart.' }
+    foreach ($phase in 'comparison','timeline','context') {
+        Copy-Item -LiteralPath (Join-Path $index "capture-$phase.png") -Destination "$testRoot/capture-$pass-$phase.png"
+    }
     foreach ($graph in @($f.graph, $f.image)) {
         $stage=$graph.stageBounds; $map=$graph.minimapBounds
         foreach ($card in $graph.cardBounds) {
@@ -124,6 +161,8 @@ if ($saved.language -ne 'ru' -or $saved.folders.Count -ne 1 -or $saved.folders[0
     checks=@('setup Russian selector','RU/EN/RU live DOM','restart language persistence','queries and selected paths unchanged',
         'real graph text preview','real graph image preview','Find similar from graph and result',
         '40 then all similar files via Show more','no duplicate files or seed in neighbors','Back to original query',
+        '360px overlay inspector','real visual/EXIF channel evidence','side-by-side real previews','confirm/reject/unverify','rejected-link visibility',
+        'persist reviews and pins across restart','real unexpanded counts','node context menu expand-all/hide/restore','shortest expanded path','filename dimming','real semantic graph search','honest missing face analyzer','timeline keeps pinned coordinates','actual SHA-256',
         'bounded inspector layout','75% initial camera','perimeter and minimap card clearance','native WebView PNG captures','actual minimap click and recenter','zoom slider','collapsible inspector','real image and video card thumbnails','cosine labels','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |
     ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Actual packaged UI refinements passed: $testRoot"
