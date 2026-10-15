@@ -385,3 +385,41 @@ VM. Record OS build, user privilege level, artifact SHA-256 and result. Hosted
   `THIRD_PARTY_NOTICES.md`, publish required source artifacts alongside binaries.
 
 Do not mark release readiness until this checklist and the workflow have evidence.
+
+## Rounded panel, file previews and interface language
+
+The Tauri shell has an English / Русский selector in the search header and setup window.
+The selection is saved atomically with the existing folder/device settings, applies to open shell windows and tray
+menu labels immediately, and does not change queries, filenames, indexed content or the embedding model.
+Existing settings default to English. Native OS dialogs/media controls follow the Windows language; low-level
+runtime diagnostic details may remain English. The separate native Swift macOS app does not yet use this shell catalog.
+
+Select a file in Graph to preview its image, PDF page, video frame, audio player or indexed text/code fragment.
+A preview failure offers opening the original file. Selecting another node replaces the preview; leaving the graph
+pauses its media. The same existing local preview/render service is used by search and graph.
+
+**Find similar** is available below a search preview and in the graph inspector. It lists stored-vector neighbors
+with cosine similarity >= 0.55, excluding the seed, using the matched fragment where available and otherwise the
+file's mean vector. **Show more** fetches 40 at a time; **Back to results** reruns the original text query.
+As with graph expansions, related-file pages are recalculated from the current index. Concurrent indexing can
+change ranking between pages; paths are deduplicated, but a fresh search is needed to include every new change.
+This operation requires indexed vectors, without downloading or running another model.
+
+Windows requests DWM rounded corners on the opaque native panel and uses an 8-DIP web radius without a second
+outline. Windows 10 uses a DPI-scaled native rounded window region when that DWM API is unavailable. Native resize
+and DPI-change events update that region. DWM preferences are hints; desktop appearance still needs the manual
+Win10/11 check (including high DPI and Remote Desktop), as described in
+[Microsoft's rounding guidance](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners).
+
+Validation on a packaged application:
+
+```powershell
+node --test Tests/GraphModelTests.cjs Tests/I18nTests.cjs
+./scripts/windows/UI-Features-Smoke.ps1 -Archive build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip -Models C:/test-models -OutputDirectory C:/test-evidence/ui-features
+```
+
+This real WebView smoke uses synthetic Cyrillic folders, actual CPU inference and the installed HTML/JavaScript.
+It checks setup language, live RU/EN switching, persistence after restart, text/image previews in graph,
+Find similar from both locations, paginated neighbors and returning to the original query. It does not install over
+an existing user copy or touch the user's index. Its DOM geometry and DWM policy checks do not replace a visual
+check of the outer native window on retail Windows 10 and 11.

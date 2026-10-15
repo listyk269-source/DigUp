@@ -231,3 +231,7 @@ Apple Inc.
 ## License
 
 MIT
+
+The Windows/Linux Tauri shell includes a persistent **English / Русский** interface selector.
+Use **Graph** to explore related files with a selected-file preview, or **Find similar** below a result to load
+its semantic neighbors in pages. See [Windows usage and validation](docs/windows.md#rounded-panel-file-previews-and-interface-language).
