@@ -221,6 +221,12 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
         "face_cancel",
         "face_file",
         "face_search",
+        "people_list",
+        "person_save",
+        "person_faces",
+        "face_label",
+        "people_undo",
+        "face_people",
         "embed_ahead",
         "text",
         "render",
@@ -508,7 +514,9 @@ fn panel_height(app: AppHandle, height: f64, graph: Option<bool>) {
         // A canonical native WebView viewport makes isolated visual checks independent
         // of a CI runner's virtual desktop size. Normal windows still fit their monitor.
         let smoke_viewport = shell.options.debug_isolated
-            && (shell.options.debug_ui_features || shell.options.debug_faces)
+            && (shell.options.debug_ui_features
+                || shell.options.debug_faces
+                || shell.options.debug_people)
             && graph.unwrap_or(false);
         let monitor = panel.current_monitor().ok().flatten();
         let scale = monitor
@@ -570,7 +578,7 @@ async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, Str
 
 #[tauri::command]
 fn debug_search_options(shell: State<'_, Arc<Shell>>) -> Value {
-    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features, "faces": shell.options.debug_faces})
+    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features, "faces": shell.options.debug_faces, "people": shell.options.debug_people})
 }
 
 #[tauri::command]
@@ -588,7 +596,9 @@ async fn debug_capture(
     label: String,
 ) -> Result<Value, String> {
     if !shell.options.debug_isolated
-        || !(shell.options.debug_ui_features || shell.options.debug_faces)
+        || !(shell.options.debug_ui_features
+            || shell.options.debug_faces
+            || shell.options.debug_people)
         || ![
             "documents",
             "media",
@@ -598,6 +608,9 @@ async fn debug_capture(
             "faces-select",
             "faces-matches",
             "faces-video",
+            "people-assigned",
+            "people-suggestions",
+            "people-rename",
         ]
         .contains(&label.as_str())
     {
