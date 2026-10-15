@@ -245,4 +245,6 @@ Face weights download separately on first use; see [Face search](docs/face-searc
 privacy, accuracy limits and validation. Object detection and Windows OCR extraction are not included.
 
 **People** adds local face labels, assignment to selected or all matches, rejected mistakes,
-renaming, undo and unconfirmed label suggestions after new media are indexed. See [People](docs/people.md).
+renaming, undo and unconfirmed label suggestions after new media are indexed. Once face search is enabled,
+new photos and videos are processed automatically, with background progress, persistent pause/resume and
+pending proposal counts. See [People](docs/people.md).

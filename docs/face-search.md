@@ -21,7 +21,10 @@ Manual link confirmation records the user's assessment; it is not proof of ident
    Video matches include a sampled time and an internal player. **Show in graph** projects actual
    face comparisons into the existing graph, with a separate model source and face evidence.
 
-New or changed media need another incremental face-index run after the normal index catches up.
+Once enabled, face indexing follows new or changed media automatically after the normal index
+catches up. The compact background row shows progress and lets you pause/resume; this preference
+survives a restart. Automatic work does not download models. Existing completed face jobs are
+reused, and failed exact file versions are not retried continuously. An explicit manual run can retry.
 Removing a file or excluding its folder prevents it from being returned. Unavailable/removable roots
 do not cause their existing face data to be silently erased. There is no automatic name assignment.
 The local [People section](people.md) adds user-assigned labels, bulk review, corrections, undo and
@@ -60,7 +63,10 @@ changes invalidate page revisions; the UI restarts the ranking explicitly rather
 
 The sidecar contains face descriptors, locations and file paths. It stays local and uses the same
 OS account permissions as the ordinary index; no additional database encryption is implemented.
-After quitting DigUp, removing `face-index.sqlite` and its SQLite WAL/SHM companions resets this layer.
+Pause automatic face indexing first. After quitting DigUp, removing `face-index.sqlite` and its
+SQLite WAL/SHM companions resets the observations and People labels. Remove `face-auto.json` too
+to reset automatic preferences and the failed-version retry ledger; otherwise enabled automatic
+work can rebuild the face layer from the semantic index at the next start.
 Temporary prepared frames/staging are removed on normal completion/cancellation; a forced process or
 system crash may leave `face-scratch-*` folders in the index directory. Remove them only after quitting
 all DigUp instances. Normal index/settings and original media need not be deleted.

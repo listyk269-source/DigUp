@@ -112,8 +112,7 @@ jobs:
           ./scripts/windows/Search-Pagination-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/search-pagination'
           ./scripts/windows/Graph-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/graph-smoke'
           ./scripts/windows/UI-Features-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/ui-features'
-          ./scripts/windows/Faces-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/faces-smoke'
-          ./scripts/windows/Faces-Smoke.ps1 -People -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/people-smoke'
+          ./scripts/windows/Automatic-Faces-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/automatic-faces'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
           $env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
@@ -152,12 +151,12 @@ jobs:
             build.noindex/windows/ui-features/*.txt
             build.noindex/windows/ui-features/*.svg
             build.noindex/windows/ui-features/*.png
-            build.noindex/windows/faces-smoke/*.json
-            build.noindex/windows/faces-smoke/*.txt
-            build.noindex/windows/faces-smoke/*.png
-            build.noindex/windows/people-smoke/*.json
-            build.noindex/windows/people-smoke/*.txt
-            build.noindex/windows/people-smoke/*.png
+            build.noindex/windows/automatic-faces/*.json
+            build.noindex/windows/automatic-faces/*.txt
+            build.noindex/windows/automatic-faces/*.png
+            build.noindex/windows/automatic-faces/baseline/*.json
+            build.noindex/windows/automatic-faces/baseline/*.txt
+            build.noindex/windows/automatic-faces/baseline/*.png
             build.noindex/windows/gpu-policy-smoke/*.json
             build.noindex/windows/gpu-policy-smoke/*.jsonl
             build.noindex/windows/gpu-policy-smoke/*.txt
