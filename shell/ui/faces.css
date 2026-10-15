@@ -2,7 +2,13 @@
 html.faces-mode, html.faces-mode body { background: #202429; }
 .faces-active { --surface: #202429; --text: #eef2f6; --secondary: #b4bec8; --tertiary: #a4aeba; --line: #414952; --chip: #30363d; --selected: #3e5062; background: #202429; color: #eef2f6; }
 .faces-active .field, .faces-active .index-status { background: #252b32; border-color: #414952; }
-.faces-view { flex: 1; min-height: 0; display: flex; flex-direction: column; color: #eef2f6; background: #202429; }
+.faces-view { color-scheme: dark; flex: 1; min-height: 0; display: flex; flex-direction: column; color: #eef2f6; background: #202429; }
+.faces-view :is(.face-source, .face-results-list, .face-match-preview, .face-match-body) { scrollbar-color: #687785 #252b32; scrollbar-width: thin; }
+.faces-view :is(.face-source, .face-results-list, .face-match-preview, .face-match-body):hover { scrollbar-color: #8999a8 #252b32; }
+.faces-view ::-webkit-scrollbar { width: 10px; height: 10px; }
+.faces-view ::-webkit-scrollbar-track, .faces-view ::-webkit-scrollbar-corner { background: #252b32; }
+.faces-view ::-webkit-scrollbar-thumb { background: #687785; border: 2px solid #252b32; border-radius: 8px; }
+.faces-view ::-webkit-scrollbar-thumb:hover { background: #8999a8; }
 .faces-view button, .faces-view select { font: inherit; }
 .faces-view .quiet-button, .faces-view select { color: #e1e7ee; background: #323940; border: 1px solid #505962; border-radius: 8px; padding: 6px 10px; }
 .faces-view button:hover:not(:disabled), .faces-view select:hover { background: #424c57; }
@@ -73,4 +79,9 @@ html.faces-mode, html.faces-mode body { background: #202429; }
 }
 @media (forced-colors: active) {
   .face-box, .face-choice[aria-pressed="true"], .face-result[aria-pressed="true"] { border-color: Highlight; }
+  .faces-view { color-scheme: normal; }
+  .faces-view :is(.face-source, .face-results-list, .face-match-preview, .face-match-body), .faces-view :is(.face-source, .face-results-list, .face-match-preview, .face-match-body):hover { scrollbar-color: auto; scrollbar-width: auto; }
+  .faces-view ::-webkit-scrollbar-track, .faces-view ::-webkit-scrollbar-corner { background: Canvas; }
+  .faces-view ::-webkit-scrollbar-thumb { background: ButtonText; border-color: Canvas; }
+  .faces-view ::-webkit-scrollbar-thumb:hover { background: Highlight; }
 }

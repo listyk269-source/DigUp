@@ -1,6 +1,6 @@
 ---
 name: DigUp Graph Workspace
-description: Graph-scoped graphite canvas with glass file cards and amber/cyan state cues.
+description: Graph and face-investigation workspaces with graphite surfaces, glass file cards, and amber/cyan state cues.
 colors:
   graphite: "#202429"
   inspector: "#252b32"
@@ -8,6 +8,7 @@ colors:
   glass-top: "#454b52"
   glass-bottom: "#2b3036"
   quiet-fill: "#323940cc"
+  quiet-solid: "#323940"
   quiet-hover: "#424c57"
   active-fill: "#3a4652"
   control-stroke: "#505962"
@@ -32,10 +33,17 @@ colors:
   rejected-fill: "#483334"
   rejected-text: "#f0cfcd"
   modality-fill: "#293039"
+  media-stage: "#181c21"
+  scrollbar-thumb: "#687785"
+  scrollbar-hover: "#8999a8"
 typography:
   title:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, Ubuntu, Cantarell, "Noto Sans", sans-serif'
     fontSize: "16px"
+    fontWeight: 600
+  panel-title:
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, Ubuntu, Cantarell, "Noto Sans", sans-serif'
+    fontSize: "13px"
     fontWeight: 600
   file-name:
     fontFamily: "Segoe UI, sans-serif"
@@ -61,12 +69,14 @@ rounded:
   thumbnail: "5px"
   score: "12px"
   chip: "16px"
+  face-box: "3px"
 spacing:
   compact: "6px"
   control-gap: "7px"
   small: "8px"
   medium: "10px"
   large: "16px"
+  pane: "18px"
 components:
   button-quiet:
     backgroundColor: "{colors.quiet-fill}"
@@ -129,6 +139,30 @@ components:
     rounded: "{rounded.file-card}"
     width: "244px"
     height: "72px"
+  face-source-stage:
+    backgroundColor: "{colors.media-stage}"
+    rounded: "{rounded.file-card}"
+  face-control:
+    backgroundColor: "{colors.quiet-solid}"
+    textColor: "{colors.button-text}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    padding: "6px 10px"
+  face-choice:
+    backgroundColor: "{colors.glass-bottom}"
+    textColor: "{colors.button-text}"
+    typography: "{typography.metadata}"
+    rounded: "{rounded.control}"
+    padding: "5px"
+  face-choice-selected:
+    backgroundColor: "{colors.amber-fill}"
+    textColor: "{colors.action-text}"
+    rounded: "{rounded.control}"
+  face-result-selected:
+    backgroundColor: "{colors.cyan-fill}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+    padding: "9px 6px"
 ---
 
 # Design System: DigUp Graph Workspace
@@ -137,28 +171,33 @@ components:
 
 **Creative North Star: "Graphite, Glass, Amber/Cyan"**
 
-This system applies only to DigUp's Tauri graph workspace and its graph-active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; these graph tokens are not a product-wide rebrand.
+This system applies to DigUp's Tauri graph workspace, its face-investigation extension, and their active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; this is a scoped workspace system.
 
 A restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and emphasizes its unverified incident links; cyan distinguishes video cards. Green and muted red record the operator's confirmed and rejected link states. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the overlay inspector supplies readable file and match evidence.
+
+Face investigation reuses that graphite material, native type, quiet controls, and warm selection. A large source photograph or sampled video frame carries numbered cyan face boxes; the selected observation and crop adopt amber. Actual face crops, file names, cosine values, and reported video times make candidate review concrete. The indexing strip and persistent candidate-language footer remain part of the working surface.
 
 **Key Characteristics:**
 - A world-anchored grid and stable file neighborhoods.
 - Glass plates with small rounded corners and restrained state glows.
 - Native sans typography, measured filename truncation, and modality/cosine pills.
 - Visible search/index context, graph search and filters, a collapsible evidence inspector, and an operable minimap.
+- A source-led face workspace with local indexing controls, observation crops, paged candidates, and media evidence.
 
 Source of truth: `shell/ui/graph.css`, its extension `shell/ui/graph-investigation.css`, SVG construction in `shell/ui/graph.js`, investigation behavior in `shell/ui/graph-tools.js` and `shell/ui/graph-state.js`, markup in `shell/ui/index.html`, and RU/EN strings in `shell/ui/i18n.js`. Corrected native WebView captures of file evidence, match comparison, timeline, context menu, and documents confirm the composition at (1280 × 900 DIP); synthetic fixture content is evidence of rendering, not brand imagery. `docs/graph-investigation.md` records the evidence and capability boundaries.
+
+The face extension is implemented in `shell/ui/faces.css`, `shell/ui/faces.js`, and `shell/ui/face-state.js`, with graph entry points in `shell/ui/graph.js` and `shell/ui/graph-tools.js`. Native captures at `../work/faces-development-h264/review-faces-select.png`, `review-faces-matches.png`, and `review-faces-video.png` establish its source-selection, candidate, and timed-video composition. The later dark-scrollbar treatment is taken from the current stylesheet; those earlier captures do not establish its final packaged appearance.
 
 ## Colors
 
 Cool graphite neutrals establish the working surface; warm selection and cool video cues explain state without coloring every file.
 
 ### Primary
-- **Amber:** Selected-card outline, keyboard focus, minimap selection, and selected-file link emphasis. The selected fill and label soften the same warm state.
+- **Amber:** Selected-card outline, keyboard focus, minimap selection, and selected-file link emphasis. In Faces it marks the selected source observation, numbered box, and crop. The selected fill and label soften the same warm state.
 - **Warm Action:** The Find similar action uses a muted warm fill and pale warm text rather than a saturated banner.
 
 ### Secondary
-- **Cyan:** Video-card outlines and the corresponding cool fill/metadata. Selected video cards adopt the amber selection state.
+- **Cyan:** Video-card outlines and the corresponding cool fill/metadata. Selected video cards adopt the amber selection state. In the face workspace, cyan marks unselected detection boxes and the active candidate row; this scoped use distinguishes the observation being searched from the candidate being inspected.
 
 ### Tertiary
 - **Confirmed Green:** Solid confirmed links, their pill borders, and the Confirm link action. This records a local human assessment.
@@ -168,13 +207,15 @@ Cool graphite neutrals establish the working surface; warm selection and cool vi
 - **Graphite:** Canvas, score-label backplates, and graph-active outer background.
 - **Inspector / Inspector Overlay:** The explanatory footer and translucent file/match evidence overlay.
 - **Glass Top / Glass Bottom:** The default file plate's vertical translucent gradient.
-- **Quiet Fill / Quiet Hover / Active Fill:** Compact controls and their interaction states.
+- **Quiet Fill / Quiet Solid / Quiet Hover / Active Fill:** Compact controls and their interaction states; face controls use the opaque quiet surface.
 - **Control Stroke / Divider:** Functional boundaries between controls, canvas, inspector, and footer.
 - **Text / Secondary Text:** General graph text and supporting status information.
 - **Node Text / Node Secondary:** File names and file-kind labels.
 - **Modality Fill:** Quiet modality chips and link-pill backplates.
+- **Media Stage:** The dark backplate behind source media and observation crops.
+- **Scrollbar Thumb / Scrollbar Hover:** Visible cool-gray handles over the inspector-colored track in face-source, candidate-list, and preview panes.
 
-**The State Color Rule.** Amber follows the selected card, active unverified links, and a requested shortest path. Cyan identifies unselected video cards. Confirmed links retain green during ordinary selection; rejected links use muted red only when explicitly shown. Pair review colors with line patterns and inspector text.
+**The State Color Rule.** In the graph, amber follows the selected card, active unverified links, and a requested shortest path; cyan identifies unselected video cards. In Faces, amber follows the selected source observation, while cyan identifies available face boxes and the active candidate row. Confirmed links retain green during ordinary selection; rejected links use muted red only when explicitly shown. Pair review colors with line patterns and inspector text.
 
 ## Typography
 
@@ -185,6 +226,7 @@ Cool graphite neutrals establish the working surface; warm selection and cool vi
 
 ### Hierarchy
 - **Title:** Graph heading, with a semibold weight.
+- **Panel Title:** Face-workspace subsection headings and the face-index status heading.
 - **File Name:** Medium-weight file identity inside the card; fit to a measured text width (166 world units) using a middle ellipsis.
 - **File Kind:** Supporting type label below the file name.
 - **Body:** Inspector explanation and footer note; the inspector title is semibold at the file-name size.
@@ -203,11 +245,17 @@ The canvas grid repeats every (48 world units). Initial camera zoom is (75%); co
 
 Controls use small gaps, with a slightly wider gap between toolbar groups. Filter chips, neighbor actions, and inspector buttons wrap. Closing the inspector reveals the canvas beneath it. Timeline mode places unpinned cards proportionally by modification date with collision lanes and a separate area for missing dates; pinned cards retain their coordinates, and switching back restores force positions.
 
+The face workspace keeps the existing search and main-index context above its toolbar and local face-index strip. Its main area divides into source media and candidate review using `minmax(310px, .86fr)` and `minmax(370px, 1.14fr)`. The source has a large fitted image, numbered boxes positioned against the actual rendered image, and an auto-filling crop grid with minimum tile width (78px). Candidate review divides the list and media preview with `minmax(160px, .8fr)` and `minmax(200px, 1fr)`. Source, candidate list, and preview scroll independently; the candidate disclaimer stays below them. Repeated pane insets use the frontmatter's pane spacing.
+
+At widths up to (940px), the face columns become `minmax(260px, .8fr)` and `minmax(310px, 1fr)`; the candidate list stacks above its preview and is capped at (200px) high. Source media is capped at (290px) high, or (230px) at that breakpoint; candidate media is capped at (240px). These are extensions of the existing desktop workspace, not new global page templates.
+
 **The Topology Rule.** Force positions communicate connections, not measured similarity distance. Timeline positions encode modification dates except for explicit pins. Show only expanded neighborhoods, retain the (120-file) cap, and do not promise planar routing for cyclic graphs.
 
 ## Elevation & Depth
 
 Depth comes from tonal layering, translucent plates, fine strokes, and selective glow. Default file cards use a vertical gradient with top opacity (.86) and bottom opacity (.95). Floating controls, the minimap, the inspector overlay, and the context menu use backdrop blur (12px). Inspector media has no added shadow.
+
+Face panes use flat graphite and inspector surfaces, fine dividers, and dark media backplates. Face boxes use a restrained cyan tint (`#77acc50a`) or warm hover/selected tint (`#f0a04814`) beneath their fine colored outlines. Crops, candidate rows, and source media add no decorative shadow.
 
 ### Shadow Vocabulary
 - **Minimap lift** (`0 7px 20px #00000040`): A restrained floating-camera surface above the canvas.
@@ -220,6 +268,8 @@ Depth comes from tonal layering, translucent plates, fine strokes, and selective
 
 Horizontal file plates have gently rounded corners, while controls are slightly tighter. Thumbnails are square crops (40 × 40 world units) with smaller rounded corners. Link pills are (24 world units) high, with width (48 + 18 per modality icon) and fully rounded ends, centered at the curve midpoint with collision avoidance. The real unexpanded-neighbor count uses a smaller pill at the card's upper right; the pin affordance occupies its lower right. Strokes stay fine; keyboard focus strengthens the selected outline rather than changing the card silhouette.
 
+Face-source stages reuse the file-card corner, face-choice and candidate rows reuse the control corner, and crops reuse the thumbnail corner. Numbered face boxes use the tighter face-box corner and a (2px) outline. Source-choice crops are (62 × 62px); candidate crops are (45 × 45px). Crop geometry comes from the indexed bounding box for the actual image or reported video frame.
+
 ## Components
 
 ### Buttons
@@ -228,7 +278,7 @@ Compact glass controls use a fine neutral border, inherited native type, minimum
 
 ### Chips
 
-Modality filters use compact native labels (11px), fine neutral borders, and fully rounded corners. The selected chip adopts the amber fill with warm text and border, with selection also exposed through `aria-pressed`. All, Scene, Audio, Text / OCR, and EXIF describe supported filtering; Faces stays visibly disabled because this build has no face analyzer.
+Modality filters use compact native labels (11px), fine neutral borders, and fully rounded corners. The selected chip adopts the amber fill with warm text and border, with selection also exposed through `aria-pressed`. All, Scene, Audio, Text / OCR, and EXIF describe supported filtering. Faces opens observation selection for the current file; it is disabled until the local worker and face models are ready, with a setup explanation in its title.
 
 ### Inputs / Fields
 
@@ -240,13 +290,25 @@ The graph omnibar uses a fine bordered graphite field and an amber focus-within 
 
 Camera navigation combines zoom out/in, Center selected, Refresh, and the Preview toggle. Drag the background or use arrow keys to pan; wheel zoom stays under the pointer. The minimap supports click/drag camera movement and keyboard panning. Use translated text and accessible labels in both RU and EN.
 
-The Force graph / Timeline select changes the spatial view without changing the file-card material. Card pins and +N expansion affordances support keyboard activation. The temporary context menu uses the same graphite/glass material, a fine border, rounded corners (10px), and a narrow width (250px); it offers expansion, supported modalities, shortest path within the expanded graph, pin/unpin, and hiding. Disabled Faces remains explicit. The menu supports arrow-key navigation and Escape; hidden nodes have a restore action.
+The Force graph / Timeline select changes the spatial view without changing the file-card material. Card pins and +N expansion affordances support keyboard activation. The temporary context menu uses the same graphite/glass material, a fine border, rounded corners (10px), and a narrow width (250px); it offers expansion, supported modalities, shortest path within the expanded graph, pin/unpin, and hiding. Its Faces entry routes to selection in the chosen file and reflects model readiness. The menu supports arrow-key navigation and Escape; hidden nodes have a restore action.
 
 ### Cards / Containers
 
 The inspector uses a translucent tonal overlay with a fine left divider and independent vertical scrolling. Its heading and close control stay above the current file or match view. File preview, filename/path, and wrapping actions precede the Indexed evidence heading and opt-in Compute SHA-256 action. A compact two-column metadata list follows; Connected files stays collapsed initially below it. Evidence loading, a successful response with no indexed OCR, and failure with Retry have distinct text states.
 
-Selecting a link opens side-by-side file previews and actual per-modality evidence, followed by local verification actions. Scores remain independent cosines, not probabilities or shares; exact indexed EXIF taken-date equality has no invented cosine. Seek actions are enabled only for reported media locations. Unavailable face/object analysis and absent indexed OCR are stated honestly. The minimap retains its translucent surface, rounded border, small shadow, collapsible heading, miniature nodes, and camera rectangle.
+Selecting a link opens side-by-side file previews and actual per-modality evidence, followed by local verification actions. Scores remain independent cosines, not probabilities or shares; exact indexed EXIF taken-date equality has no invented cosine. Seek actions are enabled only for reported media locations. File evidence explains that face observations use a separate face index and require choosing a face; unextracted objects and absent indexed OCR remain explicit. The minimap retains its translucent surface, rounded border, small shadow, collapsible heading, miniature nodes, and camera rectangle.
+
+### Local Face Index Controls
+
+The face-index strip uses the inspector surface, compact semibold status, tabular counts, and the same native select and quiet-button shapes. It offers explicit local model download/backfill, start/resume, pause, and Auto / CPU / GPU choices. Keep active device and any CPU fallback reason readable alongside progress; changing the device is unavailable during processing. Show missing-runtime, loading, error, paused, complete, and complete-with-issues states through text. Existing unchanged observations are reused, and video sampling is stated as every (2 seconds).
+
+### Face Observations and Candidates
+
+The source image remains the primary context. Numbered cyan boxes and matching real crop buttons choose one observation; both expose `aria-pressed`, and the chosen source uses amber. Source labels include the actual timestamp for video observations. Loading, unprocessed, stale, no usable face, and preview failure each retain a specific explanation. Stale observations cannot be selected until reindexing.
+
+Candidate buttons pair a real crop with filename, three-decimal cosine, and actual time when present. The inspected candidate row uses cyan fill and border. A separate preview shows its source photograph or video, cosine, reported matched-frame time, and Open / Show in Explorer / Choose another face actions. Results show loaded and total counts, a minimum-face-cosine select, and explicit pagination; index changes restart the candidate list with a visible notice. Show in graph starts from the selected face observation, not a whole-file average.
+
+Keep the persistent language that matches are candidates rather than proof of identity, processing runs locally with YuNet + SFace, and sampled video can miss brief appearances. Cosine remains a comparison measure. The dark scrollbar track, visible thumb, and hover thumb belong to all face scrolling panes; forced-colors mode restores system scrollbar colors. Face controls use the existing amber focus outline with a (3px) offset and reduced disabled opacity (.48).
 
 ### File Cards and Similarity Links
 
@@ -259,13 +321,15 @@ Centered pills pair authored modality icons with the real overall cosine to two 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep this visual system scoped to graph mode.
-- **Do** preserve the amber selection and cyan video meanings.
+- **Do** keep this visual system scoped to the graph and face-investigation workspaces.
+- **Do** preserve amber source selection and the scoped cyan video, face-box, and candidate meanings.
 - **Do** pair confirmed/rejected colors with line patterns and readable local-review status.
 - **Do** retain world-anchored grid, stable existing-node positions, and measured filename truncation.
 - **Do** use actual local thumbnails and authored SVG icons.
 - **Do** keep search/index context visible, inspector details scrollable, and camera controls keyboard accessible.
 - **Do** preserve RU/EN labels, reduced-motion behavior, and forced-colors fallbacks.
+- **Do** use real face crops, numbered source boxes, reported video times, and explicit paged candidate counts.
+- **Do** retain local indexing/device status, visible dark scrollbars, and candidate-not-identity language in Faces.
 
 ### Don't:
 - **Don't** extend the graph palette into the desktop launcher or normal search as an implicit rebrand.

@@ -57,7 +57,8 @@ FFmpeg is a separate child process; DigUp does not prevent users replacing its
 shared libraries with a compatible build or exercising their LGPL rights. File
 contents are processed locally. No cloud inference, telemetry, or registration
 service is added by these dependencies.
-# Face search components
+
+## Face search components
 
 Optional local face search uses YuNet and SFace weights from OpenCV Zoo revision
 `47534e27c9851bb1128ccc0102f1145e27f23f98`. The YuNet model directory declares MIT;

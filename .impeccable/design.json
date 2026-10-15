@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T10:58:08.827Z",
+  "generatedAt": "2026-10-15T12:35:52.157Z",
   "title": "Design System: DigUp Graph Workspace",
   "extensions": {
     "colorMeta": {
@@ -423,6 +423,62 @@
           "oklch(83.57% 0.0190 254.80)",
           "oklch(95% 0.0190 254.80)"
         ]
+      },
+      "quiet-solid": {
+        "role": "neutral",
+        "displayName": "Quiet Solid",
+        "tonalRamp": [
+          "oklch(15.00% 0.0155 248.28)",
+          "oklch(26.43% 0.0155 248.28)",
+          "oklch(37.86% 0.0155 248.28)",
+          "oklch(49.29% 0.0155 248.28)",
+          "oklch(60.71% 0.0155 248.28)",
+          "oklch(72.14% 0.0155 248.28)",
+          "oklch(83.57% 0.0155 248.28)",
+          "oklch(95.00% 0.0155 248.28)"
+        ]
+      },
+      "media-stage": {
+        "role": "neutral",
+        "displayName": "Media Stage",
+        "tonalRamp": [
+          "oklch(15.00% 0.0115 254.07)",
+          "oklch(26.43% 0.0115 254.07)",
+          "oklch(37.86% 0.0115 254.07)",
+          "oklch(49.29% 0.0115 254.07)",
+          "oklch(60.71% 0.0115 254.07)",
+          "oklch(72.14% 0.0115 254.07)",
+          "oklch(83.57% 0.0115 254.07)",
+          "oklch(95.00% 0.0115 254.07)"
+        ]
+      },
+      "scrollbar-thumb": {
+        "role": "neutral",
+        "displayName": "Scrollbar Thumb",
+        "tonalRamp": [
+          "oklch(15.00% 0.0282 246.47)",
+          "oklch(26.43% 0.0282 246.47)",
+          "oklch(37.86% 0.0282 246.47)",
+          "oklch(49.29% 0.0282 246.47)",
+          "oklch(60.71% 0.0282 246.47)",
+          "oklch(72.14% 0.0282 246.47)",
+          "oklch(83.57% 0.0282 246.47)",
+          "oklch(95.00% 0.0282 246.47)"
+        ]
+      },
+      "scrollbar-hover": {
+        "role": "neutral",
+        "displayName": "Scrollbar Hover",
+        "tonalRamp": [
+          "oklch(15.00% 0.0288 246.51)",
+          "oklch(26.43% 0.0288 246.51)",
+          "oklch(37.86% 0.0288 246.51)",
+          "oklch(49.29% 0.0288 246.51)",
+          "oklch(60.71% 0.0288 246.51)",
+          "oklch(72.14% 0.0288 246.51)",
+          "oklch(83.57% 0.0288 246.51)",
+          "oklch(95.00% 0.0288 246.51)"
+        ]
       }
     },
     "typographyMeta": {
@@ -449,6 +505,10 @@
       "metadata": {
         "displayName": "Metadata",
         "purpose": "Paths, minimap, and zoom readout."
+      },
+      "panel-title": {
+        "displayName": "Panel Title",
+        "purpose": "Face-workspace subsections and local face-index status."
       }
     },
     "shadows": [
@@ -487,6 +547,10 @@
       {
         "name": "narrow-overlay",
         "value": "(max-width: 700px)"
+      },
+      {
+        "name": "face-review-stack",
+        "value": "(max-width: 940px)"
       }
     ]
   },
@@ -579,8 +643,8 @@
       "name": "Modality Chips",
       "kind": "chip",
       "refersTo": "modality-chip",
-      "description": "Quiet modality filters with amber pressed state and an explicitly unavailable Faces option.",
-      "html": "<div class=\"ds-modalities\" role=\"group\" aria-label=\"Link filters\"><button type=\"button\" aria-pressed=\"true\">All</button><button type=\"button\" aria-pressed=\"false\" disabled title=\"Face recognition is not available in this index\">Faces</button><button type=\"button\" aria-pressed=\"false\">Scene</button><button type=\"button\" aria-pressed=\"false\">Audio</button><button type=\"button\" aria-pressed=\"false\">Text / OCR</button><button type=\"button\" aria-pressed=\"false\">EXIF</button></div>",
+      "description": "Quiet modality filters with amber pressed state; Faces opens observation selection when the local worker and models are ready.",
+      "html": "<div class=\"ds-modalities\" role=\"group\" aria-label=\"Link filters\"><button type=\"button\" aria-pressed=\"true\">All</button><button type=\"button\" aria-pressed=\"false\" title=\"Choose a face in the selected file\">Faces</button><button type=\"button\" aria-pressed=\"false\">Scene</button><button type=\"button\" aria-pressed=\"false\">Audio</button><button type=\"button\" aria-pressed=\"false\">Text / OCR</button><button type=\"button\" aria-pressed=\"false\">EXIF</button></div>",
       "css": ".ds-modalities{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.ds-modalities button{border:1px solid #505962;border-radius:16px;color:#bfcbd6;background:#293039;padding:5px 10px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer}.ds-modalities button[aria-pressed=\"true\"]{color:#f3d6b3;background:#483827;border-color:#d29b5d}.ds-modalities button:hover:not(:disabled){background:#424c57;color:#f1f4f7}.ds-modalities button:focus-visible{outline:2px solid #f0a048;outline-offset:2px}.ds-modalities button:disabled{opacity:.45;cursor:default}"
     },
     {
@@ -597,21 +661,46 @@
       "description": "Schematic confirmed curve/pill and local review actions; actual scores and modality icons come from indexed evidence.",
       "html": "<div class=\"ds-review\"><svg viewBox=\"0 0 280 76\" width=\"280\" height=\"76\" aria-label=\"Schematic confirmed link\"><g class=\"ds-link\" tabindex=\"0\" role=\"button\" aria-label=\"Analyze overlap, confirmed\"><path class=\"ds-hit\" d=\"M10 62Q140 -34 270 62\"/><path class=\"ds-curve\" d=\"M10 62Q140 -34 270 62\"/><g transform=\"translate(140 14)\"><rect class=\"ds-pill\" x=\"-33\" y=\"-12\" width=\"66\" height=\"24\" rx=\"12\"/><path d=\"M1 1H13V13H1Z M1 10L5 6L8 9L11 5L13 8 M4 4h.1\" transform=\"translate(-25 -7)\" fill=\"none\" stroke=\"#a5dfbe\" stroke-width=\"1.2\"/><text x=\"25\" y=\"4\" text-anchor=\"end\">0.84</text></g></g></svg><div class=\"ds-verification\"><button class=\"ds-confirm\" type=\"button\" disabled>Confirm link</button><button class=\"ds-reject\" type=\"button\">False positive</button><button type=\"button\">Mark unverified</button></div><p>Verification is your local assessment, not an automated finding.</p></div>",
       "css": ".ds-review{color:#b4bec8;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;line-height:1.5}.ds-link{cursor:pointer;outline:none}.ds-hit{fill:none;stroke:transparent;stroke-width:18;pointer-events:stroke}.ds-curve{fill:none;stroke:#83cda2;stroke-width:3;stroke-opacity:.95}.ds-pill{fill:#293039;stroke:#83cda2;stroke-width:.8}.ds-link text{fill:#d2dbe4;font:11px \"Segoe UI\",sans-serif;font-variant-numeric:tabular-nums}.ds-link:focus-visible .ds-pill{stroke:#ffc079;stroke-width:3}.ds-verification{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px}.ds-verification button{min-height:34px;padding:6px 10px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;backdrop-filter:blur(12px);cursor:pointer}.ds-verification .ds-confirm{border-color:#628c73;color:#b8e5ca;background:#2c4236}.ds-verification .ds-reject{border-color:#a37572;color:#f0cfcd;background:#483334}.ds-verification button:hover{background:#424c57}.ds-verification .ds-confirm:hover{background:#2c4236}.ds-verification .ds-reject:hover{background:#483334}.ds-verification button:focus-visible{outline:2px solid #f0a048;outline-offset:2px}.ds-verification button:disabled{opacity:.45;cursor:default}.ds-review p{margin-top:12px}"
+    },
+    {
+      "name": "Local Face Index Controls",
+      "kind": "custom",
+      "refersTo": "face-control",
+      "description": "Inspector-toned local indexing status, explicit start/pause actions, and native device choice. Counts and active device come from the worker at runtime.",
+      "html": "<section class=\"ds-face-index\" aria-label=\"Face indexing progress\"><strong>Face index is ready to start</strong><p>YuNet + SFace processes photos and sampled video frames locally.</p><div class=\"ds-face-index-controls\"><label>Face processing <select><option>Auto · GPU with CPU fallback</option><option>CPU</option><option>GPU · CPU fallback</option></select></label><button type=\"button\">Index faces</button></div></section>",
+      "css": ".ds-face-index{padding:12px 18px;background:#252b32;color:#eef2f6;border-bottom:1px solid #414952;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-index strong{font-size:13px;font-weight:600}.ds-face-index p{margin:6px 0 0;color:#b4bec8;line-height:1.5}.ds-face-index-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.ds-face-index-controls label{display:flex;align-items:center;gap:7px;color:#b4bec8}.ds-face-index-controls select,.ds-face-index-controls button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit}.ds-face-index-controls button{cursor:pointer}.ds-face-index-controls button:hover:not(:disabled),.ds-face-index-controls select:hover{background:#424c57}.ds-face-index-controls :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-index-controls :disabled{opacity:.48;cursor:default}"
+    },
+    {
+      "name": "Face Observation Selector",
+      "kind": "custom",
+      "refersTo": "face-choice",
+      "description": "Numbered cyan source boxes and amber source selection pair with real local crops. This schematic snippet omits media; runtime crops use indexed bounding boxes on the actual source frame.",
+      "html": "<section class=\"ds-face-selector\" aria-label=\"Choose a face\"><div class=\"ds-face-stage\"><span class=\"ds-face-stage-note\">Local source image</span><button class=\"ds-face-box ds-face-box-first\" type=\"button\" aria-label=\"Face 1\" aria-pressed=\"false\"><span>1</span></button><button class=\"ds-face-box ds-face-box-selected\" type=\"button\" aria-label=\"Face 2\" aria-pressed=\"true\"><span>2</span></button></div><p>Choose one face in the picture or below.</p><div class=\"ds-face-choices\"><button class=\"ds-face-choice\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-crop\" aria-hidden=\"true\"></span><span>Face 1</span></button><button class=\"ds-face-choice\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-face-crop\" aria-hidden=\"true\"></span><span>Face 2</span></button></div></section>",
+      "css": ".ds-face-selector{color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-stage{position:relative;min-height:150px;border-radius:10px;overflow:hidden;background:#181c21}.ds-face-stage-note{display:block;padding:10px;color:#b4bec8;font-size:11px}.ds-face-box{position:absolute;display:block;min-width:0;min-height:0;margin:0;padding:0;width:42px;height:54px;top:65px;border:2px solid #77acc5;background:#77acc50a;border-radius:3px;cursor:pointer}.ds-face-box-first{left:28%}.ds-face-box-selected{left:58%}.ds-face-box:hover,.ds-face-box[aria-pressed=\"true\"]{border-color:#f0a048;background:#f0a04814}.ds-face-box span{position:absolute;top:-20px;left:-2px;min-width:20px;padding:0 3px;color:#202429;background:#77acc5;border-radius:3px 3px 0 0;font-size:11px;line-height:17px}.ds-face-box[aria-pressed=\"true\"] span{background:#f0a048}.ds-face-selector p{margin:10px 0;color:#b4bec8;line-height:1.5}.ds-face-choices{display:flex;gap:8px;flex-wrap:wrap}.ds-face-choice{display:flex;flex-direction:column;align-items:center;gap:5px;padding:5px;color:#e1e7ee;background:#2b3036;border:1px solid #505962;border-radius:8px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;font-variant-numeric:tabular-nums;cursor:pointer}.ds-face-choice[aria-pressed=\"true\"]{border-color:#f0a048;background:#483827;color:#f5d8af}.ds-face-choice:hover:not(:disabled){background:#424c57}.ds-face-crop{display:block;flex:none;width:62px;height:62px;background:#181c21;border-radius:5px}.ds-face-selector :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-selector :disabled{opacity:.48;cursor:default}@media (forced-colors:active){.ds-face-box,.ds-face-choice[aria-pressed=\"true\"]{border-color:Highlight}}"
+    },
+    {
+      "name": "Face Candidate List",
+      "kind": "custom",
+      "refersTo": "face-result-selected",
+      "description": "Cyan candidate selection, local crop, filename, reported cosine/time, explicit pagination, and dark pane scrollbars. Schematic labels carry no fabricated match score or media.",
+      "html": "<section class=\"ds-face-candidates\" aria-label=\"Face matches\"><div class=\"ds-face-candidate-scroll\"><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button></div><button class=\"ds-face-more\" type=\"button\">Show more</button><p>Face matches are candidates, not proof of identity. Video is sampled; brief appearances can be missed.</p></section>",
+      "css": ".ds-face-candidates{color-scheme:dark;background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-candidate-scroll{max-height:138px;overflow-y:auto;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-face-candidate-scroll:hover{scrollbar-color:#8999a8 #252b32}.ds-face-candidate-scroll::-webkit-scrollbar{width:10px}.ds-face-candidate-scroll::-webkit-scrollbar-track,.ds-face-candidate-scroll::-webkit-scrollbar-corner{background:#252b32}.ds-face-candidate-scroll::-webkit-scrollbar-thumb{background:#687785;border:2px solid #252b32;border-radius:8px}.ds-face-candidate-scroll::-webkit-scrollbar-thumb:hover{background:#8999a8}.ds-face-candidate{display:flex;width:100%;align-items:center;gap:9px;padding:9px 6px;border:1px solid transparent;border-radius:8px;color:#eef2f6;text-align:left;background:transparent;font:inherit;cursor:pointer}.ds-face-candidate[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-face-candidate:hover:not(:disabled){background:#424c57}.ds-face-candidate-crop{display:block;flex:none;width:45px;height:45px;background:#181c21;border-radius:5px}.ds-face-candidate-text{display:flex;flex-direction:column;gap:4px;min-width:0}.ds-face-candidate-text strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}.ds-face-candidate-text>span{color:#b4bec8;font-size:11px;font-variant-numeric:tabular-nums}.ds-face-more{margin:6px 18px 12px;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-face-more:hover:not(:disabled){background:#424c57}.ds-face-candidates p{margin:0;border-top:1px solid #414952;padding:9px 18px;color:#b4bec8;font-size:11px;line-height:1.5}.ds-face-candidates :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-candidates :disabled{opacity:.48;cursor:default}@media (forced-colors:active){.ds-face-candidates{color-scheme:normal}.ds-face-candidate[aria-pressed=\"true\"]{border-color:Highlight}.ds-face-candidate-scroll,.ds-face-candidate-scroll:hover{scrollbar-color:auto;scrollbar-width:auto}.ds-face-candidate-scroll::-webkit-scrollbar-track,.ds-face-candidate-scroll::-webkit-scrollbar-corner{background:Canvas}.ds-face-candidate-scroll::-webkit-scrollbar-thumb{background:ButtonText;border-color:Canvas}.ds-face-candidate-scroll::-webkit-scrollbar-thumb:hover{background:Highlight}}"
     }
   ],
   "narrative": {
     "northStar": "Graphite, Glass, Amber/Cyan",
-    "overview": "This system applies only to DigUp's Tauri graph workspace and its graph-active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; these graph tokens are not a product-wide rebrand.\n\nA restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and emphasizes its unverified incident links; cyan distinguishes video cards. Green and muted red record the operator's confirmed and rejected link states. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the overlay inspector supplies readable file and match evidence.",
+    "overview": "This system applies to DigUp's Tauri graph workspace, its face-investigation extension, and their active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; this is a scoped workspace system.\n\nA restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and emphasizes its unverified incident links; cyan distinguishes video cards. Green and muted red record the operator's confirmed and rejected link states. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the overlay inspector supplies readable file and match evidence.\n\nFace investigation reuses that graphite material, native type, quiet controls, and warm selection. A large source photograph or sampled video frame carries numbered cyan face boxes; the selected observation and crop adopt amber. Actual face crops, file names, cosine values, and reported video times make candidate review concrete. The indexing strip and persistent candidate-language footer remain part of the working surface.",
     "keyCharacteristics": [
       "A world-anchored grid and stable file neighborhoods.",
       "Glass plates with small rounded corners and restrained state glows.",
       "Native sans typography, measured filename truncation, and modality/cosine pills.",
-      "Visible search/index context, graph search and filters, a collapsible evidence inspector, and an operable minimap."
+      "Visible search/index context, graph search and filters, a collapsible evidence inspector, and an operable minimap.",
+      "A source-led face workspace with local indexing controls, observation crops, paged candidates, and media evidence."
     ],
     "rules": [
       {
         "name": "The State Color Rule",
-        "body": "Amber follows the selected card, active unverified links, and a requested shortest path. Cyan identifies unselected video cards. Confirmed links retain green during ordinary selection; rejected links use muted red only when explicitly shown. Pair review colors with line patterns and inspector text.",
+        "body": "In the graph, amber follows the selected card, active unverified links, and a requested shortest path; cyan identifies unselected video cards. In Faces, amber follows the selected source observation, while cyan identifies available face boxes and the active candidate row. Confirmed links retain green during ordinary selection; rejected links use muted red only when explicitly shown. Pair review colors with line patterns and inspector text.",
         "section": "colors"
       },
       {
@@ -631,13 +720,15 @@
       }
     ],
     "dos": [
-      "**Do** keep this visual system scoped to graph mode.",
-      "**Do** preserve the amber selection and cyan video meanings.",
+      "**Do** keep this visual system scoped to the graph and face-investigation workspaces.",
+      "**Do** preserve amber source selection and the scoped cyan video, face-box, and candidate meanings.",
       "**Do** pair confirmed/rejected colors with line patterns and readable local-review status.",
       "**Do** retain world-anchored grid, stable existing-node positions, and measured filename truncation.",
       "**Do** use actual local thumbnails and authored SVG icons.",
       "**Do** keep search/index context visible, inspector details scrollable, and camera controls keyboard accessible.",
-      "**Do** preserve RU/EN labels, reduced-motion behavior, and forced-colors fallbacks."
+      "**Do** preserve RU/EN labels, reduced-motion behavior, and forced-colors fallbacks.",
+      "**Do** use real face crops, numbered source boxes, reported video times, and explicit paged candidate counts.",
+      "**Do** retain local indexing/device status, visible dark scrollbars, and candidate-not-identity language in Faces."
     ],
     "donts": [
       "**Don't** extend the graph palette into the desktop launcher or normal search as an implicit rebrand.",

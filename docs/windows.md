@@ -3,7 +3,7 @@
 The Windows app uses the existing Swift engine and `digup` CLI behind the existing
 Rust/Tauri shell. These instructions do not replace the macOS app or Linux build.
 The Windows target is Windows 10 **22H2** and Windows 11, x64, with CPU execution
-and an optional Vulkan GPU backend. The Windows updater and ARM64 Windows remain
+and optional Vulkan (semantic embeddings) / DirectML (face search) GPU backends. The Windows updater and ARM64 Windows remain
 outside this release target.
 
 ## Status and evidence
@@ -12,7 +12,7 @@ The Tauri search panel's **Graph** button explores files related to the selected
 in the connected-files list, then **Expand links** / **More links** to reveal neighbors, or **Start here** to center
 a new graph on that file. **Minimum similarity** filters cosine scores; these are not probabilities or confirmed
 relationships. The view contains only expanded neighborhoods, with a 120-file rendering limit; start from another
-node to continue exploring. It does not materialize every pair of files or claim automatic topic/people detection.
+node to continue exploring. It does not materialize every pair of files or identify people by name.
 Links compare the matched indexed fragment, or the normalized file-vector average when no vector belongs to that
 fragment. Neighbors use the closest fragment per file. **Refresh** recomputes the view after indexing changes.
 Folder exclusions and the separate code index apply. Neighbor navigation reads stored vectors only, requires no
