@@ -170,7 +170,12 @@ try {
     & "$PSScriptRoot/Check-Runtime.ps1" -PackageDirectory $package
     $output = "$script:Repo/build.noindex/windows/artifacts"
     Reset-BuildDirectory $output
-    Copy-Item "$script:Repo/shell/src-tauri/target/release/bundle/nsis/*-setup.exe" $output
+    # Old versioned installers can remain in Cargo's output directory after an
+    # incremental build. Publish only the version built from this checkout.
+    $releaseConfig = Get-Content -LiteralPath "$script:Repo/shell/src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+    $releaseInstaller = "$script:Repo/shell/src-tauri/target/release/bundle/nsis/$($releaseConfig.productName)_$($releaseConfig.version)_x64-setup.exe"
+    if (!(Test-Path -LiteralPath $releaseInstaller)) { throw 'The installer for the configured release version is missing.' }
+    Copy-Item -LiteralPath $releaseInstaller -Destination $output
     # ZIP timestamps cannot represent Unix epoch values used by some crate archives.
     Get-ChildItem -LiteralPath $package -File -Recurse | Where-Object LastWriteTimeUtc -LT ([DateTime]'1980-01-01Z') |
         ForEach-Object { $_.LastWriteTimeUtc = [DateTime]'1980-01-01Z' }
