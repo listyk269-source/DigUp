@@ -15,8 +15,9 @@ relationships. The view contains only expanded neighborhoods, with a 120-file re
 node to continue exploring. It does not materialize every pair of files or claim automatic topic/people detection.
 Links compare the matched indexed fragment, or the normalized file-vector average when no vector belongs to that
 fragment. Neighbors use the closest fragment per file. **Refresh** recomputes the view after indexing changes.
-Folder exclusions and the separate code index apply. Graph navigation reads stored vectors only, requires no
-additional model/download, and does not change the index schema or search ranking. The macOS native app does not
+Folder exclusions and the separate code index apply. Neighbor navigation reads stored vectors only, requires no
+additional model/download, and does not change the index schema or main-search ranking. The optional graph
+semantic omnibar uses the existing local model. The macOS native app does not
 yet expose this Tauri view. `Graph-Smoke.ps1` checks real indexed vectors, WebView controls and model-free navigation.
 
 `scripts/windows/Build.ps1` is the build entry point. `.github/workflows/windows.yml`
@@ -414,7 +415,7 @@ Win10/11 check (including high DPI and Remote Desktop), as described in
 Validation on a packaged application:
 
 ```powershell
-node --test Tests/GraphModelTests.cjs Tests/I18nTests.cjs
+node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/I18nTests.cjs
 ./scripts/windows/UI-Features-Smoke.ps1 -Archive build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip -Models C:/test-models -OutputDirectory C:/test-evidence/ui-features
 ```
 
@@ -443,9 +444,32 @@ Drag the canvas or use arrow keys to pan. Use the wheel, +/- or the 20-200% slid
 The graph uses the existing local preview and file-opening services and works in Russian and English.
 The visual rules are documented in [DESIGN.md](../DESIGN.md) and apply only to this graph surface.
 
+The graph also has a local investigation workspace: click an edge to compare its two files,
+inspect real modality evidence and manually confirm/reject the link. Unreviewed links are dashed;
+confirmed links are green; rejected links are hidden unless **Show rejected** is enabled.
+Modality chips filter actual visual, audio, indexed OCR or EXIF evidence. **Faces** is disabled:
+no face/object detector is included. EXIF evidence currently means an equal indexed capture-date
+value, not comparison of every EXIF field. Scores are independent embedding cosines, not probabilities.
+
+The 360-DIP inspector overlays the canvas. Its file view includes indexed dates/dimensions,
+available OCR excerpts and an explicit **Compute SHA-256** action that reads the actual file in
+the background. File evidence has separate loading, unavailable and retryable error states.
+Right-click a card (or press Shift+F10) to expand all neighbors or one modality, find a shortest
+path among expanded files, pin or hide a node. The **+N** badge counts indexed neighbors above
+the current threshold that are not loaded. Pins, hidden files and manual reviews are saved locally
+beside settings in `graph-investigation.json`; they do not alter the index database.
+
+Typing in the graph search box highlights matching filenames and dims others. Enter runs local
+semantic highlighting of the loaded graph files; it is separate from the main search and does not
+query a remote service. **Timeline** places unpinned nodes by file modification date, retaining
+fixed pin coordinates; switch back to **Force** to restore the spatial layout.
+See [Graph investigation](graph-investigation.md) for state/protocol details and limits.
+
 `UI-Features-Smoke.ps1` also checks camera controls, minimap navigation, actual image/video cards,
 coefficient labels and the initial seven-card layout's perimeter/minimap clearance. It records native
-WebView2 PNG captures for text and media states on first launch and restart, with an isolated test index.
+WebView2 PNG captures for text, media, comparison, timeline and context-menu states on first launch
+and restart, with an isolated test index. The investigation checks use real image EXIF, video/audio
+embeddings, semantic highlighting, hashing, review persistence and pinned coordinates.
 These client-area captures do not include the outer DWM frame or other desktop applications.
 Only this isolated UI smoke fixes its graph client viewport at 1280 x 900 DIP, independently of
 the CI virtual desktop; normal windows fit their monitor. Smaller displays and high-DPI layouts

@@ -235,3 +235,8 @@ MIT
 The Windows/Linux Tauri shell includes a persistent **English / Русский** interface selector.
 Use **Graph** to explore related files with a selected-file preview, or **Find similar** below a result to load
 its semantic neighbors in pages. See [Windows usage and validation](docs/windows.md#rounded-panel-file-previews-and-interface-language).
+
+Graph now supports local link review, side-by-side comparison, visual/audio/indexed-OCR/EXIF filters,
+pins, expanded-neighbor counts, filename/semantic highlighting and a modification-date timeline.
+See [Graph investigation](docs/graph-investigation.md) for controls, persistence and evidence limits.
+Face/object detection and Windows OCR extraction are not included.
