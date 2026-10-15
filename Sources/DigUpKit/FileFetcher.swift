@@ -107,7 +107,7 @@ public final class FileFetcher: NSObject, URLSessionDataDelegate, @unchecked Sen
         case 200:
             written = 0   // the whole file, from the start
         default:
-            problem = ("Hugging Face answered \(status)", status == 429 || status >= 500)
+            problem = ("Model server answered \(status)", status == 429 || status >= 500)
             return completionHandler(.cancel)
         }
         do {

@@ -17,6 +17,14 @@ import LlamaRuntime
 ///         Complete FTS candidate retrieval; no 100-file/1000-segment cutoff. Metadata is read per page.
 ///         New queries/folder settings replace the cursor. Reload preserves the ranking; deleted files are skipped.
 ///   {"op":"index_stats"} → selected-folder metadata counts, recent indexed files and whole-database size.
+///   {"op":"face_status"} → opt-in face-job state, file/frame/face counts, device and fallback reason.
+///   {"op":"face_start","download":true,"device":"auto|cpu|gpu","sample_seconds":2} → starts/resumes the
+///         independent face sidecar. Only this explicit request can download the pinned YuNet/SFace weights.
+///   {"op":"face_cancel"} → cancelling, then cancelled after owned decoders/inference stop. Resume retries the
+///         interrupted file; unchanged completed files are kept. Neither operation resets the semantic index.
+///   {"op":"face_file","path":…, "offset":0,"limit":60} → version-bound faces, normalized boxes and actual frame PTS.
+///   {"op":"face_search","face_id":n,"minimum_cosine":0.363,"offset":0,"limit":40} → ranked face observations;
+///         pass index_revision on following pages. Publication expires an older ranking instead of duplicating hits.
 ///   {"op":"related_files","path":…, "segment":id?, "code":bool, "offset":0, "limit":12, "minimum_cosine":0.55}
 ///         → seed, hits, total, next_offset, has_more, basis, vector_source. Stored vectors only; no query encoder.
 ///   {"op":"embed_ahead","q":…,"code":bool}   → {"ok":true}: embeds and caches the text (the panel sends what's typed so
@@ -46,6 +54,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private let idleSeconds: Double
     private let device: LlamaDevice?
     private let log: URL
+    private let faces: FaceService
 
     private var encoder: (any Embedder)?
     private var encoderState = "stopped"
@@ -62,6 +71,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private var rendered: [String: String] = [:]
     private let renderLock = NSLock()
     private let renderSlots = DispatchSemaphore(value: 2)
+    private let faceQueries = DispatchQueue(label: "DigUp.face-queries", qos: .utility)
 
     init(index: URL, roots: [String]?, skipped: [String], types: Set<String>, codeRoots: [String],
          codeSkipped: [String], idleSeconds: Double, device: LlamaDevice?) throws {
@@ -75,6 +85,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         self.codeSkipped = codeSkipped
         self.idleSeconds = idleSeconds
         self.device = device
+        faces = FaceService(directory: index, roots: roots, skipped: skipped, types: types)
         log = index.appendingPathComponent("worker-query.log")
         previews = index.appendingPathComponent("previews")
         try? FileManager.default.removeItem(at: previews)
@@ -101,8 +112,20 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 guard let op = request["op"] as? String else { throw CLIError("no op") }
                 if op == "quit" {
                     write(["id": id, "ok": true])
+                    faces.cancel()
                     lock.withLock { stopEncoder() }
                     return 0
+                }
+                if op == "face_file" || op == "face_search" {
+                    let request = UncheckedSendable(request)
+                    faceQueries.async { [self] in
+                        var reply: [String: Any]
+                        do { reply = try op == "face_file" ? faces.file(request.value) : faces.search(request.value) }
+                        catch { reply = ["ok": false, "error": String("\(error)".prefix(500))] }
+                        reply["id"] = request.value["id"] ?? NSNull()
+                        write(reply)
+                    }
+                    continue
                 }
                 if op == "render" || op == "media_details" {
                     renderSlots.wait()
@@ -125,12 +148,16 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             reply["id"] = id
             write(reply)
         }
+        faces.cancel()
         lock.withLock { stopEncoder() }
         return 0
     }
 
     private func handle(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
         switch op {
+        case "face_status": return faces.status()
+        case "face_start": return try faces.start(request)
+        case "face_cancel": return faces.cancel()
         case "graph_search":
             let code = request["code"] as? Bool ?? false
             let paths = Array((request["paths"] as? [String] ?? []).prefix(120))
@@ -295,6 +322,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             if let value = request["roots"] as? [String] { roots = value.map { Arguments.folderURL($0).path } }
             if let value = request["skipped"] as? [String] { skipped = value.map { Arguments.folderURL($0).path } }
             if let value = request["types"] as? [String] { types = IndexOptions.extensions(value.joined(separator: ",")) }
+            faces.update(roots: roots, skipped: skipped, types: types)
             if let value = request["code_roots"] as? [String] { codeRoots = value.map { Arguments.folderURL($0).path } }
             if let value = request["code_skipped"] as? [String] { codeSkipped = value.map { Arguments.folderURL($0).path } }
             if codeSearcher == nil { try openCode() }
