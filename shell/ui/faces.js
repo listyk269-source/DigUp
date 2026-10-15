@@ -61,7 +61,7 @@ class FaceSearchView {
     if (file && !FaceState.isMedia(file)) file = null;
     const changed = this.file?.path !== file?.path;
     this.visible = true; this.file = file; this.onVisibility(true);
-    if (changed) { this.fileGeneration++; this.selection.clear(); this.fileFaces = []; this.fileReply = null; this.fileError = null; this.resultPreviewKey = null; }
+    if (changed) { this.fileGeneration++; this.selection.clear(); this.fileFaces = []; this.fileReply = null; this.fileError = null; this.resultPreviewKey = null; this.people?.faceSelected(); }
     this.render(); clearInterval(this.pollTimer);
     this.pollTimer = setInterval(() => { if (!document.hidden) this.status(); }, 1200);
     await Promise.all([this.status(), this.deviceReady]);
@@ -234,6 +234,7 @@ class FaceSearchView {
   choose(face) {
     if (this.fileReply?.stale) return;
     this.stopMedia(); this.selection.select({ ...this.file, ...face }); this.searchError = null; this.searchExpired = false; this.searchRestartNotice = false; this.selectedResult = null; this.resultPreviewKey = null;
+    this.people?.faceSelected();
     this.renderSource(); this.renderMatches(); return this.search();
   }
   async search(more = false) {
@@ -278,9 +279,13 @@ class FaceSearchView {
       button.dataset.faceId = FaceState.faceKey(hit); button.setAttribute("aria-pressed", String(this.selectedResult === FaceState.faceKey(hit)));
       const text = this.text("span", "face-result-text"); text.append(this.text("strong", "", this.nameOf(hit.path)),
         this.text("span", "", t("Cosine {value}", { value: hit.cosine.toFixed(3) }) + (hit.kind === "video" && Number.isFinite(hit.loc) ? ` · ${this.clock(hit.loc)}` : "")));
-      button.append(this.crop(hit), text); button.onclick = () => { this.stopMedia(); this.selectedResult = FaceState.faceKey(hit); this.renderMatches(); }; list.append(button);
+      button.append(this.crop(hit), text); button.onclick = () => { this.stopMedia(); this.selectedResult = FaceState.faceKey(hit); this.renderMatches(); };
+      const line = this.text("div", "face-result-line"), check = document.createElement("input"); check.type = "checkbox"; check.dataset.faceId = FaceState.faceKey(hit);
+      check.setAttribute("aria-label", t("Select observation in {name}", { name: this.nameOf(hit.path) }));
+      check.onchange = () => { this.people?.faceBulk.toggle(check.dataset.faceId, check.checked); if (this.people) this.people.bulkResetNotice = false; this.people?.renderFaceControls(); };
+      line.append(check, button); list.append(line);
     }
-    list.scrollTop = scroll; this.renderMatchPreview();
+    list.scrollTop = scroll; this.renderMatchPreview(); this.people?.renderFaceControls();
   }
   renderMatchPreview() {
     const hit = this.selection.hits.find((item) => FaceState.faceKey(item) === this.selectedResult), key = hit ? FaceState.faceKey(hit) + I18n.language : null;

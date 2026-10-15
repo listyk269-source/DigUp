@@ -68,12 +68,14 @@ let debugOptions = {};
 const featureReport = {};
 let facesReturnGraph = false;
 const graph = new GraphView({ ask, invoke, nameOf, thumbnailFor: graphThumbnail, previewFor: (hit, code) => picture(hit, { code, query: "" }), onSimilar: findSimilar, onVisibility: (visible) => {
+  if (visible && people.visible) people.close();
   if (visible && faceSearch.visible) faceSearch.close(false);
   if (visible) state.statsOpen = false;
   render();
 }, onFaces: (hit) => openFaces(hit) });
 const faceSearch = new FaceSearchView({ ask, invoke, rendered, fileURL, picture, nameOf, clock, onVisibility: (visible, restore) => {
   if (visible) {
+    if (people.visible) people.close();
     if (graph.visible) { facesReturnGraph = true; graph.close(); }
     state.statsOpen = false;
   } else {
@@ -83,12 +85,18 @@ const faceSearch = new FaceSearchView({ ask, invoke, rendered, fileURL, picture,
   render();
 }, onGraph: (seed, reply, minimum) => graph.showFaceMatches(seed, reply, minimum) });
 window.faceSearch = faceSearch;
-function openFaces(hit = selectedHit()) { return faceSearch.open(hit); }
+const people = new PeopleView({ ask, faceSearch, invoke, picture, nameOf, clock, onVisibility: (visible) => {
+  if (visible) { if (faceSearch.visible) faceSearch.close(false); if (graph.visible) graph.close(); state.statsOpen = false; }
+  render();
+}, onFace: (hit) => openFaces(hit) });
+window.people = people;
+function openFaces(hit = selectedHit()) { return faceSearch.openTask = faceSearch.open(hit); }
 const debugPages = [];
 
 // MARK: Searching
 
 function queryChanged() {
+  if (people.visible) people.close();
   if (faceSearch.visible) faceSearch.close(false);
   if (graph.visible || graph.loading) graph.close();
   state.related = null;
@@ -341,21 +349,26 @@ function revealSelected() {
 function render() {
   const empty = state.phase === "empty";
   const facesVisible = faceSearch.visible;
+  const peopleVisible = people.visible;
   document.querySelector(".panel").classList.toggle("graph-active", graph.visible);
   document.querySelector(".panel").classList.toggle("faces-active", facesVisible);
   document.documentElement.classList.toggle("graph-mode", graph.visible);
   document.documentElement.classList.toggle("faces-mode", facesVisible);
-  const height = graph.visible || facesVisible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
+  document.querySelector(".panel").classList.toggle("people-active", peopleVisible);
+  document.documentElement.classList.toggle("people-mode", peopleVisible);
+  const height = graph.visible || facesVisible || peopleVisible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
-    invoke("panel_height", { height, graph: graph.visible || facesVisible }).catch(() => {});
+    invoke("panel_height", { height, graph: graph.visible || facesVisible || peopleVisible }).catch(() => {});
   }
-  $body.hidden = empty || state.statsOpen || graph.visible || facesVisible;
-  $footer.hidden = empty || state.statsOpen || graph.visible || facesVisible;
+  $body.hidden = empty || state.statsOpen || graph.visible || facesVisible || peopleVisible;
+  $footer.hidden = empty || state.statsOpen || graph.visible || facesVisible || peopleVisible;
   $("graph-view").hidden = !graph.visible;
   $("faces-view").hidden = !facesVisible;
   $("faces-toggle").setAttribute("aria-expanded", String(facesVisible));
-  $("similar-context").hidden = !state.related || graph.visible || state.statsOpen || facesVisible;
+  $("people-view").hidden = !peopleVisible;
+  $("people-toggle").setAttribute("aria-expanded", String(peopleVisible));
+  $("similar-context").hidden = !state.related || graph.visible || state.statsOpen || facesVisible || peopleVisible;
   $("similar-title").textContent = state.related ? t("Similar to {name}", { name: nameOf(state.related.seed.path) }) : "";
   $("graph-toggle").disabled = !selectedHit();
   $("graph-toggle").setAttribute("aria-expanded", String(graph.visible));
@@ -746,6 +759,7 @@ ICONS.screenshot = ICONS.image;
 $query.addEventListener("input", queryChanged);
 $("load-more").addEventListener("click", () => state.page?.expired ? queryChanged() : loadMore());
 $("stats-toggle").addEventListener("click", () => {
+  if (people.visible) people.close();
   if (faceSearch.visible) faceSearch.close(false);
   if (graph.visible) graph.close();
   state.statsOpen = !state.statsOpen;
@@ -754,14 +768,17 @@ $("stats-toggle").addEventListener("click", () => {
 });
 $("graph-toggle").addEventListener("click", () => graph.visible ? graph.close() : graph.show(selectedHit(), state.isCode));
 $("faces-toggle").addEventListener("click", () => faceSearch.visible ? faceSearch.close() : openFaces(graph.visible ? graph.model.nodes.get(graph.selected) : selectedHit()));
+$("people-toggle").addEventListener("click", () => { if (people.visible) people.close(); else people.openTask = people.open(); });
 $("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
 $("similar-back").onclick = backFromSimilar;
-tauri.event.listen("search-scope-changed", () => { if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
+tauri.event.listen("search-scope-changed", () => { if (people.visible) people.close(); people.people = []; people.page.open(null, "assigned"); if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); people.faceSelected(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
 $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys
+  if (people.visible && event.key === "Escape") { event.preventDefault(); if (!$("person-rename").hidden) $("person-rename-cancel").click(); else people.close(); return; }
+  if (people.visible && event.target.closest?.("#people-view")) return;
   if (faceSearch.visible && event.key === "Escape") { event.preventDefault(); faceSearch.close(); return; }
   if (faceSearch.visible && event.target.closest?.("#faces-view")) return;
   if (graph.visible && event.key === "Escape") { event.preventDefault(); graph.close(); return; }
@@ -1000,6 +1017,107 @@ async function exerciseFaceSearchUi() {
   if (!report.graph.edges.some((edge) => edge.matchTypes.includes("face"))) throw new Error("Face results did not create real face graph evidence");
 }
 
+async function exercisePeopleUi() {
+  const report = featureReport.people = {};
+  const label = "Человек FACE742", renamed = "Наблюдатель FACE742";
+  const wait = async (predicate) => {
+    const deadline = Date.now() + 60000;
+    while (!predicate()) { if (Date.now() >= deadline) throw new Error("People UI smoke timed out"); await new Promise((resolve) => setTimeout(resolve, 30)); }
+  };
+  const check = (condition, message) => { if (!condition) throw new Error(message); };
+  const mutation = async (id) => {
+    const button = $(id); check(!button.disabled && !button.hidden, `${id} action is unavailable`); button.click(); await people.mutationTask;
+    if (people.mutationError) throw new Error(people.mutationError); return people.lastMutation;
+  };
+  const tab = async (mode) => { document.querySelector(`[data-person-mode="${mode}"]`).click(); await people.pageTask; if (people.pageError) throw new Error(people.pageError); };
+  const allPages = async () => {
+    while (people.page.hasMore) { $("person-more").click(); await people.pageTask; if (people.pageError) throw new Error(people.pageError); }
+  };
+  const selectObservation = (hit) => {
+    const key = people.faceRowKey(hit), box = [...$("person-faces").querySelectorAll("input")].find((input) => input.dataset.faceKey === key);
+    check(!!box, "Person observation checkbox missing"); if (!box.checked) box.click();
+  };
+  const capture = async (name) => {
+    const hits = people.page.hits;
+    if (hits.length && people.page.mode !== "stale") {
+      await wait(() => [...$("person-faces").querySelectorAll(".face-crop")].every((crop) => crop.dataset.loaded === "true"));
+      await Promise.all(hits.map(async (hit) => { const image = new Image(); image.src = await faceSearch.imageFor(hit, 360); await image.decode(); }));
+    }
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await invoke("debug_capture", { label: name });
+  };
+  await people.refreshDirectory();
+  let person = people.people.find((item) => item.name === label);
+  if (!person) {
+    report.phase = "first";
+    const seed = faceSearch.selection.seed; check(!!seed, "Faces smoke must supply the chosen source face");
+    $("faces-toggle").click(); await faceSearch.openTask; await wait(() => faceSearch.visible && !faceSearch.fileBusy && !!faceSearch.fileReply);
+    const choice = [...$("face-choices").querySelectorAll("button")].find((button) => button.dataset.faceId === FaceState.faceKey(seed));
+    check(!!choice, "Chosen source face missing after graph return"); choice.click(); await wait(() => !faceSearch.searchBusy && faceSearch.selection.hits.length > 0);
+    await people.refreshDirectory();
+    $("face-person-name").value = label; $("face-person-create").requestSubmit(); await people.createTask;
+    if (people.mutationError) throw new Error(people.mutationError);
+    person = people.people.find((item) => item.name === label); check(!!person, "Unicode person label was not created");
+    $("face-person").value = String(person.id); $("face-person").dispatchEvent(new Event("change", { bubbles: true }));
+    await mutation("face-assign-seed");
+    report.bulkLoadedBefore = faceSearch.selection.hits.length; report.bulkTotalMatches = faceSearch.selection.total;
+    check(report.bulkLoadedBefore < report.bulkTotalMatches, "Bulk smoke must run before every result page is loaded");
+    const excluded = faceSearch.selection.hits[0];
+    $("face-select-all").click();
+    const excludeBox = [...$("face-results-list").querySelectorAll("input")].find((input) => input.dataset.faceId === FaceState.faceKey(excluded));
+    check(excludeBox?.checked, "All-matches selection did not select loaded observations"); excludeBox.click();
+    const all = await mutation("face-assign-matches"); report.bulkChange = all;
+    person = people.people.find((item) => PeopleState.samePerson(item.id, person.id));
+    report.bulkAssignedBeyondLoaded = person.assigned_count > report.bulkLoadedBefore; check(report.bulkAssignedBeyondLoaded, "Bulk assignment was restricted to loaded rows");
+    $("face-clear-selected").click();
+    const rejectBox = [...$("face-results-list").querySelectorAll("input")].find((input) => input.dataset.faceId === FaceState.faceKey(excluded)); rejectBox.click();
+    await mutation("face-reject-matches");
+    $("face-label-undo").querySelector("button").click(); await people.mutationTask;
+    report.exclusionUndo = people.people.find((item) => PeopleState.samePerson(item.id, person.id)).rejected_count === 0;
+    check(report.exclusionUndo, "Exclusion undo did not restore the prior state");
+    const again = [...$("face-results-list").querySelectorAll("input")].find((input) => input.dataset.faceId === FaceState.faceKey(excluded)); if (!again.checked) again.click();
+    await mutation("face-reject-matches"); report.excludedFace = FaceState.faceKey(excluded);
+    $("people-toggle").click(); await people.openTask;
+    await people.selectPerson(person.id, "assigned"); await allPages();
+    const before = people.page.total, target = people.page.hits.find((hit) => PeopleState.idOf(hit) !== FaceState.faceKey(seed)); selectObservation(target);
+    await mutation("person-remove"); check(people.page.total === before - 1, "Removing one label changed an unexpected number of observations");
+    $("people-undo").querySelector("button").click(); await people.mutationTask;
+    report.selectiveUndo = people.page.total === before; check(report.selectiveUndo, "Selective label undo failed");
+  } else {
+    $("people-toggle").click(); await people.openTask; await people.selectPerson(person.id, "assigned"); await allPages();
+    const assignedBefore = people.page.hits.slice(); report.assignedBefore = people.page.total;
+    await tab("suggestions"); await allPages();
+    const candidates = people.page.hits.filter((hit) => /FACE742 Новый файл 0[12]/.test(hit.path));
+    if (candidates.length) {
+      report.phase = "restart";
+      report.suggestionsNotAutoAssigned = !assignedBefore.some((hit) => /FACE742 Новый файл 0[12]/.test(hit.path));
+      check(report.suggestionsNotAutoAssigned && candidates.length === 2, "New files were assigned automatically or their proposals are missing");
+      const accepted = candidates.find((hit) => /01/.test(nameOf(hit.path))), rejected = candidates.find((hit) => /02/.test(nameOf(hit.path)));
+      selectObservation(accepted); await mutation("person-assign"); report.acceptedNew = accepted.path;
+      const reject = people.page.hits.find((hit) => hit.path === rejected.path); check(!!reject, "Unconfirmed suggestion disappeared after accepting another");
+      selectObservation(reject); await mutation("person-reject"); report.rejectedNew = rejected.path;
+    } else {
+      report.phase = "verify";
+      report.acceptedNew = assignedBefore.find((hit) => /FACE742 Новый файл 01/.test(hit.path))?.path;
+      await tab("rejected"); await allPages(); report.rejectedNew = people.page.hits.find((hit) => /FACE742 Новый файл 02/.test(hit.path))?.path;
+      await tab("suggestions"); await allPages();
+      report.persistenceVerified = !!report.acceptedNew && !!report.rejectedNew && !people.page.hits.some((hit) => /FACE742 Новый файл 0[12]/.test(hit.path));
+      check(report.persistenceVerified, "Confirmed/excluded new observations did not persist correctly");
+    }
+  }
+  report.personId = person.id;
+  await people.selectPerson(person.id, "assigned"); await allPages(); report.assignedTotal = people.page.total; await capture("people-assigned");
+  await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total; await capture("people-suggestions");
+  $("person-rename-toggle").click(); $("person-name").value = renamed; $("person-rename").requestSubmit(); await people.mutationTask;
+  if (people.mutationError) throw new Error(people.mutationError);
+  check(people.person()?.name === renamed, "Person rename did not reach the visible UI"); await capture("people-rename");
+  $("people-undo").querySelector("button").click(); await people.mutationTask;
+  report.renameUndo = people.person()?.name === label; check(report.renameUndo, "Person rename undo failed");
+  const final = people.people.find((item) => PeopleState.samePerson(item.id, person.id));
+  report.rejectedTotal = final.rejected_count; report.excludedCount = final.rejected_count; report.assignedTotal = final.assigned_count;
+  report.passed = true;
+}
+
 async function completeDebugSearch() {
   debugPending = false;
   if (debugOptions.loadAll) {
@@ -1037,6 +1155,10 @@ async function completeDebugSearch() {
   if (debugOptions.faces) {
     try { await exerciseFaceSearchUi(); }
     catch (error) { state.error = String(error.message || error); featureReport.faces = { ...featureReport.faces, error: state.error, failure: faceSearch.debug() }; }
+  }
+  if (debugOptions.people) {
+    try { await exercisePeopleUi(); }
+    catch (error) { state.error = String(error.message || error); featureReport.people = { ...featureReport.people, error: state.error, failure: people.debug() }; }
   }
   report();
 }
