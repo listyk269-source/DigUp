@@ -184,6 +184,17 @@ components:
     textColor: "{colors.secondary-text}"
     typography: "{typography.label}"
     padding: "10px 18px"
+  automatic-face-status:
+    backgroundColor: "var(--surface)"
+    textColor: "var(--text)"
+    typography: "{typography.label}"
+    padding: "5px 18px"
+    height: "44px"
+  people-pending-badge:
+    backgroundColor: "var(--selected)"
+    textColor: "var(--text)"
+    rounded: "{rounded.control}"
+    padding: "1px 5px"
   people-undo:
     backgroundColor: "{colors.cyan-fill}"
     textColor: "{colors.button-text}"
@@ -205,6 +216,8 @@ Face investigation reuses that graphite material, native type, quiet controls, a
 
 People extends that working material into a compact label directory, observation list, and media preview. Cyan identifies the current person and inspected observation; separate native checkboxes identify the observations targeted by the bottom action bar. Assigned, Suggestions, Excluded, and Needs review remain explicit text groups. Local label changes expose a wrapping Undo strip, and persistent copy distinguishes the operator's labels from verified identities.
 
+A persistent automatic-face status row extends the existing search shell below its ordinary index strip. It inherits that shell's light/dark colors and the active graphite workspace colors, keeping the checked preference, file/observation progress, and explicit pause readable without replacing the search design. Pending People suggestions use a quiet badge, a toolbar total, and per-label directory counts; they remain suggestions requiring the operator's confirmation.
+
 **Key Characteristics:**
 - A world-anchored grid and stable file neighborhoods.
 - Glass plates with small rounded corners and restrained state glows.
@@ -212,12 +225,15 @@ People extends that working material into a compact label directory, observation
 - Visible search/index context, graph search and filters, a collapsible evidence inspector, and an operable minimap.
 - A source-led face workspace with local indexing controls, observation crops, paged candidates, and media evidence.
 - A People directory with explicit review groups, independent preview and bulk selection, local label forms, and visible undo.
+- Persistent automatic-face preference/progress and synchronized pending-suggestion counts in the existing shell.
 
 Source of truth: `shell/ui/graph.css`, its extension `shell/ui/graph-investigation.css`, SVG construction in `shell/ui/graph.js`, investigation behavior in `shell/ui/graph-tools.js` and `shell/ui/graph-state.js`, markup in `shell/ui/index.html`, and RU/EN strings in `shell/ui/i18n.js`. Corrected native WebView captures of file evidence, match comparison, timeline, context menu, and documents confirm the composition at (1280 × 900 DIP); synthetic fixture content is evidence of rendering, not brand imagery. `docs/graph-investigation.md` records the evidence and capability boundaries.
 
 The face extension is implemented in `shell/ui/faces.css`, `shell/ui/faces.js`, and `shell/ui/face-state.js`, with graph entry points in `shell/ui/graph.js` and `shell/ui/graph-tools.js`. Native captures at `../work/faces-development-h264/review-faces-select.png`, `review-faces-matches.png`, and `review-faces-video.png` establish its source-selection, candidate, and timed-video composition. The later dark-scrollbar treatment is taken from the current stylesheet; those earlier captures do not establish its final packaged appearance.
 
 The People extension is implemented in `shell/ui/people.css`, `shell/ui/people.js`, and `shell/ui/people-state.js`, reusing `shell/ui/faces.css` and candidate integration in `shell/ui/faces.js`, with markup in `shell/ui/index.html` and RU/EN copy in `shell/ui/i18n.js`. Native captures at `../work/people-development-ui-confirm/capture-first-people-assigned.png`, `capture-restart-people-suggestions.png`, and `capture-first-people-rename.png` establish assigned review, suggestions after restart, and the inline rename/undo composition. Synthetic capture content establishes layout and states, not identity evidence.
+
+The automatic-face shell extension is implemented in `shell/ui/faces.css`, `shell/ui/faces.js`, and `shell/ui/people.js`, with markup in `shell/ui/index.html` and RU/EN copy in `shell/ui/i18n.js`; its inherited shell variables and quiet-button base come from `shell/ui/panel.css`. Native captures at `../work/auto-faces-development-ui-confirm/capture-live-auto-waiting.png` and `capture-live-auto-progress.png` (1170 × 840 pixels), plus `capture-live-auto-suggestions.png` and `capture-live-auto-paused.png` (1920 × 1350 pixels), establish waiting, active file progress, synchronized pending counts, and explicit paused composition. Capture sizes are image pixels, not a new window-size rule. These states preserve the existing preview/checkbox distinction, action bar, and local-label disclaimer.
 
 ## Colors
 
@@ -229,6 +245,8 @@ Cool graphite neutrals establish the working surface; warm selection and cool vi
 
 ### Secondary
 - **Cyan:** Video-card outlines and the corresponding cool fill/metadata. Selected video cards adopt the amber selection state. In the face workspace, cyan marks unselected detection boxes and the active candidate row; this scoped use distinguishes the observation being searched from the candidate being inspected. People reuses the cyan fill and border for the current directory label and previewed observation; its checkboxes use the cyan accent, and the Undo strip uses the same cool fill.
+
+The persistent shell row uses the existing shell amber for its native preference checkbox, progress, and focus outline. Its pending badge inherits the shell selected fill; it does not change the workspace meaning of cyan or amber.
 
 ### Tertiary
 - **Confirmed Green:** Solid confirmed links, their pill borders, and the Confirm link action. This records a local human assessment.
@@ -268,6 +286,8 @@ Cool graphite neutrals establish the working surface; warm selection and cool vi
 
 People uses the title size for the current person's heading, the panel-title size with medium weight (500) for directory names, and the existing label/metadata sizes for forms, row filenames, observation counts, and reported times. Long person names and status/undo text wrap; observation filenames retain single-line ellipsis with full filename context in the preview.
 
+The persistent automatic-face row uses the label size, with tabular status numbers. Its People badge is smaller (10px) with tabular numerals; directory pending counts reuse the metadata size and secondary text beneath the assigned count.
+
 **The Filename Rule.** Preserve the filename's beginning and ending when truncating. Keep full paths available through the card title and inspector instead of shrinking the type.
 
 ## Layout
@@ -279,6 +299,8 @@ The graph window requests up to (1280 × 900 DIP), clamped to the monitor work a
 The canvas grid repeats every (48 world units). Initial camera zoom is (75%); controls support (20–200%). The minimap is (160px) wide and sits (16px) from the lower edge; its right inset becomes (376px) while the inspector is open. The inspector is (360px) wide with (14px) internal padding and a (180px) file preview. It remains that width through the compact toolbar breakpoint (1050px). At widths up to (700px), its width is capped at the canvas width minus (24px), and the minimap is hidden while the overlay is open. At viewport heights up to (650px), toolbar/control vertical padding contracts.
 
 Controls use small gaps, with a slightly wider gap between toolbar groups. Filter chips, neighbor actions, and inspector buttons wrap. Closing the inspector reveals the canvas beneath it. Timeline mode places unpinned cards proportionally by modification date with collision lanes and a separate area for missing dates; pinned cards retain their coordinates, and switching back restores force positions.
+
+The automatic-face row remains directly after the ordinary index strip across search, graph, Faces, and People. It is a fixed-height, non-growing flex row (44px), with compact insets (5px 18px), gaps (10px), and a fine top divider. The preference label and trailing action do not shrink; the intervening status takes the remaining width, truncates to one line, and retains the full message as its title. Busy progress is a fixed slim native bar (80 × 5px). This row adds no floating overlay or new responsive breakpoint.
 
 The face workspace keeps the existing search and main-index context above its toolbar and local face-index strip. Its main area divides into source media and candidate review using `minmax(310px, .86fr)` and `minmax(370px, 1.14fr)`. The source has a large fitted image, numbered boxes positioned against the actual rendered image, and an auto-filling crop grid with minimum tile width (78px). Candidate review divides the list and media preview with `minmax(160px, .8fr)` and `minmax(200px, 1fr)`. Source, candidate list, and preview scroll independently; the candidate disclaimer stays below them. Repeated pane insets use the frontmatter's pane spacing.
 
@@ -313,6 +335,8 @@ Face-source stages reuse the file-card corner, face-choice and candidate rows re
 
 People fields and directory rows reuse the control corner. Directory icons are authored outline SVGs (24px); adjacent selection checkboxes remain native square controls (15 × 15px). Observation rows reuse the candidate crop and rounded-row shape. Inline forms and action/undo strips use wrapping rectangular rows rather than floating dialogs.
 
+The pending People badge is a small inline rounded count (8px radius), with compact padding (1px 5px) and a left gap (5px). The automatic-face row is a flat rectangular shell strip with native checkbox/progress shapes and the existing quiet action.
+
 ## Components
 
 ### Buttons
@@ -341,6 +365,14 @@ The inspector uses a translucent tonal overlay with a fine left divider and inde
 
 Selecting a link opens side-by-side file previews and actual per-modality evidence, followed by local verification actions. Scores remain independent cosines, not probabilities or shares; exact indexed EXIF taken-date equality has no invented cosine. Seek actions are enabled only for reported media locations. File evidence explains that face observations use a separate face index and require choosing a face; unextracted objects and absent indexed OCR remain explicit. The minimap retains its translucent surface, rounded border, small shadow, collapsible heading, miniature nodes, and camera rectangle.
 
+### Persistent Automatic Face Status
+
+The native checkbox and Auto-index faces label persist beside a polite live status and one quiet action. A checked preference uses shell amber. The trailing action uses the shell quiet-button material and tighter padding (5px 8px), inherited native type at label size, and single-line text. Focus-visible uses shell amber (2px) with offset (2px); there is no added shadow. The row inherits the normal search shell's colors and the active workspace's graphite variables instead of globally recoloring search.
+
+During processing, the status reports completed/total files and detected observations, appending pending-media count when available. The slim amber progress bar is determinate when the total is known and indeterminate otherwise. The action becomes Pause indexing; while cancellation is pending it is disabled. At rest, the action is Faces when models/runtime are ready, or Set up Faces otherwise. Off and paused are separate explicit messages; paused shows an unchecked preference. Waiting for ordinary indexing, preparing pending media, missing models/runtime, failed files, and errors remain text states. Errors use the existing error-text treatment, including the warm pale error text in dark and active workspaces.
+
+Automatic processing follows ordinary indexing only after the user opts in. It uses the established local face index; this preference does not silently download models or assign person labels. Keep model setup in the explicit Faces flow and keep pause available from the persistent row.
+
 ### Local Face Index Controls
 
 The face-index strip uses the inspector surface, compact semibold status, tabular counts, and the same native select and quiet-button shapes. It offers explicit local model download/backfill, start/resume, pause, and Auto / CPU / GPU choices. Keep active device and any CPU fallback reason readable alongside progress; changing the device is unavailable during processing. Show missing-runtime, loading, error, paused, complete, and complete-with-issues states through text. Existing unchanged observations are reused, and video sampling is stated as every (2 seconds).
@@ -358,6 +390,14 @@ Keep the persistent language that matches are candidates rather than proof of id
 The directory pairs an authored person outline with a wrapping name and assigned-observation count. The current label exposes `aria-pressed` and uses the existing cyan row material. A full-width search field filters local label names; unmatched filters and an empty directory use distinct text. New-name and inline-rename fields use the same inspector fill, fine control stroke, amber caret, and existing focus outline. Names have a (120-character) input limit. Rename opens the field with focus; Cancel closes it and returns focus to Rename. Create and Save name are explicit form submissions.
 
 Assigned, Suggestions, Excluded, and Needs review are wrapping quiet buttons in a labelled group, with `aria-pressed` and the active-preview fill/border identifying the current group. Assigned explains the operator's confirmed labels. Suggestions retains a confirmation requirement and the similarity caveat. Excluded explains that observations will not be suggested again for this person; Needs review explains changed source data and omits stale crops, source media, and open/find-faces actions.
+
+### Pending Suggestions and Background Refresh
+
+The People navigation action adds a compact inline badge using the inherited selected fill and shell text. A ready count uses locale-formatted numerals; a ready zero or idle summary hides the badge. Calculating shows an ellipsis and an unavailable summary shows an exclamation mark. The badge title and People accessible label explain pending person-observation suggestions or direct the operator to open People and refresh when counts are unavailable.
+
+The People toolbar reports the same total and exposes calculating/unavailable text alongside its explicit Refresh action. Each directory label retains its assigned count and adds a secondary pending-observation line only for a positive ready count. Badge, toolbar total, and per-label pending lines share one asynchronously computed, cached summary. The total counts person-observation pairs, so one observation suggested for more than one label can contribute more than once; it is not a unique-person or unique-file count.
+
+A ready background summary may refresh an untouched first Suggestions page. Active checkbox selection, editing, mutations/loading, an inspected preview, media playback, or later pages protect the current review and expose a readable refresh notice instead. Faces similarly offers Refresh when indexing changes source observations while preserving the current query. Preserve the incumbent independent preview highlight and bulk checkboxes; background work never confirms suggestions or silently applies labels.
 
 ### People Observation Review and Bottom Actions
 
@@ -394,6 +434,8 @@ Centered pills pair authored modality icons with the real overall cosine to two 
 - **Do** keep preview highlights independent of checked observations, with the selected count and label actions in the People bottom bar.
 - **Do** retain explicit Assigned, Suggestions, Excluded, and Needs review groups, wrapping local-label forms, and the separate Undo strip.
 - **Do** keep bulk scope visible, including unloaded matches and the source when All matches + source is active.
+- **Do** retain the persistent automatic-face row, explicit preference/pause states, and file/observation progress within the existing shell.
+- **Do** synchronize pending badge, toolbar, and directory counts; expose calculating/unavailable states and preserve an active review until refresh.
 
 ### Don't:
 - **Don't** extend the graph palette into the desktop launcher or normal search as an implicit rebrand.
@@ -402,4 +444,5 @@ Centered pills pair authored modality icons with the real overall cosine to two 
 - **Don't** present cosine as probability, an exact EXIF-date match as provenance proof, or unavailable analysis as detected evidence.
 - **Don't** use selection glow as the sole focus or state indicator.
 - **Don't** present local person labels or unconfirmed suggestions as verified identities.
+- **Don't** imply automatic model download, automatic person labeling, or that a pending person-observation total counts unique people or files.
 
