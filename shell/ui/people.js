@@ -75,7 +75,7 @@ class PeopleView {
   faceRowKey(face) { return face.anchor_key || PeopleState.idOf(face); }
   render() { this.renderStatus(); this.renderDirectory(); this.renderPage(); this.renderUndo(); }
   renderStatus() {
-    this.el("people-status").textContent = this.mutationError ? t(this.mutationError) : this.directoryError ? t(this.directoryError) : this.notice || "";
+    this.el("people-status").textContent = this.mutationError ? t(this.mutationError) : this.directoryError ? t(this.directoryError) : this.notice ? (this.undoOperation ? t("Changes saved locally") : this.notice) : "";
     this.el("people-status").classList.toggle("face-error", !!this.mutationError || !!this.directoryError);
     this.el("people-refresh").disabled = !!this.mutationBusy;
     for (const form of ["people-create", "face-person-create", "person-rename"]) for (const control of this.el(form).querySelectorAll("input,button")) control.disabled = !!this.mutationBusy;
@@ -129,7 +129,9 @@ class PeopleView {
   }
   renderPreview() {
     const hit = this.page.hits.find((face) => this.faceRowKey(face) === this.selectedPreview), key = hit ? `${this.faceRowKey(hit)}:${I18n.language}:${this.page.mode}` : null;
-    if (key === this.previewKey) return; this.previewKey = key; this.stopPreview(); const host = this.el("person-preview"); host.replaceChildren(); if (!hit) return;
+    const host = this.el("person-preview");
+    if (!hit) { this.previewKey = null; this.stopPreview(); host.replaceChildren(this.text("p", "", t("No observation selected"))); return; }
+    if (key === this.previewKey) return; this.previewKey = key; this.stopPreview(); host.replaceChildren();
     if (this.page.mode !== "stale") host.append(this.picture(hit, { code: false, query: "" }));
     host.append(this.text("h3", "", this.nameOf(hit.path)), this.text("p", "", hit.kind === "video" && Number.isFinite(hit.loc) ? t("Matched frame at {time}", { time: this.clock(hit.loc) }) : t("Matched face in photograph")));
     if (this.page.mode === "stale") return;
@@ -199,7 +201,7 @@ class PeopleView {
     select.disabled = !!this.mutationBusy; this.el("face-assign-seed").disabled = !query || !this.faceTarget || !!this.mutationBusy || !!this.faceLabelError;
     this.el("face-person-status").textContent = this.mutationError ? t(this.mutationError) : this.faceLabelError ? t(this.faceLabelError) : this.directoryError ? t(this.directoryError) :
       this.faceLabel?.person ? t("Labelled: {name}", { name: this.faceLabel.person.name }) : t("Select a face and assign your own local person label.");
-    if (this.notice && !this.mutationError && !this.faceLabelError) this.el("face-person-status").textContent += " " + this.notice;
+    if (this.notice && !this.mutationError && !this.faceLabelError) this.el("face-person-status").textContent += " " + (this.undoOperation ? t("Changes saved locally") : this.notice);
     this.el("face-person-status").classList.toggle("face-error", !!this.mutationError || !!this.faceLabelError || !!this.directoryError);
     const total = selection.total, count = this.faceBulk.count(total);
     this.el("face-selected-count").textContent = this.bulkResetNotice ? t("The face query changed; the selection was cleared.") : this.faceBulk.all ? t("All {count} observations, including unloaded matches and source", { count }) : t("{count} selected", { count });

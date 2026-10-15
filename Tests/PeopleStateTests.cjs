@@ -19,6 +19,18 @@ test("opaque person UUIDs remain exact in selected-face assignment and person pa
   assert.equal(page.merge({ person: { id }, hits: [], index_revision: 12, people_revision: 1 }, generation), true);
   assert.equal(state.samePerson(id, "E8422F9A-5361-467B-81F8-EE9DD7FD65C1"), false);
 });
+test("an empty person tab clears a previous preview even after its cache key was invalidated", () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} }, PeopleState: state, t: (key) => key };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/people.js"), "utf8"), context);
+  const view = Object.create(context.module.exports.prototype), host = { children: ["previous crew photograph"], replaceChildren(...children) { this.children = children; } };
+  let stopped = 0;
+  view.page = { hits: [], mode: "suggestions" }; view.selectedPreview = null; view.previewKey = null;
+  view.el = () => host; view.stopPreview = () => { stopped++; }; view.text = (_tag, _class, text) => ({ text });
+  view.renderPreview();
+  assert.equal(stopped, 1);
+  assert.deepEqual(host.children, [{ text: "No observation selected" }]);
+});
 test("all-matches assignment covers unloaded pages, source and explicit exclusions", () => {
   const bulk = new state.BulkSelection(); bulk.sync(query); bulk.everything(); bulk.toggle(20, false);
   assert.equal(bulk.count(104), 104);

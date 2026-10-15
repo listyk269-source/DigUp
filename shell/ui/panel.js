@@ -1092,6 +1092,7 @@ async function exercisePeopleUi() {
       report.phase = "restart";
       report.suggestionsNotAutoAssigned = !assignedBefore.some((hit) => /FACE742 Новый файл 0[12]/.test(hit.path));
       check(report.suggestionsNotAutoAssigned && candidates.length === 2, "New files were assigned automatically or their proposals are missing");
+      report.suggestionCapturedTotal = people.page.total; await capture("people-suggestions"); report.suggestionsCapturedBeforeDecision = true;
       const accepted = candidates.find((hit) => /01/.test(nameOf(hit.path))), rejected = candidates.find((hit) => /02/.test(nameOf(hit.path)));
       selectObservation(accepted); await mutation("person-assign"); report.acceptedNew = accepted.path;
       const reject = people.page.hits.find((hit) => hit.path === rejected.path); check(!!reject, "Unconfirmed suggestion disappeared after accepting another");
@@ -1107,7 +1108,8 @@ async function exercisePeopleUi() {
   }
   report.personId = person.id;
   await people.selectPerson(person.id, "assigned"); await allPages(); report.assignedTotal = people.page.total; await capture("people-assigned");
-  await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total; await capture("people-suggestions");
+  await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total;
+  if (!report.suggestionsCapturedBeforeDecision) { report.suggestionCapturedTotal = people.page.total; await capture("people-suggestions"); }
   $("person-rename-toggle").click(); $("person-name").value = renamed; $("person-rename").requestSubmit(); await people.mutationTask;
   if (people.mutationError) throw new Error(people.mutationError);
   check(people.person()?.name === renamed, "Person rename did not reach the visible UI"); await capture("people-rename");
