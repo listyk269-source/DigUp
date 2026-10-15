@@ -1,7 +1,8 @@
 # Local graph investigation
 
 This extends the existing Tauri graph, local Swift search service and model/index formats.
-It introduces no cloud API, telemetry, new model weights or database migration. It is a content
+The core graph introduces no cloud API, telemetry, new model weights or database migration.
+The optional face-search layer described below downloads its own local models separately. It is a content
 exploration tool: a manual confirmation records the operator's decision, not forensic proof.
 
 ## State and components
@@ -35,11 +36,12 @@ percentage; an equal timestamp alone does not establish common origin. Modality 
 cosines, not calibrated confidence or shares that sum to 100%. The overall ranking retains the
 existing stored-vector comparison and may differ from individual channel scores.
 
-`face` is a reserved typed channel, with no analyzer in this build: the Faces chip/context option is
-disabled. Objects/faces are marked unavailable. The Windows portable indexer still has no OCR
+`face` uses the optional local [YuNet/SFace layer](face-search.md). The Faces action opens a face
+selector; after backfill, its actual 128-dimensional comparisons can open a separate face graph.
+Face vectors are never mixed with the semantic vectors. Object detection is unavailable. The Windows portable indexer still has no OCR
 extraction backend; existing OCR data can be displayed/compared, but this UI does not create it.
-No face recognition, object detector, speech transcript, complete EXIF extractor or global provenance
-analysis is claimed. Adding these needs a separate local analyzer, license/model decision and fixtures.
+No person identification by name, object detector, speech transcript, complete EXIF extractor or global
+provenance analysis is claimed. Face similarity requires visual review and is not proof of identity.
 
 The inspector distinguishes evidence loading, a successful response without indexed OCR, and an
 error with Retry. SHA-256 is opt-in: the service reads the actual scoped regular file on a background

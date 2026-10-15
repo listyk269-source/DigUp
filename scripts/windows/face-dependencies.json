@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "onnxRuntimeVersion": "1.22.1",
+  "directMLVersion": "1.15.4",
+  "opencvZooRevision": "47534e27c9851bb1128ccc0102f1145e27f23f98",
+  "downloads": {
+    "onnxRuntime": {
+      "file": "onnxruntime-directml-1.22.1.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime.directml/1.22.1/microsoft.ml.onnxruntime.directml.1.22.1.nupkg",
+      "sha256": "210823f9932f81f222e2d05d04531d948a4d75dbf527dfb94195ad61371ab728"
+    },
+    "directML": {
+      "file": "directml-1.15.4.nupkg",
+      "url": "https://api.nuget.org/v3-flatcontainer/microsoft.ai.directml/1.15.4/microsoft.ai.directml.1.15.4.nupkg",
+      "sha256": "4e7cb7ddce8cf837a7a75dc029209b520ca0101470fcdf275c1f49736a3615b9"
+    },
+    "yunetLicense": {
+      "file": "face_detection_yunet-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/LICENSE",
+      "sha256": "c83b8120c50ccbd4c4f96edf53141bdd566ebb8f8e9227e415326aa1b1aba958"
+    },
+    "sfaceLicense": {
+      "file": "face_recognition_sface-LICENSE.txt",
+      "url": "https://raw.githubusercontent.com/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_recognition_sface/LICENSE",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  },
+  "runtime": [
+    {"name": "onnxruntime.dll", "sha256": "f722dd91a311b9fa4b7f2341d22c379a72fb7bc5b639df18b64821f23cdde14b"},
+    {"name": "onnxruntime_providers_shared.dll", "sha256": "7de6659e55a0e02a8e7ca94ab2864d0e6ea59add87c3e947e8990229ae7f5e3a"},
+    {"name": "DirectML.dll", "sha256": "9c9e6d822561c6c41b90e6994b3e8857cf1d66dbfb1e0c4c799c7c89b4e92da1"}
+  ],
+  "models": [
+    {"name": "face_detection_yunet_2023mar.onnx", "bytes": 232589, "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4", "license": "MIT", "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"},
+    {"name": "face_recognition_sface_2021dec.onnx", "bytes": 38696353, "sha256": "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79", "license": "Apache-2.0", "url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/47534e27c9851bb1128ccc0102f1145e27f23f98/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"}
+  ]
+}

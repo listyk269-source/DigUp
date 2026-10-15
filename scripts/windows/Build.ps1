@@ -42,6 +42,7 @@ if (!$SwiftRuntimeDirectory) {
 if (!$SwiftRuntimeDirectory -or !(Test-Path "$SwiftRuntimeDirectory/swiftCore.dll")) {
     throw 'Pass -SwiftRuntimeDirectory (or DIGUP_SWIFT_RUNTIME) containing the pinned Swift runtime DLLs.'
 }
+& "$PSScriptRoot/Build-Faces.ps1" -SkipTests:$SkipTests
 # Build/test processes need native libraries before packaging. Never alter the machine PATH.
 $originalPath = $env:PATH
 $originalCpuOnly = $env:DIGUP_CPU_ONLY
@@ -69,6 +70,8 @@ try {
     $licenses = "$package/licenses"
     New-Item -ItemType Directory -Force $helper, $licenses | Out-Null
     Copy-Item "$swiftBin/digup.exe" $helper
+    Copy-Item "$script:Vendor/faces/bin" "$helper/faces" -Recurse
+    Copy-Item "$script:Vendor/faces/licenses" "$licenses/Faces" -Recurse
     Copy-RuntimeDlls "$script:Vendor/llama/lib" $helper
     Copy-RuntimeDlls "$script:Vendor/pdfium/bin" $helper
     Copy-RuntimeDlls "$script:Vendor/ffmpeg/bin" $helper
@@ -80,7 +83,7 @@ try {
     if ($crt.Count -ne 1) { throw 'Cannot uniquely locate the MSVC x64 redistributable CRT.' }
     Copy-RuntimeDlls $crt[0].FullName $helper
     Copy-RuntimeDlls $crt[0].FullName $package
-    Copy-Item "$script:Repo/LICENSE", "$script:Repo/THIRD_PARTY_NOTICES.md", "$PSScriptRoot/dependencies.json", "$PSScriptRoot/ffmpeg-dependencies.json" $licenses
+    Copy-Item "$script:Repo/LICENSE", "$script:Repo/THIRD_PARTY_NOTICES.md", "$PSScriptRoot/dependencies.json", "$PSScriptRoot/ffmpeg-dependencies.json", "$PSScriptRoot/face-dependencies.json" $licenses
     Restore-MacResolution
     @{
         sourceCommit = (& git rev-parse HEAD)

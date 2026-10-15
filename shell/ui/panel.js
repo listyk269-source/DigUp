@@ -933,6 +933,16 @@ async function exerciseFaceSearchUi() {
   $("face-refresh").click(); await faceSearch.refreshTask;
   await wait(() => !faceSearch.fileBusy && !!faceSearch.fileReply?.indexed && faceSearch.fileFaces.length > 0);
   await wait(() => faceSearch.debug().sourceLoaded && $("face-source-image").querySelectorAll(".face-box").length > 0);
+  // A background-image URL being assigned is not proof that its pixels have
+  // decoded. Capture the finished real selector, including every rendered crop.
+  await wait(() => {
+    const crops = [...$("face-choices").querySelectorAll(".face-crop")];
+    return crops.length > 0 && crops.every((crop) => crop.dataset.loaded === "true" && getComputedStyle(crop).backgroundImage !== "none");
+  });
+  await Promise.all(faceSearch.fileFaces.map(async (face) => {
+    const image = new Image(); image.src = await faceSearch.imageFor({ ...faceSearch.file, ...face }, 360); await image.decode();
+  }));
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   report.index = faceSearch.index; report.progressHistory = faceSearch.statusHistory; report.source = photo.path;
   report.faceChoices = faceSearch.fileFaces.length; report.boxes = $("face-source-image").querySelectorAll(".face-box").length;
   await invoke("debug_capture", { label: "faces-select" });

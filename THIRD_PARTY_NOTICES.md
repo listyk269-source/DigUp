@@ -57,3 +57,27 @@ FFmpeg is a separate child process; DigUp does not prevent users replacing its
 shared libraries with a compatible build or exercising their LGPL rights. File
 contents are processed locally. No cloud inference, telemetry, or registration
 service is added by these dependencies.
+# Face search components
+
+Optional local face search uses YuNet and SFace weights from OpenCV Zoo revision
+`47534e27c9851bb1128ccc0102f1145e27f23f98`. The YuNet model directory declares MIT;
+the SFace model directory declares Apache-2.0. Model filenames, sizes, source URLs
+and SHA-256 values are pinned in `scripts/windows/face-dependencies.json`. Weights
+are downloaded on explicit first use, are not included in the Windows installer,
+and are verified before loading. The model-directory license texts are nevertheless
+included under `licenses/Faces`.
+
+The Windows face worker uses ONNX Runtime 1.22.1 (MIT) and Microsoft DirectML 1.15.4
+(Microsoft Software License Terms for DirectML). Their exact NuGet packages and
+native DLL hashes are pinned in the same manifest. Full runtime licenses and
+third-party notices are included under `licenses/Faces`; DirectML is redistributed
+for Windows use only. ONNX Runtime telemetry is explicitly disabled by the worker.
+
+The Rust face worker dependencies and their license texts are inventoried separately
+in `licenses/Faces/Face-worker-crates.json` and `licenses/Faces/crates`. Its source
+and lockfile are included in the DigUp source distribution. The application has no
+Python/OpenCV installation dependency.
+
+Face smoke tests use NASA image S69-31739, credited to NASA and obtained from the
+official NASA image library with a fixed checksum. This public test image is not
+bundled with the application and does not imply NASA endorsement.

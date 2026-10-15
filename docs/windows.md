@@ -447,8 +447,10 @@ The visual rules are documented in [DESIGN.md](../DESIGN.md) and apply only to t
 The graph also has a local investigation workspace: click an edge to compare its two files,
 inspect real modality evidence and manually confirm/reject the link. Unreviewed links are dashed;
 confirmed links are green; rejected links are hidden unless **Show rejected** is enabled.
-Modality chips filter actual visual, audio, indexed OCR or EXIF evidence. **Faces** is disabled:
-no face/object detector is included. EXIF evidence currently means an equal indexed capture-date
+Modality chips filter actual visual, audio, indexed OCR or EXIF evidence. **Faces** opens the optional
+local YuNet/SFace selector and its separate face graph; see [Face search](face-search.md) for model
+downloads, CPU/DirectML, backfill progress and verification commands. No object detector is included.
+EXIF evidence currently means an equal indexed capture-date
 value, not comparison of every EXIF field. Scores are independent embedding cosines, not probabilities.
 
 The 360-DIP inspector overlays the canvas. Its file view includes indexed dates/dimensions,

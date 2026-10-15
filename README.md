@@ -239,4 +239,7 @@ its semantic neighbors in pages. See [Windows usage and validation](docs/windows
 Graph now supports local link review, side-by-side comparison, visual/audio/indexed-OCR/EXIF filters,
 pins, expanded-neighbor counts, filename/semantic highlighting and a modification-date timeline.
 See [Graph investigation](docs/graph-investigation.md) for controls, persistence and evidence limits.
-Face/object detection and Windows OCR extraction are not included.
+Optional local **Faces** search now uses YuNet + SFace for photographs and sampled video frames,
+with face selection, matching timestamps, incremental progress and DirectML acceleration with CPU fallback.
+Face weights download separately on first use; see [Face search](docs/face-search.md) for setup,
+privacy, accuracy limits and validation. Object detection and Windows OCR extraction are not included.

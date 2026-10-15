@@ -28,7 +28,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: Vendor/downloads
-          key: windows-downloads-${{ hashFiles('scripts/windows/dependencies.json', 'scripts/windows/ffmpeg-dependencies.json') }}
+          key: windows-downloads-${{ hashFiles('scripts/windows/dependencies.json', 'scripts/windows/ffmpeg-dependencies.json', 'scripts/windows/face-dependencies.json') }}
       - name: Cache Cargo downloads and pinned Tauri CLI
         id: cargo
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -37,13 +37,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             ~/.cargo/bin/cargo-tauri.exe
-          key: windows-rust195-tauri2122-${{ hashFiles('shell/src-tauri/Cargo.lock') }}
+          key: windows-rust195-tauri2122-${{ hashFiles('shell/src-tauri/Cargo.lock', 'face-worker/Cargo.lock') }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.22.0
       - name: Frontend model and localization tests
         run: |
-          node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/I18nTests.cjs
+          node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/FaceStateTests.cjs Tests/I18nTests.cjs
           if ($LASTEXITCODE) { throw 'Frontend tests failed' }
       - name: Install pinned Swift and Rust
         id: toolchains
@@ -99,7 +99,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: build.noindex/windows/models
-          key: windows-model-${{ hashFiles('Sources/DigUpKit/ModelFiles.swift') }}
+          key: windows-model-${{ hashFiles('Sources/DigUpKit/ModelFiles.swift', 'Sources/DigUpKit/FaceModels.swift') }}
       - name: Download/check pinned model and smoke the installed GUI and CLI
         run: |
           . ./scripts/windows/Enter-Environment.ps1
@@ -112,6 +112,7 @@ jobs:
           ./scripts/windows/Search-Pagination-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/search-pagination'
           ./scripts/windows/Graph-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/graph-smoke'
           ./scripts/windows/UI-Features-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/ui-features'
+          ./scripts/windows/Faces-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/faces-smoke'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
           $env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
@@ -150,6 +151,9 @@ jobs:
             build.noindex/windows/ui-features/*.txt
             build.noindex/windows/ui-features/*.svg
             build.noindex/windows/ui-features/*.png
+            build.noindex/windows/faces-smoke/*.json
+            build.noindex/windows/faces-smoke/*.txt
+            build.noindex/windows/faces-smoke/*.png
             build.noindex/windows/gpu-policy-smoke/*.json
             build.noindex/windows/gpu-policy-smoke/*.jsonl
             build.noindex/windows/gpu-policy-smoke/*.txt
