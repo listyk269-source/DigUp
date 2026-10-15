@@ -23,8 +23,9 @@ Manual link confirmation records the user's assessment; it is not proof of ident
 
 New or changed media need another incremental face-index run after the normal index catches up.
 Removing a file or excluding its folder prevents it from being returned. Unavailable/removable roots
-do not cause their existing face data to be silently erased. There is no automatic name assignment;
-face groups and named-person collections are outside this change.
+do not cause their existing face data to be silently erased. There is no automatic name assignment.
+The local [People section](people.md) adds user-assigned labels, bulk review, corrections, undo and
+unconfirmed suggestions for new media using this existing face index.
 
 ## Models, runtime and CPU fallback
 
@@ -77,7 +78,7 @@ all DigUp instances. Normal index/settings and original media need not be delete
 - Prepared media have a maximum side of 1600 pixels. Small, blurred, occluded or profile faces may
   be missed or mismatched. At most 32 detections per sampled image/frame are retained. The native
   worker also bounds input bytes, pixels, request lines and NMS candidates.
-- No face clustering, names, liveness checks, face enhancement, internet search, or face-based
+- No automatic identity naming, unsupervised face clustering, liveness checks, face enhancement, internet search, or face-based
   OCR/object extraction is included. No accuracy claims beyond the recorded fixtures are made.
 - Windows includes the packaged CPU/DirectML runtime. The optional face worker can be built on other
   platforms with an appropriate ONNX Runtime library; macOS/Linux execution is not certified by the

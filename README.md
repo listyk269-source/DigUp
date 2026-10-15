@@ -243,3 +243,6 @@ Optional local **Faces** search now uses YuNet + SFace for photographs and sampl
 with face selection, matching timestamps, incremental progress and DirectML acceleration with CPU fallback.
 Face weights download separately on first use; see [Face search](docs/face-search.md) for setup,
 privacy, accuracy limits and validation. Object detection and Windows OCR extraction are not included.
+
+**People** adds local face labels, assignment to selected or all matches, rejected mistakes,
+renaming, undo and unconfirmed label suggestions after new media are indexed. See [People](docs/people.md).

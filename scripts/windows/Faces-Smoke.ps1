@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][string]$Archive,
     [Parameter(Mandatory)][string]$Models,
     [Parameter(Mandatory)][string]$OutputDirectory,
+    [switch]$People,
     [string]$DevelopmentGui,
     [string]$DevelopmentHelper
 )
@@ -67,10 +68,12 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label, [in
 Run-Private $cli @('index',$fixture,'--index',$index,'--device','cpu') 'semantic-index'
 @{folders=@($fixture);codeRoots=@();skipped=@();skipTypes=@();setUp=$true;language='ru';device='cpu';faceDevice='auto'} |
     ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $settings -Encoding utf8NoBOM
-foreach ($pass in 'first','restart') {
+$passes = if ($People) { @('first','restart','verify') } else { @('first','restart') }
+foreach ($pass in $passes) {
     $report=Join-Path $testRoot "gui-$pass.json"
     $arguments=@('--index',$index,'--models',$modelsPath,'--settings',$settings,'--debug-isolated',
         '--debug-faces','--debug-query','FACE742','--debug-report',$report,'--debug-quit','--helper',$cli)
+    if ($People) { $arguments += '--debug-people' }
     Run-Private $gui $arguments "gui-$pass"
     $ui=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
     if ($ui.error) { throw "Actual face UI failed ($pass): $($ui.error); inspect $report" }
@@ -92,10 +95,39 @@ foreach ($pass in 'first','restart') {
         if ($bytes.Length -lt 24 -or [Convert]::ToHexString($bytes[0..7]) -ne '89504E470D0A1A0A') { throw 'Invalid native face PNG.' }
         Copy-Item -LiteralPath $capture -Destination "$testRoot/capture-$pass-$phase.png"
     }
+    if ($People) {
+        $peopleReport = $ui.features.people
+        if (!$peopleReport -or !$peopleReport.passed) { throw "Actual People workflow failed ($pass)." }
+        if ($peopleReport.phase -ne $pass) { throw "People persistence phase mismatch ($pass)." }
+        if ($pass -eq 'first' -and ($peopleReport.bulkLoadedBefore -ne 40 -or $peopleReport.bulkTotalMatches -le 40 -or
+            !$peopleReport.bulkAssignedBeyondLoaded -or $peopleReport.excludedCount -ne 1 -or !$peopleReport.exclusionUndo -or
+            !$peopleReport.selectiveUndo -or !$peopleReport.renameUndo)) { throw 'Actual bulk/exclusion/rename/undo checks failed.' }
+        if ($pass -eq 'restart' -and (!$peopleReport.suggestionsNotAutoAssigned -or !$peopleReport.acceptedNew -or !$peopleReport.rejectedNew)) {
+            throw 'New media must remain suggestions until an explicit label decision.'
+        }
+        if ($pass -eq 'restart' -and (!$peopleReport.suggestionsCapturedBeforeDecision -or $peopleReport.suggestionCapturedTotal -ne 2)) {
+            throw 'The native suggestion capture must show both genuine new proposals before decisions.'
+        }
+        if ($pass -eq 'verify' -and !$peopleReport.persistenceVerified) { throw 'Accepted/rejected labels did not survive restart.' }
+        foreach ($phase in @('people-assigned','people-suggestions','people-rename')) {
+            $capture = Join-Path $index "capture-$phase.png"
+            $bytes = [IO.File]::ReadAllBytes($capture)
+            if ($bytes.Length -lt 24 -or [Convert]::ToHexString($bytes[0..7]) -ne '89504E470D0A1A0A') { throw 'Invalid native People PNG.' }
+            Copy-Item -LiteralPath $capture -Destination "$testRoot/capture-$pass-$phase.png"
+        }
+        if ($pass -eq 'first') {
+            # New media enters through the real ordinary index; the next GUI pass
+            # performs actual face backfill. Existing labels must remain manual.
+            foreach ($number in 1..2) {
+                Copy-Item -LiteralPath $fixturePhoto -Destination (Join-Path $fixture ('FACE742 Новый файл {0:D2}.jpg' -f $number))
+            }
+            Run-Private $cli @('index',$fixture,'--index',$index,'--device','cpu') 'new-media-index'
+        }
+    }
 }
 $saved=Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json
 if ($saved.faceDevice -ne 'auto' -or $saved.device -ne 'cpu' -or $saved.folders[0] -ne $fixture) { throw 'Face preference altered existing settings.' }
-@{result='passed';realModels=$true;developmentGui=[bool]$DevelopmentGui;developmentHelper=[bool]$DevelopmentHelper;
+@{result='passed';realModels=$true;people=[bool]$People;developmentGui=[bool]$DevelopmentGui;developmentHelper=[bool]$DevelopmentHelper;
     userInstallationModified=$false;archiveSha256=(Get-FileHash -LiteralPath $Archive).Hash.ToLowerInvariant();
     checks=@('real YuNet/SFace','three selectable faces','bbox/crop previews','40 then all actual face observations',
         'stale selection ignored','real video timestamp and seek','first launch and restart','backfill progress',

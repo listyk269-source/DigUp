@@ -43,7 +43,7 @@ jobs:
           node-version: 22.22.0
       - name: Frontend model and localization tests
         run: |
-          node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/FaceStateTests.cjs Tests/I18nTests.cjs
+          node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/FaceStateTests.cjs Tests/PeopleStateTests.cjs Tests/I18nTests.cjs
           if ($LASTEXITCODE) { throw 'Frontend tests failed' }
       - name: Install pinned Swift and Rust
         id: toolchains
@@ -113,6 +113,7 @@ jobs:
           ./scripts/windows/Graph-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/graph-smoke'
           ./scripts/windows/UI-Features-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/ui-features'
           ./scripts/windows/Faces-Smoke.ps1 -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/faces-smoke'
+          ./scripts/windows/Faces-Smoke.ps1 -People -Archive 'build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip' -Models $models -OutputDirectory 'build.noindex/windows/people-smoke'
           $env:DIGUP_MODELS = $models
           $env:DIGUP_CPU_ONLY = '1'
           $env:DIGUP_BACKENDS = "$PWD/Vendor/llama/lib"
@@ -154,6 +155,9 @@ jobs:
             build.noindex/windows/faces-smoke/*.json
             build.noindex/windows/faces-smoke/*.txt
             build.noindex/windows/faces-smoke/*.png
+            build.noindex/windows/people-smoke/*.json
+            build.noindex/windows/people-smoke/*.txt
+            build.noindex/windows/people-smoke/*.png
             build.noindex/windows/gpu-policy-smoke/*.json
             build.noindex/windows/gpu-policy-smoke/*.jsonl
             build.noindex/windows/gpu-policy-smoke/*.txt
