@@ -14,8 +14,8 @@ import Testing
         let directory = folder()
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try FaceIndexStore(directory: directory)
-        let a = FaceFileVersion(path: "/Фото Лысаченко/Café 🦊.jpg", kind: "image", size: 10, modified: 20)
-        let b = FaceFileVersion(path: "/Фото Лысаченко/Cafe\u{301} 🦊.mp4", kind: "video", size: 30, modified: 40)
+        let a = FaceFileVersion(path: "/Тестовые фото/Café 🦊.jpg", kind: "image", size: 10, modified: 20)
+        let b = FaceFileVersion(path: "/Тестовые фото/Cafe\u{301} 🦊.mp4", kind: "video", size: 30, modified: 40)
         try store.replace(a, model: "sface", config: "v1", frames: 1, faces: [observation()])
         try store.replace(b, model: "sface", config: "v1", frames: 2, faces: [observation(0), observation(2)])
         #expect(try store.observations().count == 3)

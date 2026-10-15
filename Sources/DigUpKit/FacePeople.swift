@@ -144,18 +144,22 @@ public final class FacePeopleStore {
         return id
     }
     public func annotations(person: String? = nil, anchor: String? = nil) throws -> [FacePersonAnnotation] {
+        var result: [FacePersonAnnotation] = []
+        try forEachAnnotation(person: person, anchor: anchor) { result.append($0) }
+        return result
+    }
+    public func forEachAnnotation(person: String? = nil, anchor: String? = nil,
+                                  _ consume: (FacePersonAnnotation) throws -> Void) throws {
         var clauses: [String] = [], values: [SQLValue] = []
         if let person { clauses.append("person = ?"); values.append(.text(person)) }
         if let anchor { clauses.append("anchor = ?"); values.append(.text(anchor)) }
-        var result: [FacePersonAnnotation] = []
         try db.query("SELECT anchor,person,state,snapshot FROM face_person_annotations" +
                      (clauses.isEmpty ? "" : " WHERE " + clauses.joined(separator: " AND ")) + " ORDER BY anchor,person", values) { row in
             if let anchor = row.text(0), let person = row.text(1), let state = row.text(2), let data = row.blob(3),
                let snapshot = try? JSONDecoder().decode(FacePersonSnapshot.self, from: data) {
-                result.append(FacePersonAnnotation(anchor: anchor, personID: person, state: state, snapshot: snapshot))
+                try consume(FacePersonAnnotation(anchor: anchor, personID: person, state: state, snapshot: snapshot))
             }
         }
-        return result
     }
 
     private func check(_ expected: Int64?) throws {
