@@ -423,3 +423,30 @@ It checks setup language, live RU/EN switching, persistence after restart, text/
 Find similar from both locations, paginated neighbors and returning to the original query. It does not install over
 an existing user copy or touch the user's index. Its DOM geometry and DWM policy checks do not replace a visual
 check of the outer native window on retail Windows 10 and 11.
+
+## Graph workspace
+
+Graph opens a larger dark graphite workspace (up to 1280 x 900 DIP, limited by the current monitor).
+Its initial zoom is 75%. The local force layout uses radial anchors, separated 244 x 72-unit cards,
+and preserves existing node positions when expanding a neighborhood. Image, video and PDF cards request
+real local thumbnails, two at a time. Unavailable thumbnails retain their media icon.
+
+The threshold defaults to cosine >= 0.75; lowering it and refreshing can reveal less similar neighbors.
+The separate **Find similar** list retains its existing 0.55 threshold. Labels are actual stored-vector
+cosines, rounded to two decimals. Curved edges describe expanded neighborhoods, not every relationship
+in the index. Distances have no quantitative meaning. Dense cyclic graphs may have crossing edges;
+the workspace remains capped at 120 nodes.
+
+Drag the canvas or use arrow keys to pan. Use the wheel, +/- or the 20-200% slider to zoom;
+**Center** returns to the selected file. Click or drag the minimap to navigate the full expanded graph.
+**Preview** collapses/restores the inspector; selecting a card opens it. Enter/Space selects a focused card.
+The graph uses the existing local preview and file-opening services and works in Russian and English.
+The visual rules are documented in [DESIGN.md](../DESIGN.md) and apply only to this graph surface.
+
+`UI-Features-Smoke.ps1` also checks camera controls, minimap navigation, actual image/video cards,
+coefficient labels and the initial seven-card layout's perimeter/minimap clearance. It records native
+WebView2 PNG captures for text and media states on first launch and restart, with an isolated test index.
+These client-area captures do not include the outer DWM frame or other desktop applications.
+Only this isolated UI smoke fixes its graph client viewport at 1280 x 900 DIP, independently of
+the CI virtual desktop; normal windows fit their monitor. Smaller displays and high-DPI layouts
+still need the manual check above and may require panning, zooming or collapsing the inspector.

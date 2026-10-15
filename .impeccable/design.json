@@ -1,0 +1,497 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T09:33:14.301Z",
+  "title": "Design System: DigUp Graph Workspace",
+  "extensions": {
+    "colorMeta": {
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "tonalRamp": [
+          "oklch(15% 0.0111 254.03)",
+          "oklch(26.43% 0.0111 254.03)",
+          "oklch(37.86% 0.0111 254.03)",
+          "oklch(49.29% 0.0111 254.03)",
+          "oklch(60.71% 0.0111 254.03)",
+          "oklch(72.14% 0.0111 254.03)",
+          "oklch(83.57% 0.0111 254.03)",
+          "oklch(95% 0.0111 254.03)"
+        ]
+      },
+      "inspector": {
+        "role": "neutral",
+        "displayName": "Inspector",
+        "tonalRamp": [
+          "oklch(15% 0.0154 252.36)",
+          "oklch(26.43% 0.0154 252.36)",
+          "oklch(37.86% 0.0154 252.36)",
+          "oklch(49.29% 0.0154 252.36)",
+          "oklch(60.71% 0.0154 252.36)",
+          "oklch(72.14% 0.0154 252.36)",
+          "oklch(83.57% 0.0154 252.36)",
+          "oklch(95% 0.0154 252.36)"
+        ]
+      },
+      "glass-top": {
+        "role": "neutral",
+        "displayName": "Glass Top",
+        "tonalRamp": [
+          "oklch(15% 0.0141 252.24)",
+          "oklch(26.43% 0.0141 252.24)",
+          "oklch(37.86% 0.0141 252.24)",
+          "oklch(49.29% 0.0141 252.24)",
+          "oklch(60.71% 0.0141 252.24)",
+          "oklch(72.14% 0.0141 252.24)",
+          "oklch(83.57% 0.0141 252.24)",
+          "oklch(95% 0.0141 252.24)"
+        ]
+      },
+      "glass-bottom": {
+        "role": "neutral",
+        "displayName": "Glass Bottom",
+        "tonalRamp": [
+          "oklch(15% 0.0129 253.01)",
+          "oklch(26.43% 0.0129 253.01)",
+          "oklch(37.86% 0.0129 253.01)",
+          "oklch(49.29% 0.0129 253.01)",
+          "oklch(60.71% 0.0129 253.01)",
+          "oklch(72.14% 0.0129 253.01)",
+          "oklch(83.57% 0.0129 253.01)",
+          "oklch(95% 0.0129 253.01)"
+        ]
+      },
+      "quiet-fill": {
+        "role": "neutral",
+        "displayName": "Quiet Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0155 248.28 / 0.800)",
+          "oklch(26.43% 0.0155 248.28 / 0.800)",
+          "oklch(37.86% 0.0155 248.28 / 0.800)",
+          "oklch(49.29% 0.0155 248.28 / 0.800)",
+          "oklch(60.71% 0.0155 248.28 / 0.800)",
+          "oklch(72.14% 0.0155 248.28 / 0.800)",
+          "oklch(83.57% 0.0155 248.28 / 0.800)",
+          "oklch(95% 0.0155 248.28 / 0.800)"
+        ]
+      },
+      "quiet-hover": {
+        "role": "neutral",
+        "displayName": "Quiet Hover",
+        "tonalRamp": [
+          "oklch(15% 0.0225 250.87)",
+          "oklch(26.43% 0.0225 250.87)",
+          "oklch(37.86% 0.0225 250.87)",
+          "oklch(49.29% 0.0225 250.87)",
+          "oklch(60.71% 0.0225 250.87)",
+          "oklch(72.14% 0.0225 250.87)",
+          "oklch(83.57% 0.0225 250.87)",
+          "oklch(95% 0.0225 250.87)"
+        ]
+      },
+      "active-fill": {
+        "role": "neutral",
+        "displayName": "Active Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0257 248.49)",
+          "oklch(26.43% 0.0257 248.49)",
+          "oklch(37.86% 0.0257 248.49)",
+          "oklch(49.29% 0.0257 248.49)",
+          "oklch(60.71% 0.0257 248.49)",
+          "oklch(72.14% 0.0257 248.49)",
+          "oklch(83.57% 0.0257 248.49)",
+          "oklch(95% 0.0257 248.49)"
+        ]
+      },
+      "control-stroke": {
+        "role": "neutral",
+        "displayName": "Control Stroke",
+        "tonalRamp": [
+          "oklch(15% 0.0186 248.23)",
+          "oklch(26.43% 0.0186 248.23)",
+          "oklch(37.86% 0.0186 248.23)",
+          "oklch(49.29% 0.0186 248.23)",
+          "oklch(60.71% 0.0186 248.23)",
+          "oklch(72.14% 0.0186 248.23)",
+          "oklch(83.57% 0.0186 248.23)",
+          "oklch(95% 0.0186 248.23)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Divider",
+        "tonalRamp": [
+          "oklch(15% 0.0184 251.38)",
+          "oklch(26.43% 0.0184 251.38)",
+          "oklch(37.86% 0.0184 251.38)",
+          "oklch(49.29% 0.0184 251.38)",
+          "oklch(60.71% 0.0184 251.38)",
+          "oklch(72.14% 0.0184 251.38)",
+          "oklch(83.57% 0.0184 251.38)",
+          "oklch(95% 0.0184 251.38)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "tonalRamp": [
+          "oklch(15% 0.0069 247.90)",
+          "oklch(26.43% 0.0069 247.90)",
+          "oklch(37.86% 0.0069 247.90)",
+          "oklch(49.29% 0.0069 247.90)",
+          "oklch(60.71% 0.0069 247.90)",
+          "oklch(72.14% 0.0069 247.90)",
+          "oklch(83.57% 0.0069 247.90)",
+          "oklch(95% 0.0069 247.90)"
+        ]
+      },
+      "button-text": {
+        "role": "neutral",
+        "displayName": "Button Text",
+        "tonalRamp": [
+          "oklch(15% 0.0115 252.09)",
+          "oklch(26.43% 0.0115 252.09)",
+          "oklch(37.86% 0.0115 252.09)",
+          "oklch(49.29% 0.0115 252.09)",
+          "oklch(60.71% 0.0115 252.09)",
+          "oklch(72.14% 0.0115 252.09)",
+          "oklch(83.57% 0.0115 252.09)",
+          "oklch(95% 0.0115 252.09)"
+        ]
+      },
+      "secondary-text": {
+        "role": "neutral",
+        "displayName": "Secondary Text",
+        "tonalRamp": [
+          "oklch(15% 0.0180 248.05)",
+          "oklch(26.43% 0.0180 248.05)",
+          "oklch(37.86% 0.0180 248.05)",
+          "oklch(49.29% 0.0180 248.05)",
+          "oklch(60.71% 0.0180 248.05)",
+          "oklch(72.14% 0.0180 248.05)",
+          "oklch(83.57% 0.0180 248.05)",
+          "oklch(95% 0.0180 248.05)"
+        ]
+      },
+      "node-text": {
+        "role": "neutral",
+        "displayName": "Node Text",
+        "tonalRamp": [
+          "oklch(15% 0.0046 258.32)",
+          "oklch(26.43% 0.0046 258.32)",
+          "oklch(37.86% 0.0046 258.32)",
+          "oklch(49.29% 0.0046 258.32)",
+          "oklch(60.71% 0.0046 258.32)",
+          "oklch(72.14% 0.0046 258.32)",
+          "oklch(83.57% 0.0046 258.32)",
+          "oklch(95% 0.0046 258.32)"
+        ]
+      },
+      "node-secondary": {
+        "role": "neutral",
+        "displayName": "Node Secondary",
+        "tonalRamp": [
+          "oklch(15% 0.0163 248.04)",
+          "oklch(26.43% 0.0163 248.04)",
+          "oklch(37.86% 0.0163 248.04)",
+          "oklch(49.29% 0.0163 248.04)",
+          "oklch(60.71% 0.0163 248.04)",
+          "oklch(72.14% 0.0163 248.04)",
+          "oklch(83.57% 0.0163 248.04)",
+          "oklch(95% 0.0163 248.04)"
+        ]
+      },
+      "amber": {
+        "role": "primary",
+        "displayName": "Amber",
+        "tonalRamp": [
+          "oklch(15% 0.1393 65.39)",
+          "oklch(26.43% 0.1393 65.39)",
+          "oklch(37.86% 0.1393 65.39)",
+          "oklch(49.29% 0.1393 65.39)",
+          "oklch(60.71% 0.1393 65.39)",
+          "oklch(72.14% 0.1393 65.39)",
+          "oklch(83.57% 0.1393 65.39)",
+          "oklch(95% 0.1393 65.39)"
+        ]
+      },
+      "amber-fill": {
+        "role": "primary",
+        "displayName": "Amber Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0357 67.96)",
+          "oklch(26.43% 0.0357 67.96)",
+          "oklch(37.86% 0.0357 67.96)",
+          "oklch(49.29% 0.0357 67.96)",
+          "oklch(60.71% 0.0357 67.96)",
+          "oklch(72.14% 0.0357 67.96)",
+          "oklch(83.57% 0.0357 67.96)",
+          "oklch(95% 0.0357 67.96)"
+        ]
+      },
+      "amber-label": {
+        "role": "primary",
+        "displayName": "Amber Label",
+        "tonalRamp": [
+          "oklch(15% 0.0539 75.37)",
+          "oklch(26.43% 0.0539 75.37)",
+          "oklch(37.86% 0.0539 75.37)",
+          "oklch(49.29% 0.0539 75.37)",
+          "oklch(60.71% 0.0539 75.37)",
+          "oklch(72.14% 0.0539 75.37)",
+          "oklch(83.57% 0.0539 75.37)",
+          "oklch(95% 0.0539 75.37)"
+        ]
+      },
+      "action-fill": {
+        "role": "primary",
+        "displayName": "Action Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0391 67.76)",
+          "oklch(26.43% 0.0391 67.76)",
+          "oklch(37.86% 0.0391 67.76)",
+          "oklch(49.29% 0.0391 67.76)",
+          "oklch(60.71% 0.0391 67.76)",
+          "oklch(72.14% 0.0391 67.76)",
+          "oklch(83.57% 0.0391 67.76)",
+          "oklch(95% 0.0391 67.76)"
+        ]
+      },
+      "action-text": {
+        "role": "primary",
+        "displayName": "Action Text",
+        "tonalRamp": [
+          "oklch(15% 0.0626 76.33)",
+          "oklch(26.43% 0.0626 76.33)",
+          "oklch(37.86% 0.0626 76.33)",
+          "oklch(49.29% 0.0626 76.33)",
+          "oklch(60.71% 0.0626 76.33)",
+          "oklch(72.14% 0.0626 76.33)",
+          "oklch(83.57% 0.0626 76.33)",
+          "oklch(95% 0.0626 76.33)"
+        ]
+      },
+      "cyan": {
+        "role": "secondary",
+        "displayName": "Cyan",
+        "tonalRamp": [
+          "oklch(15% 0.0666 229.05)",
+          "oklch(26.43% 0.0666 229.05)",
+          "oklch(37.86% 0.0666 229.05)",
+          "oklch(49.29% 0.0666 229.05)",
+          "oklch(60.71% 0.0666 229.05)",
+          "oklch(72.14% 0.0666 229.05)",
+          "oklch(83.57% 0.0666 229.05)",
+          "oklch(95% 0.0666 229.05)"
+        ]
+      },
+      "cyan-fill": {
+        "role": "secondary",
+        "displayName": "Cyan Fill",
+        "tonalRamp": [
+          "oklch(15% 0.0314 238.06)",
+          "oklch(26.43% 0.0314 238.06)",
+          "oklch(37.86% 0.0314 238.06)",
+          "oklch(49.29% 0.0314 238.06)",
+          "oklch(60.71% 0.0314 238.06)",
+          "oklch(72.14% 0.0314 238.06)",
+          "oklch(83.57% 0.0314 238.06)",
+          "oklch(95% 0.0314 238.06)"
+        ]
+      },
+      "cyan-label": {
+        "role": "secondary",
+        "displayName": "Cyan Label",
+        "tonalRamp": [
+          "oklch(15% 0.0435 231.85)",
+          "oklch(26.43% 0.0435 231.85)",
+          "oklch(37.86% 0.0435 231.85)",
+          "oklch(49.29% 0.0435 231.85)",
+          "oklch(60.71% 0.0435 231.85)",
+          "oklch(72.14% 0.0435 231.85)",
+          "oklch(83.57% 0.0435 231.85)",
+          "oklch(95% 0.0435 231.85)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Graph title",
+        "purpose": "Compact graph heading."
+      },
+      "file-name": {
+        "displayName": "File name",
+        "purpose": "Measured card identity with middle ellipsis."
+      },
+      "file-kind": {
+        "displayName": "File kind",
+        "purpose": "Supporting media type."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Inspector explanation and footer."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Controls, status, and similarity values."
+      },
+      "metadata": {
+        "displayName": "Metadata",
+        "purpose": "Paths, minimap, and zoom readout."
+      }
+    },
+    "shadows": [
+      {
+        "name": "minimap-lift",
+        "value": "0 7px 20px #00000040",
+        "purpose": "Floating camera surface above the graph."
+      },
+      {
+        "name": "selected-video-glow",
+        "value": "SVG SourceAlpha Gaussian blur stdDeviation=5; flood opacity=.38; amber #ee9a3f or blue #70b8de; merged behind SourceGraphic",
+        "purpose": "Reinforce selected and video cards without removing the stroke."
+      }
+    ],
+    "motion": [
+      {
+        "name": "reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce) { .graph-view * { scroll-behavior: auto; } }",
+        "purpose": "Honor reduced motion in the graph; no decorative motion token is established."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-width",
+        "value": "(max-width: 1050px)"
+      },
+      {
+        "name": "compact-height",
+        "value": "(max-height: 650px)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Compact graph actions and camera controls.",
+      "html": "<button class=\"ds-quiet\" type=\"button\">Expand links</button>",
+      "css": ".ds-quiet{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;}.ds-quiet:hover{background:#424c57}.ds-quiet:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}.ds-quiet:disabled{opacity:.6;cursor:wait}"
+    },
+    {
+      "name": "Find Similar Button",
+      "kind": "button",
+      "refersTo": "button-similar",
+      "description": "The muted warm action in the file inspector.",
+      "html": "<button class=\"ds-similar\" type=\"button\">Find similar</button>",
+      "css": ".ds-similar{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;border-color:#a37a49;background:#52402d;color:#f5d8af}.ds-similar:hover{background:#424c57}.ds-similar:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}.ds-similar:disabled{opacity:.6;cursor:wait}"
+    },
+    {
+      "name": "Active Preview Toggle",
+      "kind": "button",
+      "refersTo": "button-active",
+      "description": "A camera-control toggle with an explicit active surface.",
+      "html": "<button class=\"ds-preview\" type=\"button\" aria-expanded=\"true\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><rect x=\"3\" y=\"4\" width=\"14\" height=\"12\" rx=\"2\"/><path d=\"M11 4V16\"/></svg>Preview</button>",
+      "css": ".ds-preview{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;border-color:#899eb1;background:#3a4652}.ds-preview svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-preview:hover{background:#424c57}.ds-preview:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
+    },
+    {
+      "name": "Minimum Similarity",
+      "kind": "input",
+      "description": "Threshold label and native select as one compact control.",
+      "html": "<label class=\"ds-threshold\"><span>Minimum similarity</span><select aria-label=\"Minimum similarity\"><option>0.35 · Broader</option><option>0.55 · Balanced</option><option selected>0.75 · Closer</option></select></label>",
+      "css": ".ds-threshold{display:inline-flex;align-items:center;gap:10px;padding:4px 6px 4px 10px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;color:#eef2f6;background:#30363dde;border:1px solid #505962;border-radius:8px}.ds-threshold select{font:inherit;background:#252a30;color:#f1f4f7;border:0;border-radius:4px;padding:4px}.ds-threshold select:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
+    },
+    {
+      "name": "Zoom Range",
+      "kind": "input",
+      "description": "Warm range input with a compact tabular camera readout.",
+      "html": "<div class=\"ds-zoom\"><label for=\"ds-zoom-range\">Zoom</label><input id=\"ds-zoom-range\" aria-label=\"Zoom\" type=\"range\" min=\"20\" max=\"200\" step=\"5\" value=\"75\"><output for=\"ds-zoom-range\">75%</output></div>",
+      "css": ".ds-zoom{display:flex;align-items:center;gap:8px;width:170px;padding:8px 10px;border-top:1px solid #414b56;background:#282e35ed}.ds-zoom label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ds-zoom input{width:100%;min-width:0;height:16px;margin:0;accent-color:#e8a75d;cursor:pointer}.ds-zoom output{flex:none;width:36px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;text-align:right;color:#dbe3ec;font-variant-numeric:tabular-nums}.ds-zoom input:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
+    },
+    {
+      "name": "Camera Navigation",
+      "kind": "nav",
+      "description": "Outline SVG camera controls in a wrapping row.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Graph camera\"><button class=\"ds-icon\" type=\"button\" aria-label=\"Zoom out\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M5 10H15\"/></svg></button><button class=\"ds-icon\" type=\"button\" aria-label=\"Zoom in\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M5 10H15 M10 5V15\"/></svg></button><button type=\"button\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"5\"/><path d=\"M10 2V6 M10 14V18 M2 10H6 M14 10H18\"/></svg>Center selected</button></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.ds-nav button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;}.ds-nav .ds-icon{width:34px;padding:6px}.ds-nav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}.ds-nav button:hover{background:#424c57}.ds-nav button:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
+    },
+    {
+      "name": "Glass File Card",
+      "kind": "custom",
+      "refersTo": "file-card",
+      "description": "The compact horizontal file primitive; content here is schematic.",
+      "html": "<svg class=\"ds-file-default\" viewBox=\"-132 -46 264 92\" width=\"264\" height=\"92\" tabindex=\"0\" role=\"button\" aria-label=\"Document file\"><defs><linearGradient id=\"ds-plate-default\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#454b52\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#2b3036\" stop-opacity=\".95\"/></linearGradient></defs><rect class=\"ds-card\" x=\"-122\" y=\"-36\" width=\"244\" height=\"72\" rx=\"10\" fill=\"url(#ds-plate-default)\" stroke=\"#969da5\" stroke-width=\"1\" stroke-opacity=\"0.55\"/><path d=\"M-103-17H-87L-79-9V17H-103Z M-87-17V-9H-79 M-97-3H-85 M-97 3H-85 M-97 9H-89\" fill=\"none\" stroke=\"#c0c8d1\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"-60\" y=\"-5\" fill=\"#f0f2f5\" font-family=\"Segoe UI,sans-serif\" font-size=\"14\" font-weight=\"500\">File name.pdf</text><text x=\"-60\" y=\"17\" fill=\"#afb8c1\" font-family=\"Segoe UI,sans-serif\" font-size=\"12.5\">PDF</text></svg>",
+      "css": ".ds-file-default{cursor:pointer;outline:none;background:#202429}.ds-file-default:hover .ds-card{stroke-opacity:1}.ds-file-default:focus-visible .ds-card{stroke:#ffc079;stroke-width:3}@media(forced-colors:active){.ds-file-default .ds-card{fill:Canvas;stroke:CanvasText;filter:none}.ds-file-default text{fill:CanvasText}}"
+    },
+    {
+      "name": "Selected File Card",
+      "kind": "custom",
+      "refersTo": "file-card-selected",
+      "description": "Amber selection takes precedence over file-kind color.",
+      "html": "<svg class=\"ds-file-selected\" viewBox=\"-132 -46 264 92\" width=\"264\" height=\"92\" tabindex=\"0\" role=\"button\" aria-label=\"Document file\"><defs><linearGradient id=\"ds-plate-selected\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#454b52\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#2b3036\" stop-opacity=\".95\"/></linearGradient><filter id=\"ds-glow-selected\" x=\"-30%\" y=\"-70%\" width=\"160%\" height=\"240%\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"5\" result=\"blur\"/><feFlood flood-color=\"#ee9a3f\" flood-opacity=\".38\" result=\"color\"/><feComposite in=\"color\" in2=\"blur\" operator=\"in\" result=\"glow\"/><feMerge><feMergeNode in=\"glow\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></defs><rect class=\"ds-card\" x=\"-122\" y=\"-36\" width=\"244\" height=\"72\" rx=\"10\" fill=\"#483827\" stroke=\"#f0a048\" stroke-width=\"1.8\" stroke-opacity=\"1\" filter=\"url(#ds-glow-selected)\"/><path d=\"M-103-17H-87L-79-9V17H-103Z M-87-17V-9H-79 M-97-3H-85 M-97 3H-85 M-97 9H-89\" fill=\"none\" stroke=\"#efa246\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"-60\" y=\"-5\" fill=\"#f0f2f5\" font-family=\"Segoe UI,sans-serif\" font-size=\"14\" font-weight=\"500\">File name.pdf</text><text x=\"-60\" y=\"17\" fill=\"#d6bd9b\" font-family=\"Segoe UI,sans-serif\" font-size=\"12.5\">PDF</text></svg>",
+      "css": ".ds-file-selected{cursor:pointer;outline:none;background:#202429}.ds-file-selected:hover .ds-card{stroke-opacity:1}.ds-file-selected:focus-visible .ds-card{stroke:#ffc079;stroke-width:3}@media(forced-colors:active){.ds-file-selected .ds-card{fill:Canvas;stroke:CanvasText;filter:none}.ds-file-selected text{fill:CanvasText}}"
+    },
+    {
+      "name": "Video File Card",
+      "kind": "custom",
+      "refersTo": "file-card-video",
+      "description": "Cyan identifies an unselected video.",
+      "html": "<svg class=\"ds-file-video\" viewBox=\"-132 -46 264 92\" width=\"264\" height=\"92\" tabindex=\"0\" role=\"button\" aria-label=\"Video file\"><defs><linearGradient id=\"ds-plate-video\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#454b52\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#2b3036\" stop-opacity=\".95\"/></linearGradient><filter id=\"ds-glow-video\" x=\"-30%\" y=\"-70%\" width=\"160%\" height=\"240%\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"5\" result=\"blur\"/><feFlood flood-color=\"#70b8de\" flood-opacity=\".38\" result=\"color\"/><feComposite in=\"color\" in2=\"blur\" operator=\"in\" result=\"glow\"/><feMerge><feMergeNode in=\"glow\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></defs><rect class=\"ds-card\" x=\"-122\" y=\"-36\" width=\"244\" height=\"72\" rx=\"10\" fill=\"#293b47\" stroke=\"#77acc5\" stroke-width=\"1\" stroke-opacity=\"0.85\" filter=\"url(#ds-glow-video)\"/><path d=\"M-108-14H-76V14H-108Z M-100-14V14 M-84-14V14 M-108-6H-100 M-108 6H-100 M-84-6H-76 M-84 6H-76 M-96-6L-88 0L-96 6Z\" fill=\"none\" stroke=\"#82bbd6\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"-60\" y=\"-5\" fill=\"#f0f2f5\" font-family=\"Segoe UI,sans-serif\" font-size=\"14\" font-weight=\"500\">File name.mp4</text><text x=\"-60\" y=\"17\" fill=\"#a9cadc\" font-family=\"Segoe UI,sans-serif\" font-size=\"12.5\">Video</text></svg>",
+      "css": ".ds-file-video{cursor:pointer;outline:none;background:#202429}.ds-file-video:hover .ds-card{stroke-opacity:1}.ds-file-video:focus-visible .ds-card{stroke:#ffc079;stroke-width:3}@media(forced-colors:active){.ds-file-video .ds-card{fill:Canvas;stroke:CanvasText;filter:none}.ds-file-video text{fill:CanvasText}}"
+    },
+    {
+      "name": "Minimap Container",
+      "kind": "card",
+      "description": "A collapsible glass camera surface with a restrained shadow; schematic nodes carry no file data.",
+      "html": "<details class=\"ds-minimap\" open><summary><span>Minimap</span><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M5 9L8 6L11 9\"/></svg></summary><svg class=\"ds-map\" viewBox=\"0 0 180 105\" role=\"img\" aria-label=\"Schematic minimap\"><path d=\"M35 30L90 55L145 30 M90 55L35 85 M90 55L145 85\" stroke=\"#77828c\" stroke-opacity=\".6\" fill=\"none\"/><g fill=\"#a5b0bc\"><rect x=\"23\" y=\"26\" width=\"24\" height=\"8\" rx=\"2\"/><rect x=\"23\" y=\"81\" width=\"24\" height=\"8\" rx=\"2\"/><rect x=\"133\" y=\"81\" width=\"24\" height=\"8\" rx=\"2\"/></g><rect x=\"133\" y=\"26\" width=\"24\" height=\"8\" rx=\"2\" fill=\"#82bbd6\"/><rect x=\"78\" y=\"51\" width=\"24\" height=\"8\" rx=\"2\" fill=\"#f0a048\"/><rect x=\"18\" y=\"18\" width=\"144\" height=\"75\" fill=\"#c5d8ed\" fill-opacity=\".07\" stroke=\"#b7cce3\"/></svg></details>",
+      "css": ".ds-minimap{width:190px;background:#282e35ed;border:1px solid #56616d;border-radius:9px;box-shadow:0 7px 20px #00000040;backdrop-filter:blur(12px)}.ds-minimap summary{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;color:#d7e0e9;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer;list-style:none}.ds-minimap summary::-webkit-details-marker{display:none}.ds-minimap summary svg{height:14px;width:14px;stroke:#b2bfcc;fill:none;stroke-width:1.5}.ds-minimap:not([open]) summary svg{transform:rotate(180deg)}.ds-minimap summary:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}.ds-map{display:block;width:calc(100% - 16px);height:105px;margin:0 8px;border-radius:3px;background:#1c2025}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Graphite, Glass, Amber/Cyan",
+    "overview": "This system applies only to DigUp's Tauri graph workspace and its graph-active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; these graph tokens are not a product-wide rebrand.\n\nA restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and its incident links; cyan distinguishes video cards. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the inspector supplies readable detail.",
+    "keyCharacteristics": [
+      "A world-anchored grid and stable file neighborhoods.",
+      "Glass plates with small rounded corners and restrained state glows.",
+      "Native sans typography, measured filename truncation, and numeric similarity labels.",
+      "Visible search/index context, a collapsible inspector, and an operable minimap."
+    ],
+    "rules": [
+      {
+        "name": "The State Color Rule",
+        "body": "Amber follows the selection and its incident links. Cyan identifies video when that card is unselected. Preserve these meanings when adding graph states.",
+        "section": "colors"
+      },
+      {
+        "name": "The Filename Rule",
+        "body": "Preserve the filename's beginning and ending when truncating. Keep full paths available through the card title and inspector instead of shrinking the type.",
+        "section": "typography"
+      },
+      {
+        "name": "The Topology Rule",
+        "body": "Position communicates connections, not measured similarity distance. Show only expanded neighborhoods, retain the (120-file) cap, and do not promise planar routing for cyclic graphs.",
+        "section": "layout"
+      },
+      {
+        "name": "The Quiet Depth Rule",
+        "body": "Keep default cards restrained. Selection and video state may glow; the ordinary canvas remains low contrast.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** keep this visual system scoped to graph mode.",
+      "**Do** preserve the amber selection and cyan video meanings.",
+      "**Do** retain world-anchored grid, stable existing-node positions, and measured filename truncation.",
+      "**Do** use actual local thumbnails and authored SVG icons.",
+      "**Do** keep search/index context visible, inspector details scrollable, and camera controls keyboard accessible.",
+      "**Do** preserve RU/EN labels, reduced-motion behavior, and forced-colors fallbacks."
+    ],
+    "donts": [
+      "**Don't** extend the graph palette into the desktop launcher or normal search as an implicit rebrand.",
+      "**Don't** encode cosine as physical distance or imply that only expanded links form a complete global graph.",
+      "**Don't** replace real scores or thumbnails with decorative fabricated data.",
+      "**Don't** use selection glow as the sole focus or state indicator."
+    ]
+  }
+}
+
