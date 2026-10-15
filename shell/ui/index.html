@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>DigUp</title>
   <link rel="stylesheet" href="panel.css">
+  <link rel="stylesheet" href="graph.css">
 </head>
 <body>
   <main id="panel" class="panel">
@@ -38,19 +39,33 @@
       <p id="stats-stamp" class="overview-note"></p>
     </section>
     <section id="graph-view" class="graph-view" aria-label="Related files graph" data-i18n-aria-label="Related files graph" hidden>
-      <div class="graph-toolbar"><h2 data-i18n="Related files">Related files</h2><button id="graph-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></div>
-      <p id="graph-status" role="status" aria-live="polite"></p>
+      <div class="graph-toolbar"><h2 data-i18n="Related files">Related files</h2><p id="graph-status" role="status" aria-live="polite"></p><button id="graph-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></div>
       <div class="graph-controls">
-        <label><span data-i18n="Minimum similarity">Minimum similarity</span> <select id="graph-minimum"><option value="0.35" data-i18n="0.35 · Broader">0.35 · Broader</option><option value="0.55" selected data-i18n="0.55 · Balanced">0.55 · Balanced</option><option value="0.75" data-i18n="0.75 · Closer">0.75 · Closer</option></select></label>
-        <button id="graph-zoom-out" class="quiet-button" type="button" aria-label="Zoom out" data-i18n-aria-label="Zoom out">−</button><button id="graph-zoom-in" class="quiet-button" type="button" aria-label="Zoom in" data-i18n-aria-label="Zoom in">+</button>
-        <button id="graph-center" class="quiet-button" type="button" data-i18n="Center selected">Center selected</button><button id="graph-refresh" class="quiet-button" type="button" data-i18n="Refresh">Refresh</button>
+        <label class="graph-threshold"><span data-i18n="Minimum similarity">Minimum similarity</span><select id="graph-minimum"><option value="0.35" data-i18n="0.35 · Broader">0.35 · Broader</option><option value="0.55" data-i18n="0.55 · Balanced">0.55 · Balanced</option><option value="0.75" selected data-i18n="0.75 · Closer">0.75 · Closer</option></select></label>
+        <div class="graph-navigation">
+          <button id="graph-zoom-out" class="quiet-button icon-button" type="button" aria-label="Zoom out" data-i18n-aria-label="Zoom out"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10H15"/></svg></button>
+          <button id="graph-zoom-in" class="quiet-button icon-button" type="button" aria-label="Zoom in" data-i18n-aria-label="Zoom in"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10H15 M10 5V15"/></svg></button>
+          <button id="graph-center" class="quiet-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="5"/><path d="M10 2V6 M10 14V18 M2 10H6 M14 10H18"/></svg><span data-i18n="Center selected">Center selected</span></button>
+          <button id="graph-refresh" class="quiet-button" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M16 8A6 6 0 1 0 16 13 M16 3V8H11"/></svg><span data-i18n="Refresh">Refresh</span></button>
+          <button id="graph-inspector-toggle" class="quiet-button active" type="button" aria-controls="graph-inspector" aria-expanded="true"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2"/><path d="M11 4V16"/></svg><span data-i18n="Preview">Preview</span></button>
+        </div>
       </div>
-      <svg id="graph-scene" class="graph-scene" viewBox="-360 -125 720 250" preserveAspectRatio="xMidYMid slice" tabindex="0" role="group" aria-label="File similarity graph. Drag background or use arrow keys to pan." data-i18n-aria-label="File similarity graph. Drag background or use arrow keys to pan."></svg>
-      <p class="graph-note" data-i18n="Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.">Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.</p>
-      <div class="graph-inspector"><div id="graph-preview" class="graph-preview" aria-label="Preview" data-i18n-aria-label="Preview"></div><div class="graph-detail"><h3 id="graph-title"></h3><p id="graph-path"></p><p id="graph-basis"></p>
-        <div class="graph-actions"><button id="graph-expand" class="quiet-button" type="button" data-i18n="Expand links">Expand links</button><button id="graph-start-here" class="quiet-button" type="button" data-i18n="Start here">Start here</button><button id="graph-similar" class="quiet-button" type="button" data-i18n="Find similar">Find similar</button><button id="graph-open" class="quiet-button" type="button" data-i18n="Open">Open</button><button id="graph-reveal" class="quiet-button" type="button" data-i18n="Show in Explorer">Show in Explorer</button></div>
-        <div id="graph-neighbors" class="graph-neighbors" aria-label="Connected files" data-i18n-aria-label="Connected files"></div>
-      </div></div>
+      <div class="graph-workspace">
+        <div class="graph-stage">
+          <svg id="graph-scene" class="graph-scene" tabindex="0" role="group" aria-label="File similarity graph. Drag background or use arrow keys to pan." data-i18n-aria-label="File similarity graph. Drag background or use arrow keys to pan."></svg>
+          <details class="graph-minimap" open><summary><span data-i18n="Minimap">Minimap</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 9L8 6L11 9"/></svg></summary>
+            <svg id="graph-map" tabindex="0" role="group" aria-label="Minimap. Click to move the camera." data-i18n-aria-label="Minimap. Click to move the camera." preserveAspectRatio="xMidYMid meet"></svg>
+            <div class="graph-zoom-control"><label for="graph-zoom" data-i18n="Zoom">Zoom</label><input id="graph-zoom" type="range" min="20" max="200" step="5" value="75"><output id="graph-zoom-value" for="graph-zoom">75%</output></div>
+          </details>
+        </div>
+        <aside id="graph-inspector" class="graph-inspector" aria-label="Preview" data-i18n-aria-label="Preview">
+          <div id="graph-preview" class="graph-preview"></div><div class="graph-detail"><h3 id="graph-title"></h3><p id="graph-path"></p><p id="graph-basis"></p>
+            <div class="graph-actions"><button id="graph-similar" class="quiet-button" type="button" data-i18n="Find similar">Find similar</button><button id="graph-expand" class="quiet-button" type="button" data-i18n="Expand links">Expand links</button><button id="graph-start-here" class="quiet-button" type="button" data-i18n="Start here">Start here</button><button id="graph-open" class="quiet-button" type="button" data-i18n="Open">Open</button><button id="graph-reveal" class="quiet-button" type="button" data-i18n="Show in Explorer">Show in Explorer</button></div>
+            <div id="graph-neighbors" class="graph-neighbors" aria-label="Connected files" data-i18n-aria-label="Connected files"></div>
+          </div>
+        </aside>
+      </div>
+      <p class="graph-note"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 9V14 M10 6V6.5"/></svg><span data-i18n="Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.">Links show similarity of indexed content, not a confirmed relationship. Positions show connections, not a measured distance. Only expanded neighborhoods are shown.</span></p>
     </section>
     <section id="similar-context" class="similar-context" hidden><span id="similar-title"></span><button id="similar-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></section>
     <section id="body" class="body" hidden>

@@ -51,12 +51,25 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label) {
     } finally { if (!$process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(5000) }; $process.Dispose() }
 }
 
+for ($number=1; $number -le 5; $number++) {
+    Copy-Item -LiteralPath "$script:Repo/Tests/LlamaRuntimeTests/Reference/photo.jpg" -Destination (Join-Path $fixture "UIFEATURE742-IMG_2018_000$number.jpg")
+}
+Run-Private (Join-Path $package 'helper/ffmpeg.exe') @('-v','error','-nostdin','-y','-loop','1','-framerate','1',
+    '-i',"$script:Repo/Tests/LlamaRuntimeTests/Reference/photo.jpg",'-t','2','-c:v','mpeg4','-q:v','4','-pix_fmt','yuv420p','-an',
+    (Join-Path $fixture 'UIFEATURE742-preview.mp4')) 'fixture-video'
 $gui=Join-Path $package 'DigUp.exe'
 foreach ($pass in 'first','restart') {
     $report=Join-Path $testRoot "gui-$pass.json"
     $arguments=@('--index',$index,'--models',$modelsPath,'--settings',$settings,'--debug-isolated',
         '--debug-ui-features','--debug-query','UIFEATURE742','--debug-report',$report,'--debug-quit')
-    if ($pass -eq 'first') { $arguments+=@('--debug-setup','--offer',$fixture) }
+    if ($f.controls.initialZoom -ne 0.75 -or $f.controls.zoomIn -le 0.75 -or $f.controls.sliderZoom -ne 0.75 -or
+        $f.controls.zoomLabel -ne '75%' -or !$f.controls.inspectorRestored -or $f.controls.collapsedWidth -le $f.controls.beforeWidth -or
+        ([Math]::Abs($f.controls.minimapCenter.x) + [Math]::Abs($f.controls.minimapCenter.y)) -lt 10 -or
+        [Math]::Abs($f.controls.centered.x) -gt 0.01 -or [Math]::Abs($f.controls.centered.y) -gt 0.01 -or
+        $f.graph.labels.Count -ne $f.graph.links -or $f.graph.minimapNodes -ne $f.graph.files -or
+        @($f.image.thumbnails | Where-Object loaded -eq $true).Count -lt 2 -or
+        @($f.image.nodes | Where-Object kind -eq 'video').Count -lt 1) { throw 'Native graph camera/minimap/thumbnails/inspector controls failed.' }
+    if ($pass -eq 'first' ) { $arguments+=@('--debug-setup','--offer',$fixture) }
     Run-Private $gui $arguments "gui-$pass"
     $ui=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
     $f=$ui.features
@@ -94,6 +107,6 @@ if ($saved.language -ne 'ru' -or $saved.folders.Count -ne 1 -or $saved.folders[0
     checks=@('setup Russian selector','RU/EN/RU live DOM','restart language persistence','queries and selected paths unchanged',
         'real graph text preview','real graph image preview','Find similar from graph and result',
         '40 then all similar files via Show more','no duplicate files or seed in neighbors','Back to original query',
-        'bounded inspector layout','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |
+        'bounded inspector layout','75% initial camera','actual minimap click and recenter','zoom slider','collapsible inspector','real image and video card thumbnails','cosine labels','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |
     ConvertTo-Json -Depth 4 | Set-Content -LiteralPath "$testRoot/result.json" -Encoding utf8NoBOM
 Write-Host "Actual packaged UI refinements passed: $testRoot"

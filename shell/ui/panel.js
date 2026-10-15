@@ -66,7 +66,7 @@ const progressHistory = [];
 let progressQueued = false;
 let debugOptions = {};
 const featureReport = {};
-const graph = new GraphView({ ask, invoke, nameOf, previewFor: (hit, code) => picture(hit, { code, query: "" }), onSimilar: findSimilar, onVisibility: (visible) => {
+const graph = new GraphView({ ask, invoke, nameOf, thumbnailFor: graphThumbnail, previewFor: (hit, code) => picture(hit, { code, query: "" }), onSimilar: findSimilar, onVisibility: (visible) => {
   if (visible) state.statsOpen = false;
   render();
 } });
@@ -325,10 +325,12 @@ function revealSelected() {
 
 function render() {
   const empty = state.phase === "empty";
-  const height = graph.visible ? 720 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
+  document.querySelector(".panel").classList.toggle("graph-active", graph.visible);
+  document.documentElement.classList.toggle("graph-mode", graph.visible);
+  const height = graph.visible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
-    invoke("panel_height", { height }).catch(() => {});
+    invoke("panel_height", { height, graph: graph.visible }).catch(() => {});
   }
   $body.hidden = empty || state.statsOpen || graph.visible;
   $footer.hidden = empty || state.statsOpen || graph.visible;
@@ -679,6 +681,14 @@ function kindIcon(kind) {
 
 /// The helper's JPEG of a page, a frame or a picture, asked for once per file and place.
 const renders = new Map();
+async function graphThumbnail(hit) {
+  const kind = ["image", "screenshot"].includes(hit.kind) ? "image" : hit.kind;
+  const loc = kind === "pdf" ? (hit.segment === "page" || hit.segment === "page_image" ? hit.loc : 1) : kind === "video" ? hit.loc ?? .5 : null;
+  const path = await rendered(hit.path, kind, loc, 80);
+  if (!path) return null;
+  return { path, url: fileURL(path) };
+}
+
 function rendered(path, kind, loc, pixels) {
   const key = `${path}|${kind}|${loc}|${pixels}`;
   if (!renders.has(key)) renders.set(key, ask({ op: "render", path, kind, loc, pixels }).then((reply) => reply.image));
@@ -959,6 +969,20 @@ async function exerciseUiFeatures() {
   await language("ru"); featureReport.russian = snapshot();
   $("graph-toggle").click(); await wait(() => !graph.loading);
   await wait(() => !!$("graph-preview").querySelector(".passage")?.textContent.includes("UIFEATURE742"));
+  const controls = { initialZoom: graph.zoom, initialCenter: { ...graph.center } };
+  $("graph-zoom-in").click(); controls.zoomIn = graph.zoom;
+  $("graph-zoom").value = "75"; $("graph-zoom").dispatchEvent(new Event("input", { bubbles: true }));
+  controls.sliderZoom = graph.zoom; controls.zoomLabel = $("graph-zoom-value").textContent;
+  const mapRect = $("graph-map").getBoundingClientRect();
+  $("graph-map").dispatchEvent(new MouseEvent("click", { clientX: mapRect.x + mapRect.width * .7, clientY: mapRect.y + mapRect.height * .65, bubbles: true }));
+  controls.minimapCenter = { ...graph.center };
+  $("graph-center").click(); controls.centered = { ...graph.center };
+  const beforeInspector = graph.svg.clientWidth;
+  $("graph-inspector-toggle").click(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  controls.collapsedWidth = graph.svg.clientWidth; controls.beforeWidth = beforeInspector;
+  $("graph-inspector-toggle").click(); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  controls.inspectorRestored = graph.inspectorOpen;
+  featureReport.controls = controls;
   featureReport.graph = graph.debug();
   featureReport.graph.bounds = ["graph-scene", "graph-preview", "graph-detail"].map((id) => {
     const node = id === "graph-detail" ? document.querySelector(".graph-detail") : $(id), rect = node.getBoundingClientRect();
@@ -984,7 +1008,16 @@ async function exerciseUiFeatures() {
   selectKind("image");
   $("graph-toggle").click(); await wait(() => !graph.loading);
   await wait(() => !!$("graph-preview").querySelector("img")?.naturalWidth);
-  featureReport.image = graph.debug(); graph.close();
+  await wait(() => graph.svg.querySelectorAll('.graph-thumbnail[data-loaded="true"]').length >= 2);
+  featureReport.image = graph.debug();
+  featureReport.image.assets = [...graph.model.nodes.values(), ...state.strong, ...state.weaker].map((hit) => ({ path: hit.path, url: fileURL(hit.path) }));
+  const domClone = document.documentElement.cloneNode(true);
+  domClone.querySelectorAll("script").forEach((node) => node.remove());
+  const inputs = document.querySelectorAll("input"), selects = document.querySelectorAll("select");
+  domClone.querySelectorAll("input").forEach((node, index) => node.setAttribute("value", inputs[index].value));
+  domClone.querySelectorAll("select").forEach((node, index) => [...node.options].forEach((option, i) => option.toggleAttribute("selected", selects[index].selectedIndex === i)));
+  featureReport.image.htmlSnapshot = "<!doctype html>" + domClone.outerHTML;
+  graph.close();
   await language("en"); featureReport.englishAgain = snapshot();
   await language("ru");
   featureReport.final = snapshot();

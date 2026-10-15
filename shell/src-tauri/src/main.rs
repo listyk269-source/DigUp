@@ -438,25 +438,44 @@ fn retry_model(app: AppHandle) {
 
 /// The panel grows to show results and shrinks back to its field.
 #[tauri::command]
-fn panel_height(app: AppHandle, height: f64) {
+fn panel_height(app: AppHandle, height: f64, graph: Option<bool>) {
     if let Some(panel) = app.get_webview_window("panel") {
         let monitor = panel.current_monitor().ok().flatten();
-        let maximum = monitor
+        let scale = monitor
             .as_ref()
-            .map(|screen| screen.work_area().size.height as f64 / screen.scale_factor())
-            .unwrap_or(720.0);
-        let actual = height.clamp(FIELD_HEIGHT, 720.0).min(maximum);
-        let _ = panel.set_size(LogicalSize::new(PANEL_WIDTH, actual));
+            .map(|screen| screen.scale_factor())
+            .unwrap_or(1.0);
+        let maximum_height = monitor
+            .as_ref()
+            .map(|screen| screen.work_area().size.height as f64 / scale - 24.0)
+            .unwrap_or(900.0)
+            .max(FIELD_HEIGHT);
+        let maximum_width = monitor
+            .as_ref()
+            .map(|screen| screen.work_area().size.width as f64 / scale - 24.0)
+            .unwrap_or(1280.0)
+            .max(320.0);
+        let actual = height.clamp(FIELD_HEIGHT, 900.0).min(maximum_height);
+        let width = (if graph.unwrap_or(false) {
+            1280.0_f64
+        } else {
+            PANEL_WIDTH
+        })
+        .min(maximum_width);
+        let previous_size = panel.outer_size().ok();
+        let _ = panel.set_size(LogicalSize::new(width, actual));
         if let (Some(screen), Ok(position)) = (monitor, panel.outer_position()) {
             let work = screen.work_area();
-            let bottom = work.position.y + work.size.height as i32
-                - (actual * screen.scale_factor()).ceil() as i32;
+            let bottom = work.position.y + work.size.height as i32 - (actual * scale).ceil() as i32;
+            let right = work.position.x + work.size.width as i32 - (width * scale).ceil() as i32;
+            let centered = previous_size
+                .map(|old| position.x + (old.width as i32 - (width * scale) as i32) / 2)
+                .unwrap_or(position.x);
+            let x = centered.clamp(work.position.x, right.max(work.position.x));
             let y = position
                 .y
                 .clamp(work.position.y, bottom.max(work.position.y));
-            if y != position.y {
-                let _ = panel.set_position(PhysicalPosition::new(position.x, y));
-            }
+            let _ = panel.set_position(PhysicalPosition::new(x, y));
         }
     }
 }
@@ -1022,7 +1041,11 @@ fn show_panel(app: &AppHandle) {
     // On the screen with the pointer, centered, a fifth of the way down.
     if let Ok(pointer) = app.cursor_position() {
         if let Ok(Some(screen)) = app.monitor_from_point(pointer.x, pointer.y) {
-            let width = (PANEL_WIDTH * screen.scale_factor()) as i32;
+            let logical_width = panel
+                .inner_size()
+                .map(|size| size.width as f64 / panel.scale_factor().unwrap_or(1.0))
+                .unwrap_or(PANEL_WIDTH);
+            let width = (logical_width * screen.scale_factor()) as i32;
             let x = screen.position().x + (screen.size().width as i32 - width) / 2;
             let y = screen.position().y + (screen.size().height as f64 * 0.2) as i32;
             let _ = panel.set_position(PhysicalPosition::new(x, y));

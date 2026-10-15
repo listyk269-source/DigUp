@@ -2,6 +2,9 @@
 // Explicit UI message catalog. Paths, names, queries and document content never pass through DOM translation.
 const I18n = (() => {
   const ru = {
+    "Minimap": "Миникарта",
+    "Minimap. Click to move the camera.": "Миникарта. Нажмите, чтобы переместить камеру.",
+    "Zoom": "Масштаб",
   "Search": "Поиск",
   "Language": "Язык интерфейса",
   "Index": "Индекс",

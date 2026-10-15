@@ -161,31 +161,6 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .stats-recent button { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .overview-note { margin: 8px 0; }
 
-.graph-view { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px 16px 0; border-top: 1px solid var(--line); }
-.graph-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.graph-toolbar h2 { margin: 0; font-size: 17px; font-weight: 600; }
-#graph-status { margin: 6px 0; font-size: 12px; color: var(--secondary); }
-.graph-controls { display: flex; align-items: center; gap: 7px; }
-.graph-controls label { font-size: 12px; margin-right: auto; }
-.graph-controls select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); padding: 4px; }
-.graph-scene { width: 100%; height: 250px; min-height: 150px; flex: 1 1 250px; touch-action: none; cursor: grab; }
-.graph-edge { stroke: var(--secondary); opacity: 0.65; }
-.graph-node { cursor: pointer; }
-.graph-node rect { fill: var(--surface); stroke: var(--secondary); stroke-width: 1; }
-.graph-node.selected rect { fill: var(--selected); stroke: var(--ember); stroke-width: 2; }
-.graph-node:focus-visible rect { stroke: var(--ember); stroke-width: 3; }
-.graph-node-name { fill: var(--text); font-size: 13px; font-weight: 600; }
-.graph-node-kind { fill: var(--secondary); font-size: 12px; }
-.graph-note { margin: 2px 0 8px; color: var(--secondary); font-size: 12px; line-height: 1.4; }
-.graph-detail { min-width: 0; min-height: 0; flex: 1; overflow: auto; border-top: 1px solid var(--line); padding: 8px 0 12px; }
-.graph-detail h3 { font-size: 14px; margin: 0; }
-#graph-path { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 3px 0; color: var(--secondary); font-size: 12px; }
-#graph-basis { margin: 4px 0 8px; font-size: 12px; color: var(--secondary); }
-.graph-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.graph-neighbors { display: grid; gap: 4px; margin-top: 8px; }
-.graph-neighbors button { font: inherit; color: var(--text); text-align: left; background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.graph-neighbors p { color: var(--secondary); font-size: 12px; margin: 2px 0; }
-
 .group-title {
   font-size: 10px;
   font-weight: 600;
@@ -426,15 +401,6 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .summary { color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .keys { color: var(--secondary); white-space: pre; }
 
-/* Selected-file inspector: real preview and actions remain visible below the graph. */
-.graph-inspector { display: flex; gap: 14px; min-height: 155px; height: 200px; flex: 0 1 200px; border-top: 1px solid var(--line); }
-.graph-preview { width: 220px; min-width: 150px; overflow: auto; display: flex; padding: 10px 0; }
-.graph-preview .picture { width: 100%; min-height: 0; }
-.graph-preview .passage { overflow: auto; }
-.graph-preview img, .graph-preview video { max-height: 175px; }
-.graph-detail { border-top: 0; }
-.graph-controls { flex-wrap: wrap; }
-.graph-scene { min-height: 130px; }
 .buttons { flex-wrap: wrap; }
 .language-select { font: inherit; font-size: 12px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 3px; max-width: 88px; }
 .language-select:focus-visible, select:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
