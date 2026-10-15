@@ -50,6 +50,7 @@ pub struct Options {
     pub debug_load_all: bool,
     /// Isolated release smoke: explore a real stored-vector neighborhood through the graph's DOM controls.
     pub debug_graph: bool,
+    pub debug_ui_features: bool,
 }
 
 impl Options {
@@ -88,6 +89,7 @@ impl Options {
             debug_reconfigure_folder: None,
             debug_load_all: false,
             debug_graph: false,
+            debug_ui_features: false,
         };
         while let Some(arg) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -117,6 +119,7 @@ impl Options {
                 }
                 "--debug-load-all" => options.debug_load_all = true,
                 "--debug-graph" => options.debug_graph = true,
+                "--debug-ui-features" => options.debug_ui_features = true,
                 _ => return Err(format!("unknown argument {arg}")),
             }
         }
@@ -140,6 +143,9 @@ impl Options {
         }
         if options.debug_load_all && !options.debug_isolated {
             return Err("--debug-load-all requires --debug-isolated".into());
+        }
+        if options.debug_ui_features && !options.debug_isolated {
+            return Err("--debug-ui-features requires --debug-isolated".into());
         }
         if options.debug_graph && !options.debug_isolated {
             return Err("--debug-graph requires --debug-isolated".into());
@@ -266,6 +272,7 @@ mod tests {
         assert!(parse(&["--debug-isolated"], None, None).is_err());
         assert!(parse(&["--debug-load-all"], None, None).is_err());
         assert!(parse(&["--debug-graph"], None, None).is_err());
+        assert!(parse(&["--debug-ui-features"], None, None).is_err());
         assert!(parse(&["--debug-reconfigure-folder", "relative"], None, None).is_err());
         let root = std::env::temp_dir().join("DigUp test кириллица");
         let args = [

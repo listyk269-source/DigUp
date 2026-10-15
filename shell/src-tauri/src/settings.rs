@@ -7,6 +7,23 @@ use std::path::Path;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub enum Language {
+    #[default]
+    En,
+    Ru,
+}
+
+impl Language {
+    pub fn text<'a>(self, english: &'a str, russian: &'a str) -> &'a str {
+        match self {
+            Self::En => english,
+            Self::Ru => russian,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Device {
     #[default]
     Auto,
@@ -52,6 +69,8 @@ pub struct Settings {
     pub hotkey: String,
     /// Inference device preference; Auto can fall back to CPU when a GPU cannot start.
     pub device: Device,
+    /// The shell's interface language; independent of search and document languages.
+    pub language: Language,
     /// Onboarding is done: the shell starts in the tray.
     pub set_up: bool,
 }
@@ -101,12 +120,14 @@ mod tests {
         settings.save(&path).unwrap();
         settings.set_up = true;
         settings.device = Device::Gpu;
+        settings.language = Language::Ru;
         settings.save(&path).unwrap();
         let loaded = Settings::load(&path);
         assert_eq!(loaded.folders, settings.folders);
         assert_eq!(loaded.code_roots, settings.code_roots);
         assert!(loaded.set_up);
         assert_eq!(loaded.device, Device::Gpu);
+        assert_eq!(loaded.language, Language::Ru);
         assert!(!path.with_extension("json.new").exists());
         std::fs::remove_dir_all(temporary).unwrap();
     }
@@ -120,6 +141,7 @@ mod tests {
         assert!(settings.hotkey.is_empty());
         assert!(settings.code_roots.is_empty());
         assert_eq!(settings.device, Device::Auto);
+        assert_eq!(settings.language, Language::En);
     }
 
     #[test]

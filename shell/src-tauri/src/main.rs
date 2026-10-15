@@ -17,7 +17,7 @@ use helper::{Estimates, IndexService, Launch, ModelDownload, SearchService};
 use index_status::IndexStatus;
 use options::{Options, DEFAULT_HOTKEY};
 use serde_json::{json, Value};
-use settings::{Device, Settings};
+use settings::{Device, Language, Settings};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -52,6 +52,7 @@ struct Shell {
     watcher: Mutex<Option<FolderWatcher>>,
     /// The tray menu's first line: what's going on.
     status: Mutex<Option<MenuItem<Wry>>>,
+    tray_labels: Mutex<Vec<(MenuItem<Wry>, String, String)>>,
     /// Replayed when a webview starts or is shown after indexing has already begun.
     index_status: Mutex<IndexStatus>,
     /// When the search service last reloaded the index (while indexing, at most every few seconds).
@@ -193,6 +194,39 @@ fn index_status(shell: State<'_, Arc<Shell>>) -> IndexStatus {
     shell.index_status.lock().unwrap().clone()
 }
 
+#[tauri::command]
+fn language(shell: State<'_, Arc<Shell>>) -> Language {
+    shell.settings.lock().unwrap().language
+}
+
+#[tauri::command]
+fn set_language(
+    app: AppHandle,
+    shell: State<'_, Arc<Shell>>,
+    language: Language,
+) -> Result<(), String> {
+    // Serialize with setup/device saves. Publish only after the atomic settings write succeeded.
+    {
+        let _configuration = shell.configuration.lock().unwrap();
+        let mut settings = shell.settings.lock().unwrap();
+        let mut updated = settings.clone();
+        updated.language = language;
+        updated
+            .save(&shell.settings_path)
+            .map_err(|e| e.to_string())?;
+        *settings = updated;
+    }
+    for (item, en, ru) in shell.tray_labels.lock().unwrap().iter() {
+        let _ = item.set_text(language.text(en, ru));
+    }
+    if let Some(window) = app.get_webview_window("setup") {
+        let _ = window.set_title(language.text("Set Up DigUp", "Настройка DigUp"));
+    }
+    set_status(&app, "Index status is shown in the search panel");
+    let _ = app.emit("language-changed", language);
+    Ok(())
+}
+
 /// Setup shows file counts only; detailed estimates also probe media durations and PDF pages unnecessarily.
 #[tauri::command]
 async fn estimate(
@@ -273,6 +307,8 @@ fn setup_info(app: AppHandle, shell: State<'_, Arc<Shell>>) -> Value {
         "hotkey": shortcut_text(&shell.hotkey()),
         "model": shell.model_state.lock().unwrap().clone(),
         "auto": shell.options.debug_setup,
+        "language": shell.settings.lock().unwrap().language,
+        "debugUiFeatures": shell.options.debug_ui_features,
         "debugDevice": shell.options.debug_device,
         "debugReconfigure": reconfigure,
         "autostart": autostart::enabled(),
@@ -288,7 +324,14 @@ async fn pick_folders(app: AppHandle) -> Vec<String> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .set_title("Add Folders")
+        .set_title(
+            app.state::<Arc<Shell>>()
+                .settings
+                .lock()
+                .unwrap()
+                .language
+                .text("Add Folders", "Добавить папки"),
+        )
         .pick_folders(move |folders| {
             let _ = sender.send(folders);
         });
@@ -432,7 +475,7 @@ async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, Str
 
 #[tauri::command]
 fn debug_search_options(shell: State<'_, Arc<Shell>>) -> Value {
-    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph})
+    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features})
 }
 
 #[tauri::command]
@@ -452,6 +495,7 @@ fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value)
             .and_then(|window| panel_corner_preference(&window)));
     }
     let saved_device = shell.settings.lock().unwrap().device;
+    report["savedLanguage"] = json!(shell.settings.lock().unwrap().language);
     report["savedDevice"] = json!(saved_device);
     report["devicePreference"] = json!(shell.options.effective_device(saved_device));
     report["deviceOverridden"] = json!(shell.options.device_is_overridden());
@@ -531,6 +575,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             ask,
             index_status,
+            language,
+            set_language,
             estimate,
             setup_info,
             pick_folders,
@@ -651,6 +697,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
         model_state: Mutex::new(json!({"state": "checking"})),
         watcher: Mutex::new(None),
         status: Mutex::new(None),
+        tray_labels: Mutex::new(Vec::new()),
         index_status: Mutex::new(IndexStatus::default()),
         reloaded: Mutex::new(Instant::now()),
         debug_query_sent: AtomicBool::new(false),
@@ -837,21 +884,41 @@ fn quit(app: &AppHandle) {
 // MARK: Windows
 
 #[cfg(windows)]
-fn square_panel_corners(window: &tauri::WebviewWindow) {
-    use windows_sys::Win32::Graphics::Dwm::{
-        DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+fn round_panel_corners(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Graphics::{
+        Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND},
+        Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn},
     };
     if let Ok(hwnd) = window.hwnd() {
-        // SAFETY: the live Tauri window owns this HWND; DWM reads an i32 during this call only.
-        // Windows 10 does not support this Windows 11 attribute. Its failure is harmless:
-        // the opaque web surface already has square corners there.
-        unsafe {
-            let _ = DwmSetWindowAttribute(
+        // DWM clips the opaque WebView itself on Windows 11: no second transparent frame.
+        // SAFETY: live HWND and an i32 read only for this call.
+        let result = unsafe {
+            DwmSetWindowAttribute(
                 hwnd.0,
                 DWMWA_WINDOW_CORNER_PREFERENCE as u32,
-                (&DWMWCP_DONOTROUND as *const i32).cast(),
+                (&DWMWCP_ROUND as *const i32).cast(),
                 std::mem::size_of::<i32>() as u32,
-            );
+            )
+        };
+        if result < 0 {
+            // Windows 10 fallback. Region coordinates are physical pixels; recompute on size/DPI changes.
+            if let (Ok(size), Ok(scale)) = (window.outer_size(), window.scale_factor()) {
+                let diameter = (16.0 * scale).round() as i32;
+                // SAFETY: owned GDI region. On success Windows owns it, on failure we delete it.
+                unsafe {
+                    let region = CreateRoundRectRgn(
+                        0,
+                        0,
+                        size.width as i32 + 1,
+                        size.height as i32 + 1,
+                        diameter,
+                        diameter,
+                    );
+                    if !region.is_null() && SetWindowRgn(hwnd.0, region, 1) == 0 {
+                        DeleteObject(region);
+                    }
+                }
+            }
         }
     }
 }
@@ -896,9 +963,18 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
         .visible(false)
         .build()?;
     #[cfg(windows)]
-    square_panel_corners(&panel);
+    round_panel_corners(&panel);
     let app = app.clone();
     panel.on_window_event(move |event| {
+        #[cfg(windows)]
+        if matches!(
+            event,
+            WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. }
+        ) {
+            if let Some(window) = app.get_webview_window("panel") {
+                round_panel_corners(&window);
+            }
+        }
         // Like Spotlight: it steps away when you click elsewhere.
         if let WindowEvent::Focused(false) = event {
             if !app.state::<Arc<Shell>>().options.debug_show {
@@ -952,7 +1028,14 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
         builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
     }
     let window = builder
-        .title("Set Up DigUp")
+        .title(
+            shell
+                .settings
+                .lock()
+                .unwrap()
+                .language
+                .text("Set Up DigUp", "Настройка DigUp"),
+        )
         .inner_size(720.0, 600.0)
         .resizable(false)
         .maximizable(false)
@@ -1035,6 +1118,37 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
             &quit_item,
         ],
     )?;
+    *shell.tray_labels.lock().unwrap() = vec![
+        (search.clone(), "Search…".into(), "Поиск…".into()),
+        (
+            folders.clone(),
+            "Choose Folders…".into(),
+            "Выбрать папки…".into(),
+        ),
+        (
+            index.clone(),
+            "Index Now / Resume".into(),
+            "Индексировать / Продолжить".into(),
+        ),
+        (
+            pause.clone(),
+            "Pause Indexing".into(),
+            "Приостановить индексацию".into(),
+        ),
+        (
+            model.clone(),
+            "Retry Model Download".into(),
+            "Повторить загрузку модели".into(),
+        ),
+        (
+            quit_item.clone(),
+            "Quit DigUp".into(),
+            "Выйти из DigUp".into(),
+        ),
+    ];
+    for (item, en, ru) in shell.tray_labels.lock().unwrap().iter() {
+        item.set_text(shell.settings.lock().unwrap().language.text(en, ru))?;
+    }
     // A Mac's menu bar takes a template (it colors it); trays elsewhere show the app's own small icon.
     #[cfg(target_os = "macos")]
     let icon = tauri::include_image!("icons/tray-template.png");
@@ -1099,8 +1213,21 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
 }
 
 fn set_status(app: &AppHandle, text: &str) {
-    if let Some(status) = app.state::<Arc<Shell>>().status.lock().unwrap().as_ref() {
-        let _ = status.set_text(text);
+    let shell = app.state::<Arc<Shell>>();
+    let language = shell.settings.lock().unwrap().language;
+    let russian = match shell.index_status.lock().unwrap().stage.as_str() {
+        "starting" => "Подготовка индекса…",
+        "scanning" => "Сканирование папок…",
+        "indexing" => "Индексация файлов…",
+        "rest" => "Чтение длинных файлов…",
+        "idle" => "Индекс обновлён",
+        "paused" => "Индексация приостановлена",
+        "waiting" => "Ожидание модели",
+        "no-folders" => "Папки не выбраны",
+        _ => "Проверьте состояние индекса в окне поиска",
+    };
+    if let Some(status) = shell.status.lock().unwrap().as_ref() {
+        let _ = status.set_text(language.text(text, russian));
     }
     let _ = app.emit("status", text);
 }
