@@ -22,13 +22,49 @@ final class FaceService: @unchecked Sendable {
     private var fetcher: FileFetcher?
     private var active = false
     private var verifiedModels = false
+    private var preferences = FaceAutoSettings()
+    private var schedule = FaceAutoSchedule()
+    private var monitoring = false
+    private var closed = false
+    private var autoBlocked = false
+    private var manualStart = false
+    private var sourceRevision: UInt64 = 0
+    private let wake = DispatchSemaphore(value: 0)
+    private let jobs = DispatchGroup()
+    let suggestionSummary = FaceSuggestionSummaryCache()
+
     init(directory: URL, roots: [String]?, skipped: [String], types: Set<String>) {
         self.directory = directory
         scope = Scope(roots: roots, skipped: skipped, excludedTypes: types)
+        do {
+            var completed = false, step = 2.0
+            if FileManager.default.fileExists(atPath: directory.appendingPathComponent(FaceIndexStore.name).path) {
+                let sidecar = try Database(path: directory.appendingPathComponent(FaceIndexStore.name).path)
+                try sidecar.query("SELECT config FROM face_jobs WHERE state = 'done' ORDER BY completed DESC LIMIT 1") { row in
+                    completed = true
+                    if let config = row.text(0), let raw = config.split(separator: ";").first(where: { $0.hasPrefix("step=") }),
+                       let value = Double(raw.dropFirst(5)), FaceAutoSettings.validStep(value) { step = value }
+                }
+            }
+            preferences = try FaceAutoSettings.load(from: directory, completedJobs: completed, previousStep: step)
+            // Persist the legacy opt-in decision once. A later deletion of face jobs must not silently opt someone out.
+            if completed, !FileManager.default.fileExists(atPath: FaceAutoSettings.file(in: directory).path) {
+                try preferences.save(to: directory)
+            }
+        } catch {
+            preferences = FaceAutoSettings()
+            state["auto_error"] = "Saved face preferences could not be read. Choose face indexing settings again."
+        }
     }
     func update(roots: [String]?, skipped: [String], types: Set<String>) {
-        cancel()
-        stateLock.withLock { scope = Scope(roots: roots, skipped: skipped, excludedTypes: types); scopeRevision &+= 1 }
+        stateLock.withLock {
+            cancellation?.cancel(); fetcher?.cancel()
+            scope = Scope(roots: roots, skipped: skipped, excludedTypes: types); scopeRevision &+= 1
+            state["pending"] = 0; state["previously_completed"] = 0
+            schedule.request(now: ProcessInfo.processInfo.systemUptime)
+            if active { state["state"] = "cancelling" }
+        }
+        suggestionSummary.invalidate(); wake.signal()
     }
     func status() -> [String: Any] {
         stateLock.withLock {
@@ -40,48 +76,192 @@ final class FaceService: @unchecked Sendable {
             reply["device_active"] = state["device"] ?? "unknown"
             reply["active"] = active
             reply["model_id"] = FaceModels.modelID
-            reply["sample_seconds"] = state["sample_seconds"] ?? 2.0
+            reply["sample_seconds"] = state["sample_seconds"] ?? preferences.sampleSeconds
+            reply["auto_enabled"] = preferences.enabled
+            reply["auto_paused"] = preferences.paused
+            reply["auto_device"] = preferences.device
+            reply["auto_sample_seconds"] = preferences.sampleSeconds
+            reply["auto_pending"] = state["pending"] ?? 0
+            reply["pending"] = state["pending"] ?? 0
+            reply["previously_completed"] = state["previously_completed"] ?? 0
+            reply["auto_state"] = preferences.paused ? "paused" : !preferences.enabled ? "disabled"
+                : active ? "running" : state["auto_state"] ?? "waiting_for_index"
+            reply["auto_error"] = state["auto_error"] ?? NSNull()
             return reply
         }
     }
     @discardableResult func cancel() -> [String: Any] {
         stateLock.withLock {
+            preferences.setEnabled(false); schedule.pause()
+            do { try preferences.save(to: directory) }
+            catch { state["auto_error"] = "The pause could not be saved. Check access to the index folder before restarting DigUp." }
             cancellation?.cancel()
             fetcher?.cancel()
             if active { state["state"] = "cancelling" }
         }
         return status()
     }
-    func start(_ request: [String: Any]) throws -> [String: Any] {
-        let device = request["device"] as? String ?? "auto"
+
+    /// Quitting or changing the scope cancels owned work without turning a persistent opt-in into a manual pause.
+    func shutdown() {
+        stateLock.withLock {
+            closed = true; schedule.shutdown(); cancellation?.cancel(); fetcher?.cancel()
+        }
+        suggestionSummary.cancel(); wake.signal()
+        _ = jobs.wait(timeout: .now() + 1.5)
+    }
+
+    func automatic(_ request: [String: Any]) throws -> [String: Any] {
+        guard let enabled = request["enabled"] as? Bool else { throw CLIError("Choose whether automatic face indexing is enabled.") }
+        let (device, step) = try settings(request)
+        try stateLock.withLock {
+            guard !closed else { throw CLIError("Face indexing is shutting down.") }
+            let changed = preferences.device != device || preferences.sampleSeconds != step
+            var updated = preferences; updated.setEnabled(enabled); updated.device = device; updated.sampleSeconds = step
+            try updated.save(to: directory); preferences = updated
+            autoBlocked = false; state.removeValue(forKey: "auto_error")
+            if !enabled || changed { cancellation?.cancel(); fetcher?.cancel() }
+            if enabled { schedule.request(now: ProcessInfo.processInfo.systemUptime) } else { schedule.pause() }
+            if active, !enabled || changed { state["state"] = "cancelling" }
+        }
+        wake.signal()
+        return status()
+    }
+
+    private func settings(_ request: [String: Any]) throws -> (String, Double) {
+        let saved = stateLock.withLock { preferences }
+        let device = request["device"] as? String ?? saved.device
         guard ["auto", "cpu", "gpu"].contains(device) else { throw CLIError("Choose auto, CPU or GPU for face indexing.") }
-        let step = request["sample_seconds"] as? Double ?? 2
-        guard step.isFinite, (0.25...60).contains(step) else { throw CLIError("Video sampling must be between 0.25 and 60 seconds.") }
+        let step = request["sample_seconds"] as? Double ?? saved.sampleSeconds
+        guard FaceAutoSettings.validStep(step) else { throw CLIError("Video sampling must be between 0.25 and 60 seconds.") }
+        return (device, step)
+    }
+    func start(_ request: [String: Any]) throws -> [String: Any] {
+        let (device, step) = try settings(request)
+        let start = try stateLock.withLock {
+            guard !closed else { throw CLIError("Face indexing is shutting down.") }
+            guard !active, !manualStart else { return false }
+            var updated = preferences; updated.setEnabled(true); updated.device = device; updated.sampleSeconds = step
+            try updated.save(to: directory); preferences = updated
+            autoBlocked = false; state.removeValue(forKey: "auto_error")
+            manualStart = true
+            return true
+        }
+        if start { launch(device: device, step: step, download: request["download"] as? Bool ?? false, automatic: false) }
+        return status()
+    }
+
+    private func launch(device: String, step: Double, download: Bool, automatic: Bool, expectedScope: UInt64? = nil) {
         let token = FaceCancellation()
         let selected: Scope? = stateLock.withLock {
-            guard !active else { return nil }
-            active = true; cancellation = token
+            guard !closed, !active, !automatic || (preferences.enabled && !preferences.paused) else { return nil }
+            guard !automatic || !manualStart else { return nil }
+            if let expectedScope {
+                guard scopeRevision == expectedScope, preferences.device == device, preferences.sampleSeconds == step else { return nil }
+            }
+            active = true; manualStart = false; cancellation = token
+            let previous = state["previously_completed"] ?? 0, pending = state["pending"] ?? 0
             state = ["state": "running", "total": 0, "done": 0, "failed": 0, "faces": 0, "frames": 0,
-                     "current_frame": 0, "total_frames": 0, "requested_device": device, "device": "unknown", "sample_seconds": step]
+                     "current_frame": 0, "total_frames": 0, "requested_device": device, "device": "unknown", "sample_seconds": step,
+                     "previously_completed": previous, "pending": pending, "automatic": automatic]
+            jobs.enter()
             return scope
         }
-        guard let selected else { return status() }
-        let download = request["download"] as? Bool ?? false
+        guard let selected else { return }
         Thread.detachNewThread { [self] in
-            defer { stateLock.withLock { active = false; cancellation = nil; fetcher = nil } }
+            defer {
+                stateLock.withLock {
+                    active = false; cancellation = nil; fetcher = nil
+                    schedule.request(now: ProcessInfo.processInfo.systemUptime)
+                }
+                wake.signal(); jobs.leave()
+            }
             do {
                 try prepareModels(download: download, token: token)
-                try backfill(scope: selected, device: device, step: step, token: token)
+                try backfill(scope: selected, device: device, step: step, token: token, automatic: automatic)
                 try token.check()
                 change(["state": "completed", "current_frame": 0, "total_frames": 0])
             } catch is CancellationError {
                 change(["state": "cancelled"])
             } catch {
                 // No file path, crop, embedding or document content is logged or copied to status.
-                change(["state": "error", "error": Self.safeMessage(error)])
+                stateLock.withLock { autoBlocked = true }
+                change(["state": "error", "error": Self.safeMessage(error), "auto_state": "error", "auto_error": Self.safeMessage(error)])
             }
         }
-        return status()
+    }
+
+    /// The ordinary index owns file discovery. Observe its commits without opening a decoder, loading weights,
+    /// or repeatedly walking user folders. A separate connection is confined to this monitor thread.
+    func startMonitoring() {
+        let start = stateLock.withLock {
+            guard !closed, !monitoring else { return false }
+            monitoring = true; schedule.request(now: ProcessInfo.processInfo.systemUptime)
+            return true
+        }
+        guard start else { return }
+        Thread.detachNewThread { [self] in
+            var database: Database?, previous: Int64?
+            while !stateLock.withLock({ closed }) {
+                do {
+                    if database == nil { database = try Database(path: directory.appendingPathComponent(IndexStore.mainFile).path) }
+                    var version: Int64 = 0
+                    try database?.query("PRAGMA data_version") { version = $0.int(0) }
+                    if previous != version {
+                        previous = version
+                        stateLock.withLock {
+                            sourceRevision &+= 1; schedule.request(now: ProcessInfo.processInfo.systemUptime)
+                        }
+                        suggestionSummary.invalidate()
+                    }
+                    let check = stateLock.withLock {
+                        if state["auto_state"] as? String == "waiting_for_models", FaceModels.complete(in: FaceModels.installed) {
+                            schedule.request(now: ProcessInfo.processInfo.systemUptime)
+                        }
+                        return schedule.take(now: ProcessInfo.processInfo.systemUptime,
+                            enabled: preferences.enabled && !preferences.paused && !autoBlocked, active: active)
+                    }
+                    if check { try checkAutomaticWork() }
+                } catch {
+                    stateLock.withLock {
+                        // A temporarily busy ordinary index must not permanently disable an existing opt-in.
+                        // Retry metadata after the bounded debounce; only launch() latches native/model errors.
+                        schedule.request(now: ProcessInfo.processInfo.systemUptime)
+                        state["auto_state"] = "error"
+                        state["auto_error"] = Self.safeMessage(error)
+                    }
+                }
+                _ = wake.wait(timeout: .now() + 1)
+            }
+        }
+    }
+
+    private func checkAutomaticWork() throws {
+        let (selected, revision, saved) = stateLock.withLock { (scope, scopeRevision, preferences) }
+        let config = Self.configuration(step: saved.sampleSeconds)
+        var plan = try plan(scope: selected, settings: saved, config: config, retryFailures: false)
+        plan.pending = plan.pending.filter { Self.current($0, scope: selected) }
+        let proceed = stateLock.withLock {
+            guard !closed, !active, !autoBlocked, scopeRevision == revision, preferences.enabled, !preferences.paused,
+                  preferences.device == saved.device, preferences.sampleSeconds == saved.sampleSeconds else { return false }
+            if state["auto_state"] as? String == "error" { state.removeValue(forKey: "auto_error") }
+            state["pending"] = plan.pending.count; state["previously_completed"] = plan.completed
+            state["auto_failed"] = plan.failed
+            guard !plan.pending.isEmpty else { state["auto_state"] = "waiting_for_index"; return false }
+            guard FaceModels.complete(in: FaceModels.installed) else { state["auto_state"] = "waiting_for_models"; return false }
+            state["auto_state"] = "ready"
+            return true
+        }
+        if proceed { launch(device: saved.device, step: saved.sampleSeconds, download: false, automatic: true, expectedScope: revision) }
+    }
+
+    func suggestionContext() -> (directory: URL, scope: Scope, revision: UInt64, sourceRevision: UInt64) {
+        stateLock.withLock { (directory, scope, scopeRevision, sourceRevision) }
+    }
+    func checkSuggestionScope(_ revision: UInt64, sourceRevision: UInt64) throws {
+        guard stateLock.withLock({ !closed && scopeRevision == revision && self.sourceRevision == sourceRevision }) else {
+            throw CLIError("Selected folders or indexed files changed. Refresh the face suggestions.")
+        }
     }
 
     private func change(_ values: [String: Any]) { stateLock.withLock { for (key, value) in values { state[key] = value } } }
@@ -89,6 +269,8 @@ final class FaceService: @unchecked Sendable {
         guard stateLock.withLock({ scopeRevision == revision }) else { throw CLIError("Selected folders changed. Repeat the face request.") }
     }
     private static func safeMessage(_ error: Error) -> String {
+        if let error = error as? FaceWorkerProtocol.RuntimeFailure { return error.description }
+        if let error = error as? FaceWorkerProtocol.FileFailure { return error.description }
         if let error = error as? CLIError { return error.description }
         if let error = error as? FaceMedia.Failure { return error.description }
         return "Face indexing could not finish. Check the model files, packaged runtime and selected-folder access, then retry."
@@ -161,7 +343,7 @@ final class FaceService: @unchecked Sendable {
         try database.query("SELECT path FROM files") { if let path = $0.text(0) { paths.insert(Data(path.utf8)) } }
         return paths
     }
-    private static func current(_ file: FaceFileVersion, scope: Scope) -> Bool {
+    static func current(_ file: FaceFileVersion, scope: Scope) -> Bool {
         guard scope.accepts(file.path), scope.accepts(FolderSelection.realPath(file.path)),
               let attributes = try? FileManager.default.attributesOfItem(atPath: FileAccess.path(file.path)),
               attributes[.type] as? FileAttributeType == .typeRegular,
@@ -170,12 +352,50 @@ final class FaceService: @unchecked Sendable {
         return abs(date.timeIntervalSince1970 - file.modified) < 0.001
     }
 
-    private func backfill(scope: Scope, device: String, step: Double, token: FaceCancellation) throws {
+    private static func configuration(step: Double) -> String {
+        "oriented-1600-actual-pts-dedup-v2;step=\(step);max-faces=32;weights=\(FaceModels.revision);worker=\(FaceModels.modelID)"
+    }
+
+    private func plan(scope: Scope, settings: FaceAutoSettings, config: String, retryFailures: Bool) throws -> FaceAutoPlan {
+        var jobs: [FaceAutoJob] = []
+        let path = directory.appendingPathComponent(FaceIndexStore.name)
+        if FileManager.default.fileExists(atPath: path.path) {
+            let database = try Database(path: path.path)
+            try database.query("SELECT path,kind,size,modified,model,config,state FROM face_jobs") { row in
+                guard let path = row.text(0), let kind = row.text(1), let model = row.text(4),
+                      let config = row.text(5), let state = row.text(6) else { return }
+                jobs.append(FaceAutoJob(file: FaceFileVersion(path: path, kind: kind, size: row.int(2), modified: row.double(3)),
+                                        model: model, config: config, state: state))
+            }
+        }
+        return FaceAutoPlan.make(files: try indexedFiles(), jobs: jobs, settings: settings,
+            model: FaceModels.modelID, config: config, retryFailures: retryFailures, accepts: { scope.accepts($0.path) })
+    }
+
+    private func rememberFailure(_ file: FaceFileVersion, config: String) throws {
+        try stateLock.withLock {
+            var updated = preferences; updated.recordFailure(file, config: config)
+            try updated.save(to: directory); preferences = updated
+        }
+    }
+    private func forgetFailure(_ path: String) throws {
+        try stateLock.withLock {
+            guard preferences.failures.contains(where: { $0.file.path.utf8.elementsEqual(path.utf8) }) else { return }
+            var updated = preferences; updated.clearFailure(path)
+            try updated.save(to: directory); preferences = updated
+        }
+    }
+
+    private func backfill(scope: Scope, device: String, step: Double, token: FaceCancellation, automatic: Bool) throws {
         guard let worker = Self.worker() else { throw CLIError("The packaged face worker is missing. Reinstall DigUp with the face runtime.") }
         let sidecar = try FaceIndexStore(directory: directory)
         try sidecar.removeDeleted(retainedPaths: retainedPaths())
-        let files = try indexedFiles().filter { scope.accepts($0.path) && Self.current($0, scope: scope) }
-        change(["total": files.count])
+        let config = Self.configuration(step: step)
+        let initial = try plan(scope: scope, settings: stateLock.withLock { preferences }, config: config, retryFailures: !automatic)
+        var files = initial.pending.filter { Self.current($0, scope: scope) }
+        change(["total": files.count, "pending": files.count, "previously_completed": initial.completed, "auto_failed": initial.failed])
+        // An explicit manual start still reports the actual backend, including for a fully completed index.
+        guard !automatic || !files.isEmpty else { return }
         let client = try FaceWorkerClient(executable: worker, models: FaceModels.installed, device: device, token: token)
         defer { client.close() }
         let info = try client.request(["op": "info"])
@@ -185,17 +405,16 @@ final class FaceService: @unchecked Sendable {
         let actualDevice = info["device"] as? String ?? "cpu"
         change(["device": actualDevice, "device_active": actualDevice,
                 "fallback_reason": info["fallback_reason"] ?? NSNull()])
-        let config = "oriented-1600-actual-pts-dedup-v2;step=\(step);max-faces=32;weights=\(FaceModels.revision);worker=\(FaceModels.modelID)"
         let scratch = directory.appendingPathComponent("face-scratch-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
         var done = 0, failed = 0, totalFaces = 0, frames = 0
-        for file in files {
+        var cursor = 0
+        var attempted: [Data: FaceAutoAttempt] = [:]
+        while cursor < files.count {
+            let file = files[cursor]; cursor += 1
+            attempted[Data(file.path.utf8)] = FaceAutoAttempt(file: file, config: config)
             try token.check()
-            if try sidecar.completed(file, model: FaceModels.modelID, config: config) {
-                done += 1; totalFaces += try sidecar.count(path: file.path, model: FaceModels.modelID)
-                change(["done": done, "faces": totalFaces]); continue
-            }
             do {
                 guard Self.current(file, scope: scope) else { throw FaceMedia.Failure("The file changed before face indexing.") }
                 let duration = file.kind == "video" ? try FaceMedia.duration(file.path, cancellation: token) : 0
@@ -229,20 +448,11 @@ final class FaceService: @unchecked Sendable {
                     } else { prepared = try FaceMedia.image(file.path, in: scratch, cancellation: token) }
                     defer { try? FileManager.default.removeItem(atPath: FileAccess.path(prepared)) }
                     let response = try client.request(["op": "analyze", "path": prepared, "max_faces": 32])
-                    if let output = response["faces"] as? [[String: Any]] {
-                        for row in output {
-                            guard let bbox = row["bbox"] as? [Double], let landmarks = row["landmarks"] as? [Double],
-                                  let score = row["score"] as? Double, let vector = row["embedding"] as? [Double] else {
-                                throw FaceMedia.Failure("The face runtime returned invalid data.")
-                            }
-                            let face = FaceObservation(bbox: bbox, landmarks: landmarks, score: score,
-                                                       embedding: vector.map(Float.init), loc: loc)
-                            guard face.isValid else { throw FaceMedia.Failure("The face runtime returned invalid data.") }
-                            var encoded = try JSONEncoder().encode(face); encoded.append(10)
-                            try stage.write(contentsOf: encoded)
-                            observationCount += 1
-                        }
-                    } else { throw FaceMedia.Failure("The face runtime returned invalid data.") }
+                    for face in try FaceWorkerProtocol.observations(response, location: loc) {
+                        var encoded = try JSONEncoder().encode(face); encoded.append(10)
+                        try stage.write(contentsOf: encoded)
+                        observationCount += 1
+                    }
                     frames += 1
                     completedFrames += 1
                     change(["frames": frames, "current_frame": frame + 1, "device": response["device"] ?? actualDevice,
@@ -254,12 +464,22 @@ final class FaceService: @unchecked Sendable {
                 try stage.close()
                 try sidecar.replaceStaged(file, model: FaceModels.modelID, config: config, frames: completedFrames,
                                           staged: staged, cancellation: token)
+                try forgetFailure(file.path)
                 done += 1; totalFaces += observationCount
             } catch is CancellationError { throw CancellationError() }
+            catch let error as FaceWorkerProtocol.RuntimeFailure {
+                // The analysis result is unknown. Keep this version and every remaining file pending;
+                // a dead/protocol-broken shared worker must not poison the per-file retry ledger.
+                try token.check()
+                throw error
+            }
             catch {
                 try token.check()
                 failed += 1
                 change(["last_issue": Self.safeMessage(error)])
+                // Persist a version/config-specific failed attempt even when a previous good job is retained.
+                // Only a new version, settings change, or explicit manual start retries it.
+                try rememberFailure(file, config: config)
                 // An unsuccessful refinement must not destroy a previously valid file job. A changed file/config
                 // does not satisfy completed(), so the next explicit start still retries this file.
                 var hasGoodJob = false
@@ -268,7 +488,16 @@ final class FaceService: @unchecked Sendable {
                     try sidecar.replace(file, model: FaceModels.modelID, config: config, frames: 0, faces: [], failed: true)
                 }
             }
-            change(["done": done, "failed": failed, "faces": totalFaces])
+            if cursor == files.count {
+                try token.check()
+                // Ordinary indexing can commit more files during this sweep. Extend the same owned worker's
+                // queue before it exits; a final racing commit is also caught by the monitor's data_version.
+                let fresh = try plan(scope: scope, settings: stateLock.withLock { preferences }, config: config, retryFailures: !automatic)
+                files += fresh.pending.filter {
+                    attempted[Data($0.path.utf8)]?.matches($0, config: config) != true && Self.current($0, scope: scope)
+                }
+            }
+            change(["done": done, "failed": failed, "faces": totalFaces, "total": files.count, "pending": files.count - cursor])
         }
     }
 

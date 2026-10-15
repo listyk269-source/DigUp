@@ -218,3 +218,55 @@ final class FacePeopleService {
                 "reference_source_count": references.sourceCount, "references_sampled": references.sampled]
     }
 }
+
+extension FaceService {
+    /// Lightweight polling: only revision metadata is read here. The semantic-file map, template collection and
+    /// comparisons are made once per key on the cache's private queue, alongside indexing and ordinary search.
+    func suggestions(_ request: [String: Any]) throws -> [String: Any] {
+        let minimum = request["minimum_cosine"] as? Double ?? 0.363
+        guard minimum.isFinite, (-1...1).contains(minimum) else { throw CLIError("Invalid face similarity threshold.") }
+        let context = suggestionContext()
+        let faceDatabase = context.directory.appendingPathComponent(FaceIndexStore.name)
+        let exists = FileManager.default.fileExists(atPath: faceDatabase.path)
+        var indexRevision: Int64 = 0, peopleRevision: Int64 = 0
+        if exists {
+            let metadata = try Database(path: faceDatabase.path)
+            try metadata.query("SELECT key,value FROM face_meta WHERE key IN ('revision','people_revision')") { row in
+                if row.text(0) == "revision" { indexRevision = row.int(1) }
+                else if row.text(0) == "people_revision" { peopleRevision = row.int(1) }
+            }
+        }
+        let key = FaceSuggestionSummaryKey(scopeRevision: context.revision, indexRevision: indexRevision,
+            peopleRevision: peopleRevision, sourceRevision: context.sourceRevision, minimumCosine: minimum)
+        let snapshot = suggestionSummary.request(key: key, refresh: request["refresh"] as? Bool ?? false) { [self] token in
+            try token.check()
+            try checkSuggestionScope(context.revision, sourceRevision: context.sourceRevision)
+            guard exists else { return FaceSuggestionSummary(key: key, people: []) }
+            let main = try Database(path: context.directory.appendingPathComponent(IndexStore.mainFile).path)
+            var indexed: [Data: FaceFileVersion] = [:]
+            try main.query("SELECT path,kind,size,mtime FROM files WHERE kind IN ('image','screenshot','video') AND state IN ('done','partial')") { row in
+                try token.check()
+                guard let path = row.text(0), let kind = row.text(1) else { return }
+                indexed[Data(path.utf8)] = FaceFileVersion(path: path, kind: kind, size: row.int(2), modified: row.double(3))
+            }
+            let index = try FaceIndexStore(directory: context.directory)
+            return try FaceSuggestionSummary.calculate(index: index, key: key, cancellation: token, acceptsCurrent: { file in
+                indexed[Data(file.path.utf8)] == file && Self.current(file, scope: context.scope)
+            }, acceptsScope: { file in
+                context.scope.accepts(file.path) && context.scope.accepts(FolderSelection.realPath(file.path))
+            }, checkScope: { [self] in try checkSuggestionScope(context.revision, sourceRevision: context.sourceRevision) })
+        }
+        try checkSuggestionScope(context.revision, sourceRevision: context.sourceRevision)
+        let rows: [[String: Any]] = snapshot.result?.people.map { person in
+            ["person_id": person.personID, "name": person.name, "pending_count": person.pendingCount,
+             "reference_count": person.referenceCount, "reference_source_count": person.referenceSourceCount,
+             "references_sampled": person.referencesSampled]
+        } ?? []
+        return ["ok": true, "state": snapshot.state.rawValue, "total": snapshot.result.map { $0.total } as Any? ?? NSNull(),
+                "people": rows, "index_revision": indexRevision, "people_revision": peopleRevision,
+                "scope_revision": context.revision, "source_revision": context.sourceRevision, "minimum_cosine": minimum,
+                "count_unit": "person_observation_pairs", "reference_limit": FacePeopleReferences.limit,
+                "observations_checked": snapshot.result.map { $0.observationsChecked } as Any? ?? NSNull(),
+                "computed_at": snapshot.result.map { $0.computedAt } as Any? ?? NSNull(), "error": snapshot.error as Any? ?? NSNull()]
+    }
+}

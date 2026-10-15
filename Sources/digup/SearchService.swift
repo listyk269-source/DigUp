@@ -22,6 +22,9 @@ import LlamaRuntime
 ///         independent face sidecar. Only this explicit request can download the pinned YuNet/SFace weights.
 ///   {"op":"face_cancel"} → cancelling, then cancelled after owned decoders/inference stop. Resume retries the
 ///         interrupted file; unchanged completed files are kept. Neither operation resets the semantic index.
+///   {"op":"face_auto","enabled":true,"device":"auto|cpu|gpu","sample_seconds":2} → persistent automatic
+///         backfill after ordinary index commits; never downloads weights. face_cancel persistently pauses it.
+///   {"op":"people_suggestions","minimum_cosine":0.5} → cached asynchronous counts of unreviewed person/face pairs.
 ///   {"op":"face_file","path":…, "offset":0,"limit":60} → version-bound faces, normalized boxes and actual frame PTS.
 ///   {"op":"face_search","face_id":n,"minimum_cosine":0.363,"offset":0,"limit":40} → ranked face observations;
 ///         pass index_revision on following pages. Publication expires an older ranking instead of duplicating hits.
@@ -102,6 +105,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     }
 
     func serve() -> Int32 {
+        faces.startMonitoring()
         Thread.detachNewThread { [self] in idleWatch() }
         while let line = readLine() {
             guard let data = line.data(using: .utf8),
@@ -112,17 +116,18 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 guard let op = request["op"] as? String else { throw CLIError("no op") }
                 if op == "quit" {
                     write(["id": id, "ok": true])
-                    faces.cancel()
+                    faces.shutdown()
                     lock.withLock { stopEncoder() }
                     return 0
                 }
-                if ["face_file", "face_search", "people_list", "person_save", "person_faces", "face_label", "people_undo", "face_people"].contains(op) {
+                if ["face_file", "face_search", "people_list", "person_save", "person_faces", "face_label", "people_undo", "face_people", "people_suggestions"].contains(op) {
                     let request = UncheckedSendable(request)
                     faceQueries.async { [self] in
                         var reply: [String: Any]
                         do {
                             if op == "face_file" { reply = try faces.file(request.value) }
                             else if op == "face_search" { reply = try faces.search(request.value) }
+                            else if op == "people_suggestions" { reply = try faces.suggestions(request.value) }
                             else { reply = try faces.people(op, request.value) }
                         }
                         catch { reply = ["ok": false, "error": String("\(error)".prefix(500))] }
@@ -152,7 +157,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             reply["id"] = id
             write(reply)
         }
-        faces.cancel()
+        faces.shutdown()
         lock.withLock { stopEncoder() }
         return 0
     }
@@ -161,6 +166,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         switch op {
         case "face_status": return faces.status()
         case "face_start": return try faces.start(request)
+        case "face_auto": return try faces.automatic(request)
         case "face_cancel": return faces.cancel()
         case "graph_search":
             let code = request["code"] as? Bool ?? false
