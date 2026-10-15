@@ -490,6 +490,9 @@ fn debug_setup_snapshot(shell: State<'_, Arc<Shell>>, report: Value) {
 fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value) {
     #[cfg(windows)]
     {
+        report["nativeCornerRegionRounded"] = json!(app
+            .get_webview_window("panel")
+            .and_then(|window| panel_corner_region(&window)));
         report["nativeCornerPreference"] = json!(app
             .get_webview_window("panel")
             .and_then(|window| panel_corner_preference(&window)));
@@ -920,6 +923,29 @@ fn round_panel_corners(window: &tauri::WebviewWindow) {
                 }
             }
         }
+    }
+}
+
+#[cfg(windows)]
+fn panel_corner_region(window: &tauri::WebviewWindow) -> Option<bool> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        CreateRectRgn, DeleteObject, GetWindowRgn, PtInRegion,
+    };
+    let hwnd = window.hwnd().ok()?;
+    let size = window.outer_size().ok()?;
+    // SAFETY: a private GDI region receives the window region's copy and is always released here.
+    unsafe {
+        let region = CreateRectRgn(0, 0, 0, 0);
+        if region.is_null() {
+            return None;
+        }
+        let kind = GetWindowRgn(hwnd.0, region);
+        let rounded = kind > 0
+            && PtInRegion(region, 0, 0) == 0
+            && PtInRegion(region, size.width as i32 / 2, size.height as i32 / 2) != 0
+            && PtInRegion(region, size.width as i32 - 1, size.height as i32 - 1) == 0;
+        DeleteObject(region);
+        (kind > 0).then_some(rounded)
     }
 }
 

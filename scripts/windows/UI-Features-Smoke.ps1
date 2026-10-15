@@ -62,6 +62,7 @@ foreach ($pass in 'first','restart') {
     $f=$ui.features
     if ($ui.error -or $ui.savedLanguage -ne 'ru' -or $ui.language -ne 'ru' -or $f.initial.lang -ne 'ru' -or
         $f.english.action -ne 'Find similar' -or $f.russian.action -ne 'Найти похожие' -or
+        'Documents' -notin $f.english.groups -or 'Документы' -notin $f.russian.groups -or
         $f.english.indexLabel -ne 'Index' -or $f.russian.indexLabel -ne 'Индекс' -or
         $f.englishAgain.action -ne 'Find similar' -or $f.final.action -ne 'Найти похожие' -or
         $f.english.query -ne $f.russian.query -or $f.english.selected -ne $f.russian.selected -or

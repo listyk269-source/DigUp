@@ -92,7 +92,7 @@ html.platform-windows, html.platform-windows body { background: var(--surface); 
   font-size: 22px;
 }
 
-#query::placeholder { color: var(--tertiary); }
+#query::placeholder { color: var(--secondary); }
 
 .index-status { flex: none; height: 80px; padding: 9px 18px 10px; border-top: 1px solid var(--line); }
 .index-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -424,7 +424,7 @@ button:disabled { opacity: 0.6; cursor: wait; }
 }
 
 .summary { color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.keys { color: var(--tertiary); white-space: pre; }
+.keys { color: var(--secondary); white-space: pre; }
 
 /* Selected-file inspector: real preview and actions remain visible below the graph. */
 .graph-inspector { display: flex; gap: 14px; min-height: 155px; height: 200px; flex: 0 1 200px; border-top: 1px solid var(--line); }

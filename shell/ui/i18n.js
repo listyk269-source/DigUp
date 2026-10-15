@@ -122,7 +122,7 @@ const I18n = (() => {
   ", {count} read so far": ", прочитано: {count}",
   "partly read so far": "прочитано частично",
   "{count} lines": "Строк: {count}",
-  "{count} bytes": "{count} байт",
+  "{count} bytes": "{count} Б",
   "Index status unavailable": "Состояние индекса недоступно",
   "Close and reopen the search panel to check again.": "Закройте и откройте окно поиска для повторной проверки.",
   "Scanning code folders…": "Сканирование папок с кодом…",
@@ -246,8 +246,22 @@ const I18n = (() => {
   " ({problem}, trying again)": " ({problem}, повторная попытка)"
 };
   let language = "en";
-  const t = (key, values = {}) => (language === "ru" ? ru[key] ?? key : key)
-    .replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match);
+  const singular = {
+    "{count} results": "{count} result", "{count} weaker matches": "{count} weaker match",
+    "{count} pages": "{count} page", "{count} lines": "{count} line", "{count} bytes": "{count} byte",
+    "{count} pictures": "{count} picture", "{count} PDFs": "{count} PDF", "{count} documents": "{count} document",
+    "{count} recordings": "{count} recording", "{count} videos": "{count} video",
+    "{count} files searchable": "{count} file searchable", "{count} files couldn't be indexed": "{count} file couldn't be indexed",
+    "{count} RAW files not supported": "{count} RAW file not supported", "{count} files skipped": "{count} file skipped",
+    "{count} folders unavailable": "{count} folder unavailable",
+    "{count} selected folders · {status}": "{count} selected folder · {status}",
+    " · {count} indexed neighbors above the threshold": " · {count} indexed neighbor above the threshold",
+  };
+  const t = (key, values = {}) => {
+    const message = language === "ru" && Object.hasOwn(ru, key) ? ru[key]
+      : language === "en" && Number(values.count) === 1 && Object.hasOwn(singular, key) ? singular[key] : key;
+    return message.replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match);
+  };
   const locale = () => language === "ru" ? "ru-RU" : "en-US";
   function apply() {
     document.documentElement.lang = language;

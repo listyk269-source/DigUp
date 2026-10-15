@@ -81,6 +81,9 @@ foreach ($pass in 'first','restart') {
     if ([Environment]::OSVersion.Version.Build -ge 22000 -and $ui.nativeCornerPreference -ne 2) {
         throw "Windows 11 native panel has not enabled native corner rounding ($pass)."
     }
+    if ([Environment]::OSVersion.Version.Build -lt 22000 -and $ui.nativeCornerRegionRounded -ne $true) {
+        throw "Windows 10/Server fallback has no rounded native region ($pass)."
+    }
     $pages = @($ui.pagination.pages)
     if ($ui.error -or $ui.pagination.error -or $ui.phase -ne 'meaning' -or $ui.pagination.loaded -ne 145 -or
         $ui.pagination.total -ne 145 -or $ui.pagination.hasMore -or $ui.pagination.buttonVisible -or

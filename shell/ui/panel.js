@@ -23,10 +23,10 @@ const MOD = isMac ? "⌘" : "Ctrl+";
 const fileManager = () => isMac ? "Finder" : isWindows ? (I18n.language === "ru" ? "Проводнике" : "Explorer") : t("Files");
 // Pictures every web view shows as they are; anything else (HEIC, TIFF, RAW…) comes as JPEG from the helper.
 const SHOWN_AS_IS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp"]);
-const GROUP_OF = { screenshot: t("Screenshots"), image: t("Images"), pdf: t("Documents"), doc: t("Documents"), video: t("Video"),
-                   audio: t("Audio"), code: t("Code") };
-const KIND_TITLE = { screenshot: t("Screenshot"), image: t("Image"), pdf: "PDF", doc: t("Document"), audio: t("Audio"),
-                     video: t("Video"), code: t("Code") };
+const GROUP_OF = { screenshot: "Screenshots", image: "Images", pdf: "Documents", doc: "Documents", video: "Video",
+                   audio: "Audio", code: "Code" };
+const KIND_TITLE = { screenshot: "Screenshot", image: "Image", pdf: "PDF", doc: "Document", audio: "Audio",
+                     video: "Video", code: "Code" };
 
 const $ = (id) => document.getElementById(id);
 const $query = $("query"), $body = $("body"), $list = $("list"), $preview = $("preview");
@@ -942,7 +942,16 @@ async function exerciseUiFeatures() {
     select.value = value; select.dispatchEvent(new Event("change", { bubbles: true }));
     await wait(() => !select.disabled && I18n.language === value);
   };
-  const snapshot = () => ({ lang: document.documentElement.lang, query: $query.value,
+  const selectKind = (kind) => {
+    const hit = [...state.strong, ...state.weaker].find((file) => file.kind === kind);
+    if (!hit) throw new Error(`Missing real ${kind} fixture in search results`);
+    if (state.weaker.includes(hit) && !state.showWeaker) toggleWeaker();
+    const row = [...$list.querySelectorAll(".row")].find((node) => node.querySelector(".name").textContent === nameOf(hit.path));
+    if (!row) throw new Error("Fixture row is not reachable through the results DOM");
+    row.click();
+  };
+  selectKind("doc");
+  const snapshot = () => ({ groups: [...$list.querySelectorAll(".group-title")].map((node) => node.textContent), lang: document.documentElement.lang, query: $query.value,
     indexLabel: $("stats-toggle").textContent, graphLabel: $("graph-toggle").textContent,
     action: $preview.querySelector(".find-similar")?.textContent, selected: selectedHit()?.path });
   featureReport.initial = snapshot();
@@ -972,6 +981,7 @@ async function exerciseUiFeatures() {
   // Re-query the image fixture by its unique filename, then use the same graph button.
   $query.value = "UIFEATURE742-preview"; queryChanged();
   await wait(() => state.finalGeneration === state.generation);
+  selectKind("image");
   $("graph-toggle").click(); await wait(() => !graph.loading);
   await wait(() => !!$("graph-preview").querySelector("img")?.naturalWidth);
   featureReport.image = graph.debug(); graph.close();

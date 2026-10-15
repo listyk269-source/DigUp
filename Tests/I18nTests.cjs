@@ -18,6 +18,7 @@ test("language switch retains document names, queries and literal replacement ch
   assert.equal(i18n.t("Similar to {name}", { name }), `Похожие на «${name}»`);
   assert.equal(i18n.t("{count} results", { count: 21 }), "Результатов: 21");
   assert.equal(i18n.locale(), "ru-RU");
+  for (const key of ["__proto__", "constructor", "toString"]) assert.equal(i18n.t(key), key);
   i18n.set("en");
   assert.equal(i18n.t("Similar to {name}", { name }), `Similar to ${name}`);
   assert.equal(i18n.t("Find similar"), "Find similar");
@@ -34,4 +35,14 @@ test("static UI annotations and literal translation calls have catalog entries",
       assert.ok(Object.hasOwn(i18n.catalog, match[1]), `${filename}: ${match[1]}`);
     }
   }
+});
+
+test("English singular and Russian neutral counters handle 1, 2, 5 and 21", () => {
+  i18n.set("en");
+  assert.equal(i18n.t("{count} results", { count: 1 }), "1 result");
+  assert.equal(i18n.t("{count} pages", { count: "1" }), "1 page");
+  assert.equal(i18n.t("{count} pages", { count: 2 }), "2 pages");
+  i18n.set("ru");
+  for (const count of [1, 2, 5, 21]) assert.equal(i18n.t("{count} results", { count }), `Результатов: ${count}`);
+  i18n.set("en");
 });

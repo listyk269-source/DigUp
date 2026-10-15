@@ -8,9 +8,10 @@ use std::path::Path;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
-    #[default]
-    En,
     Ru,
+    #[default]
+    #[serde(other)]
+    En,
 }
 
 impl Language {
@@ -142,6 +143,20 @@ mod tests {
         assert!(settings.code_roots.is_empty());
         assert_eq!(settings.device, Device::Auto);
         assert_eq!(settings.language, Language::En);
+    }
+
+    #[test]
+    fn language_values_round_trip_and_future_language_keeps_folders() {
+        for value in [Language::En, Language::Ru] {
+            let json = serde_json::to_string(&value).unwrap();
+            assert_eq!(serde_json::from_str::<Language>(&json).unwrap(), value);
+        }
+        let settings: Settings =
+            serde_json::from_str(r#"{"language":"de","folders":["C:/Документы"],"setUp":true}"#)
+                .unwrap();
+        assert_eq!(settings.language, Language::En);
+        assert_eq!(settings.folders, vec!["C:/Документы"]);
+        assert!(settings.set_up);
     }
 
     #[test]

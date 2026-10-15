@@ -165,7 +165,7 @@ class GraphView {
     clone.setAttribute("style", `background:${getComputedStyle(document.documentElement).getPropertyValue("--surface").trim()}`);
     const originals = this.svg.querySelectorAll("*"), copies = clone.querySelectorAll("*");
     originals.forEach((node, i) => { const css = getComputedStyle(node); for (const key of ["fill", "stroke", "font-size", "font-family", "font-weight"]) copies[i].setAttribute(key, css.getPropertyValue(key)); });
-    return { visible: this.visible, preview: { text: this.el("graph-preview").textContent, tag: this.el("graph-preview").querySelector("img,video,audio,.passage")?.tagName, loaded: !!this.el("graph-preview").querySelector("img")?.naturalWidth }, loading: this.loading, error: this.error, files: this.model.nodes.size, links: this.model.edges.size,
+    return { visible: this.visible, preview: { text: this.el("graph-preview").textContent.slice(0, 160), tag: this.el("graph-preview").querySelector("img,video,audio,.passage")?.tagName, loaded: !!this.el("graph-preview").querySelector("img")?.naturalWidth }, loading: this.loading, error: this.error, files: this.model.nodes.size, links: this.model.edges.size,
       nodes: [...this.model.nodes.values()], edges: [...this.model.edges.values()], trace: this.trace,
       drawnNodes: this.svg.querySelectorAll(".graph-node").length, drawnLinks: this.svg.querySelectorAll(".graph-edge").length,
       viewport: { width: this.svg.clientWidth, height: this.svg.clientHeight, windowHeight: window.innerHeight },
