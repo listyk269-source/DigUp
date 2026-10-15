@@ -40,13 +40,17 @@ class FaceSearchView {
       if (JSON.stringify(progress) !== JSON.stringify(this.statusHistory.at(-1))) this.statusHistory.push(progress);
       if (this.statusHistory.length > 100) this.statusHistory.shift();
       this.updateGraphAvailability();
+      this.auto?.statusChanged(reply);
       if (this.visible) {
         this.renderStatus();
-        if (this.file && previous?.state !== reply.state && ["completed", "cancelled", "paused", "error"].includes(reply.state)) await this.loadFile();
+        if (this.file && previous?.state !== reply.state && ["completed", "cancelled", "paused", "error"].includes(reply.state)) {
+          if (this.selection.seed) { this.autoFileChanged = true; this.renderSource(); }
+          else await this.loadFile();
+        }
       }
       return reply;
     } catch (error) {
-      if (generation === this.statusGeneration) { this.statusError = String(error.message || error); if (this.visible) this.renderStatus(); }
+      if (generation === this.statusGeneration) { this.statusError = String(error.message || error); this.auto?.render(); if (this.visible) this.renderStatus(); }
     }
   }
   updateGraphAvailability() {
@@ -63,7 +67,7 @@ class FaceSearchView {
     this.visible = true; this.file = file; this.onVisibility(true);
     if (changed) { this.fileGeneration++; this.selection.clear(); this.fileFaces = []; this.fileReply = null; this.fileError = null; this.resultPreviewKey = null; this.people?.faceSelected(); }
     this.render(); clearInterval(this.pollTimer);
-    this.pollTimer = setInterval(() => { if (!document.hidden) this.status(); }, 1200);
+    if (!this.auto) this.pollTimer = setInterval(() => { if (!document.hidden) this.status(); }, 1200);
     await Promise.all([this.status(), this.deviceReady]);
     if (this.visible && generation === this.openGeneration && file) await this.loadFile();
   }
@@ -76,13 +80,14 @@ class FaceSearchView {
   async saveDevice() {
     const device = this.el("face-device").value;
     this.deviceSaving = true; this.deviceSaveError = false; this.renderStatus();
-    try { await this.invoke("set_face_device", { device }); }
+    try { await this.invoke("set_face_device", { device }); if (this.index?.auto_enabled === true) await this.auto?.setEnabled(true); }
     catch { this.deviceSaveError = true; }
     finally { this.deviceSaving = false; if (this.visible) this.renderStatus(); }
   }
   async refresh() {
     await this.status();
     if (!this.visible) return;
+    this.autoFileChanged = false;
     const seed = this.selection.seed;
     if (this.file) await this.loadFile();
     if (seed && this.fileFaces.some((face) => FaceState.faceKey(face) === FaceState.faceKey(seed))) this.choose(seed);
@@ -93,7 +98,7 @@ class FaceSearchView {
     try {
       const reply = await this.ask({ op: "face_start", download: true, device: this.el("face-device").value, sample_seconds: 2 });
       if (reply.ok === false) throw new Error(reply.error);
-      this.statusGeneration++; this.index = reply; this.updateGraphAvailability();
+      this.statusGeneration++; this.index = reply; this.updateGraphAvailability(); this.auto?.statusChanged(reply);
     } catch (error) { this.statusError = String(error.message || error); }
     finally { this.actionBusy = false; if (this.visible) this.renderStatus(); }
   }
@@ -103,7 +108,7 @@ class FaceSearchView {
     try {
       const reply = await this.ask({ op: "face_cancel" });
       if (reply.ok === false) throw new Error(reply.error);
-      this.statusGeneration++; this.index = reply;
+      this.statusGeneration++; this.index = reply; this.auto?.statusChanged(reply);
     } catch (error) { this.statusError = String(error.message || error); }
     finally { this.actionBusy = false; if (this.visible) this.renderStatus(); }
   }
@@ -169,6 +174,7 @@ class FaceSearchView {
       this.fileReply?.stale ? t("This file changed. Run face indexing again before searching its faces.") :
       !this.fileFaces.length ? t("No usable face was detected in this file. Small, blurred or briefly visible faces can be missed.") :
       t("Choose one face in the picture or below. Each video observation has its own timestamp."));
+    if (this.autoFileChanged && !this.fileBusy) message.textContent += " " + t("Face indexing updated. Refresh to update observations; your current query is unchanged.");
     const choices = this.el("face-choices"); choices.replaceChildren();
     for (const [index, observation] of this.fileFaces.entries()) {
       const button = document.createElement("button"); button.type = "button"; button.className = "face-choice";
@@ -312,4 +318,115 @@ class FaceSearchView {
       sourceLoaded: !!this.el("face-source-image").querySelector("img")?.naturalWidth,
       loadedCrops: this.el("faces-view").querySelectorAll('[data-loaded="true"]').length };
   }
+  autoDebug() { return this.auto?.debug() || null; }
 }
+
+// The helper schedules work. This controller only observes local state and sends
+// explicit preference changes; it never starts inference or downloads on a timer.
+class FaceAutoStatus {
+  constructor({ faces, people, ask }) {
+    Object.assign(this, { faces, people, ask }); this.el = (id) => document.getElementById(id);
+    this.summaryGeneration = 0; this.history = []; this.summaryHistory = []; this.summary = null;
+    this.el("face-auto-enabled").onchange = () => { this.actionTask = this.preferenceTask = this.setEnabled(this.el("face-auto-enabled").checked); };
+    this.el("face-auto-open").onclick = () => {
+      if (this.faces.index?.active) { this.pauseTask = this.faces.cancel(); return; }
+      if (!this.faces.visible) this.el("faces-toggle").click();
+    };
+    this.timer = setInterval(() => { if (!document.hidden) this.refresh(false); }, 2000);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) this.refresh(); });
+    document.addEventListener("ui-language-changed", () => { this.render(); this.renderSummary(); });
+    window.addEventListener("pagehide", () => clearInterval(this.timer), { once: true });
+    window.__TAURI__?.event.listen("search-scope-changed", () => this.invalidateScope()).catch(() => {});
+    this.ready = Promise.resolve().then(() => this.refresh());
+  }
+  async refresh(force = true) {
+    if (this.refreshBusy) return this.refreshTask;
+    this.refreshBusy = true;
+    this.refreshTask = (async () => {
+      await this.faces.status();
+      if (force || Date.now() >= (this.summaryDue || 0)) await this.refreshSummary();
+    })().finally(() => { this.refreshBusy = false; });
+    return this.refreshTask;
+  }
+  statusChanged(status) {
+    const progress = { state: status.state, auto_state: status.auto_state, enabled: status.auto_enabled, pending: status.auto_pending,
+      done: status.done, total: status.total, faces: status.faces, frames: status.frames, active: status.active };
+    if (JSON.stringify(progress) !== JSON.stringify(this.history.at(-1))) this.history.push(progress);
+    if (this.history.length > 120) this.history.shift();
+    if (this.lastState && this.lastState !== status.state) this.summaryDue = 0;
+    this.lastState = status.state; this.render();
+  }
+  async setEnabled(enabled) {
+    if (this.preferenceBusy) return;
+    this.preferenceBusy = true; this.preferenceError = null; this.render();
+    try {
+      const reply = await this.ask({ op: "face_auto", enabled, device: this.faces.el("face-device").value });
+      if (reply.ok === false) throw new Error(reply.error);
+      this.faces.statusGeneration++; this.faces.index = reply; this.faces.statusError = null; this.statusChanged(reply);
+      if (this.faces.visible) this.faces.renderStatus();
+      await this.refreshSummary();
+    } catch (error) { this.preferenceError = String(error.message || error); }
+    finally { this.preferenceBusy = false; this.render(); }
+  }
+  render() {
+    const state = this.faces.index || {}, busy = state.active || ["running", "downloading", "cancelling"].includes(state.state), enabled = state.auto_enabled === true;
+    const error = this.preferenceError || this.faces.statusError || state.auto_error || (state.state === "error" ? state.error : null);
+    const checkbox = this.el("face-auto-enabled"); checkbox.checked = enabled; checkbox.disabled = this.preferenceBusy || !this.faces.index || !this.faces.deviceLoaded;
+    const message = this.el("face-auto-message"); message.classList.toggle("face-error", !!error);
+    const descriptions = { waiting_for_index: "Faces: waiting for new indexed media", waiting_for_models: "Faces: model setup required", waiting_for_runtime: "Faces: runtime unavailable",
+      waiting: "Faces: waiting for new indexed media", paused: "Automatic face indexing is paused", idle: "Faces: waiting for new indexed media", ready: "Faces: preparing pending media" };
+    message.textContent = error ? t(error) : busy ? t("Faces: {done} / {total} files · {faces} observations", { done: state.done || 0, total: state.total || 0, faces: state.faces || 0 }) :
+      !state.models_ready ? t("Faces: model setup required") : !enabled ? t(state.auto_paused ? "Automatic face indexing is paused" : "Automatic face indexing is off") :
+      t(descriptions[state.auto_state] || "Faces: waiting for new indexed media");
+    if (enabled && Number.isFinite(state.auto_pending) && state.auto_pending > 0) message.textContent += " · " + t("{count} media files waiting", { count: state.auto_pending });
+    if (!busy && state.failed > 0) message.textContent += " · " + t("{count} face files failed", { count: state.failed });
+    message.title = message.textContent;
+    const bar = this.el("face-auto-progress"); bar.hidden = !busy;
+    if (busy && state.total > 0) { bar.max = state.total; bar.value = Math.min(state.total, state.done || 0); } else bar.removeAttribute("value");
+    const open = this.el("face-auto-open"); open.disabled = this.preferenceBusy || !!this.faces.actionBusy || state.state === "cancelling";
+    open.textContent = t(busy ? "Pause indexing" : state.models_ready && state.worker_available ? "Faces" : "Set up Faces");
+  }
+  async refreshSummary(retry = false) {
+    if (this.summaryBusy) {
+      if (!retry) return this.summaryTask;
+      await this.summaryTask;
+      return this.refreshSummary(true);
+    }
+    this.summaryBusy = true; const generation = ++this.summaryGeneration;
+    this.summaryTask = this.readSummary(generation, retry); return this.summaryTask;
+  }
+  async readSummary(generation, retry = false) {
+    try {
+      const reply = await this.ask({ op: "people_suggestions", minimum_cosine: .5, ...(retry ? { refresh: true } : {}) });
+      if (generation !== this.summaryGeneration) return;
+      if (reply.ok === false) throw new Error(reply.error);
+      this.summary = reply; this.summaryError = null; this.summaryDue = Date.now() + (reply.state === "computing" ? 2000 : 10000);
+      const entry = { state: reply.state, total: reply.total, index_revision: reply.index_revision, people_revision: reply.people_revision, scope_revision: reply.scope_revision };
+      if (JSON.stringify(entry) !== JSON.stringify(this.summaryHistory.at(-1))) this.summaryHistory.push(entry);
+      if (this.summaryHistory.length > 120) this.summaryHistory.shift();
+      this.renderSummary(); this.people.backgroundSummary(reply);
+    } catch (error) {
+      if (generation === this.summaryGeneration) {
+        this.summary = null; this.summaryError = String(error.message || error); this.summaryDue = Date.now() + 10000; this.renderSummary();
+        this.people.backgroundSummary({ state: "error", people: [], total: null });
+      }
+    } finally { this.summaryBusy = false; }
+  }
+  renderSummary() {
+    const badge = this.el("people-pending-badge"), summary = this.summary;
+    badge.hidden = !this.summaryError && (!summary || summary.state === "idle" || summary.state === "ready" && summary.total === 0);
+    badge.textContent = summary?.state === "ready" ? Number(summary.total || 0).toLocaleString(I18n.locale()) : summary?.state === "error" || this.summaryError ? "!" : "…";
+    const title = summary?.state === "ready" ? t("{count} pending person-observation suggestions", { count: summary.total || 0 }) : summary?.state === "error" || this.summaryError ?
+      t("Suggestion counts unavailable. Open People and refresh.") : t("Calculating pending person-observation suggestions…");
+    badge.title = title; this.el("people-toggle").setAttribute("aria-label", t("People") + ": " + title);
+  }
+  invalidateScope() {
+    this.summaryGeneration++; this.summary = null; this.summaryDue = 0; this.people.backgroundSummaryKey = null;
+    this.renderSummary(); this.refresh();
+  }
+  debug() { return { status: this.faces.index, index: this.faces.index, error: this.preferenceError || this.faces.statusError, history: this.history, statusHistory: this.history, summaryHistory: this.summaryHistory, summary: this.summary,
+    summaryError: this.summaryError, enabled: this.el("face-auto-enabled").checked, message: this.el("face-auto-message").textContent,
+    badge: this.el("people-pending-badge").textContent, badgeVisible: !this.el("people-pending-badge").hidden,
+    protectedReview: this.people.backgroundProtected, refreshNotice: this.people.backgroundNotice }; }
+}
+if (typeof module !== "undefined") module.exports = { FaceSearchView, FaceAutoStatus };

@@ -6,6 +6,11 @@ const PeopleState = (() => {
   const idOf = (face) => String(face.face_id ?? face.id);
   const samePerson = (left, right) => left != null && right != null && String(left) === String(right);
   const queryKey = (query) => JSON.stringify([query.seed_face_id, query.minimum_cosine, query.index_revision]);
+  const revisionKey = (snapshot) => snapshot ? JSON.stringify([snapshot.scope_revision ?? null, snapshot.index_revision ?? null, snapshot.people_revision ?? null, snapshot.minimum_cosine ?? .5]) : null;
+  function backgroundRefreshPolicy({ visible, mode, checked = 0, editing = false, busy = false, previewTouched = false, playing = false, offset = 0 }) {
+    if (!visible || mode !== "suggestions") return "none";
+    return checked || editing || busy || previewTouched || playing || offset > 40 ? "hold" : "refresh";
+  }
   class BulkSelection {
     constructor() { this.reset(null); }
     reset(query) { this.query = query; this.key = query ? queryKey(query) : null; this.all = false; this.selected = new Set(); this.excluded = new Set(); }
@@ -46,6 +51,6 @@ const PeopleState = (() => {
     request(minimum = .5) { return { op: "person_faces", person_id: this.personId, mode: this.mode, offset: this.offset, limit: 40, minimum_cosine: minimum,
       ...(this.offset ? { index_revision: this.indexRevision, people_revision: this.peopleRevision } : {}) }; }
   }
-  return { BulkSelection, PersonPage, idOf, queryKey, samePerson };
+  return { BulkSelection, PersonPage, idOf, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
 })();
 if (typeof module !== "undefined") module.exports = PeopleState;

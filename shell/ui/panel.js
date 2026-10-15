@@ -14,6 +14,7 @@ const TYPING_PAUSE = 120;          // ms after the last keystroke until the mean
 const PAGE_SIZE = 40;
 const FIELD_HEIGHT = 56;
 const INDEX_HEIGHT = 80;
+const FACE_AUTO_HEIGHT = 44;
 const PANEL_HEIGHT = 560;
 const WEAKER = "\u0000weaker";     // the selectable row that folds and unfolds the weaker matches
 const isMac = /Mac/.test(navigator.platform);
@@ -356,7 +357,7 @@ function render() {
   document.documentElement.classList.toggle("faces-mode", facesVisible);
   document.querySelector(".panel").classList.toggle("people-active", peopleVisible);
   document.documentElement.classList.toggle("people-mode", peopleVisible);
-  const height = graph.visible || facesVisible || peopleVisible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT : PANEL_HEIGHT;
+  const height = graph.visible || facesVisible || peopleVisible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT + FACE_AUTO_HEIGHT : PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
     invoke("panel_height", { height, graph: graph.visible || facesVisible || peopleVisible }).catch(() => {});
@@ -1017,6 +1018,127 @@ async function exerciseFaceSearchUi() {
   if (!report.graph.edges.some((edge) => edge.matchTypes.includes("face"))) throw new Error("Face results did not create real face graph evidence");
 }
 
+// Drives real filesystem/watch/face publication. The external smoke copies public
+// fixtures only after the native capture markers; this path never calls face_start.
+async function exerciseAutomaticFacesUi() {
+  const report = featureReport.autoFaces = { manualFaceStarts: 0 };
+  const check = (condition, message) => { if (!condition) throw new Error(message); };
+  const wait = async (action, timeout = 180000) => {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const value = await action(); if (value) return value;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error("Automatic face smoke timed out");
+  };
+  const poll = async () => { await faceSearch.background.refresh(); return faceSearch.autoDebug(); };
+  const ready = async () => { const value = await poll(); return value.summary?.state === "ready" ? value : null; };
+  const toggle = async (enabled) => {
+    const box = $("face-auto-enabled"); check(!box.disabled, "Automatic face control unavailable");
+    if (box.checked !== enabled) { box.click(); await faceSearch.background.actionTask; }
+    await wait(async () => (await poll()).index?.auto_enabled === enabled);
+  };
+  const photoName = "AUTO FACE742 Новое фото.jpg", pausedName = "AUTO FACE742 Пауза.jpg", offlineName = "AUTO FACE742 После перезапуска.jpg";
+  const videoName = "AUTO FACE742 Новое видео.mp4";
+  await people.refreshDirectory();
+  const person = people.people.find((entry) => entry.name === "Человек FACE742");
+  check(person, "People baseline label missing");
+  const page = async (mode) => {
+    await people.selectPerson(person.id, mode);
+    while (people.page.hasMore) await people.loadPage(true);
+    check(!people.pageError, people.pageError || "People page failed"); return people.page.hits.slice();
+  };
+  const capture = async (label) => {
+    if (people.visible) {
+      await wait(async () => [...$("person-faces").querySelectorAll(".face-crop")].every((crop) => crop.dataset.loaded === "true"));
+      await Promise.all(people.page.hits.map(async (hit) => { const image = new Image(); image.src = await faceSearch.imageFor(hit, 360); await image.decode(); }));
+    }
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await invoke("debug_capture", { label });
+  };
+  const indexedFile = async (path) => {
+    const reply = await ask({ op: "face_file", path });
+    return reply.ok !== false && reply.indexed && reply.faces?.length > 0 ? reply : null;
+  };
+  const ordinaryFile = async (path) => {
+    const reply = await ask({ op: "search_page", q: nameOf(path), meaning: false, limit: 200 });
+    return reply.ok !== false && reply.hits?.some((hit) => hit.path === path);
+  };
+  const firstFile = [...state.strong, ...state.weaker].find((hit) => /FACE742/.test(hit.path));
+  check(firstFile, "Automatic smoke has no real fixture directory");
+  const prefix = firstFile.path.slice(0, Math.max(firstFile.path.lastIndexOf("/"), firstFile.path.lastIndexOf("\\")) + 1);
+  const paths = { photo: prefix + photoName, video: prefix + videoName, paused: prefix + pausedName, offline: prefix + offlineName };
+  const assigned = await ask({ op: "person_faces", person_id: person.id, mode: "assigned", limit: 200 });
+  check(assigned.ok !== false, assigned.error || "Assigned baseline unavailable");
+  const restarted = assigned.hits?.some((hit) => nameOf(hit.path) === photoName);
+  report.phase = restarted ? "restart" : "live";
+  if (!restarted) {
+    check(!people.visible && !faceSearch.visible, "Automatic processing must start with the face workspaces closed");
+    const initial = await wait(ready); check(initial.index.auto_enabled, "Existing face opt-in did not enable automatic indexing");
+    report.initialSummary = initial.summary; report.workspacesClosedAtStart = true;
+    await capture("auto-waiting"); // PowerShell now adds a real photo and H.264 video.
+    let progressCaptured = false;
+    await wait(async () => {
+      const value = await poll();
+      if (!progressCaptured && value.index?.active && value.index.total_frames > 0) {
+        report.progress = { ...value.index }; report.startedWithoutWorkspace = !people.visible && !faceSearch.visible;
+        // Capture immediately while the real job is active. Opening the People
+        // directory and decoding its historical crops can outlast a short video.
+        report.progressCapture = { active: value.index.active, message: $("face-auto-message").textContent,
+          progressVisible: !$("face-auto-progress").hidden };
+        await capture("auto-progress"); progressCaptured = true;
+      }
+      return progressCaptured && !value.index?.active && await indexedFile(paths.photo) && await indexedFile(paths.video);
+    }, 900000);
+    report.realWatcherIndexedPhoto = !!await ordinaryFile(paths.photo); report.realWatcherIndexedVideo = !!await ordinaryFile(paths.video);
+    check(report.realWatcherIndexedPhoto && report.realWatcherIndexedVideo, "New files did not enter the ordinary index through the real watcher");
+    if (!people.visible) await people.open();
+    const suggestions = await page("suggestions"), newRows = suggestions.filter((hit) => [photoName, videoName].includes(nameOf(hit.path)));
+    check(newRows.some((hit) => nameOf(hit.path) === photoName) && newRows.some((hit) => nameOf(hit.path) === videoName && hit.loc > 0), "Automatic proposals lack a real photo/video timestamp");
+    report.newSuggestions = newRows.map((hit) => ({ path: hit.path, face_id: hit.face_id, loc: hit.loc }));
+    const before = await wait(ready); report.pendingBefore = before.summary.total;
+    check(before.summary.total === suggestions.length, "Pending counter differs from the actual proposal page");
+    await capture("auto-suggestions");
+    const choose = (hit) => {
+      const key = people.faceRowKey(hit), box = [...$("person-faces").querySelectorAll("input")].find((input) => input.dataset.faceKey === key);
+      check(box, "Automatic proposal checkbox missing"); box.click();
+    };
+    choose(newRows.find((hit) => nameOf(hit.path) === photoName));
+    $("person-assign").click(); await people.mutationTask; check(!people.mutationError, people.mutationError || "Accept failed");
+    report.pendingAfterAccept = (await wait(async () => { const next = await ready(); return next && next.summary.total === report.pendingBefore - 1 ? next : null; })).summary.total;
+    const remaining = people.page.hits.find((hit) => nameOf(hit.path) === videoName); choose(remaining);
+    $("person-reject").click(); await people.mutationTask; check(!people.mutationError, people.mutationError || "Reject failed");
+    report.pendingAfterReject = (await wait(async () => { const next = await ready(); return next && next.summary.total === report.pendingBefore - 2 ? next : null; })).summary.total;
+    await toggle(false); await capture("auto-paused"); // Smoke copies another real photo while paused.
+    await wait(() => ordinaryFile(paths.paused));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    check(!await indexedFile(paths.paused), "Paused automatic indexing processed a new file"); report.pauseRespected = true;
+    await toggle(true);
+    await wait(() => indexedFile(paths.paused), 900000);
+    const resumed = await wait(async () => { const next = await ready(); return next && next.summary.total === report.pendingAfterReject + 1 ? next : null; });
+    report.pendingAfterResume = resumed.summary.total; report.resumedWithoutFaceStart = true;
+    await page("suggestions"); await capture("auto-resumed");
+    await toggle(false); report.pausedForRestart = true;
+  } else {
+    const initial = await wait(ready); check(!initial.index.auto_enabled && !initial.index.active, "Automatic pause did not persist across restart");
+    report.pausePersisted = true;
+    await wait(() => ordinaryFile(paths.offline));
+    check(!await indexedFile(paths.offline), "Restart bypassed the saved automatic pause");
+    const accepted = assigned.hits.some((hit) => nameOf(hit.path) === photoName);
+    await people.open(); const rejected = await page("rejected");
+    check(accepted && rejected.some((hit) => nameOf(hit.path) === videoName), "Automatic proposal decisions were lost on restart"); report.decisionsPersisted = true;
+    await toggle(true); await wait(() => indexedFile(paths.offline), 900000);
+    const current = await wait(ready), suggestions = await page("suggestions");
+    report.pendingAfterRestart = current.summary.total;
+    check(current.summary.total === suggestions.length && suggestions.some((hit) => nameOf(hit.path) === offlineName), "Restart did not publish new suggestions");
+    const revision = current.summary.index_revision;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const stable = await wait(ready); check(stable.summary.total === current.summary.total && stable.summary.index_revision === revision, "Idle auto passes created duplicates");
+    report.idleStable = true; await capture("auto-suggestions");
+  }
+  report.status = faceSearch.autoDebug(); report.passed = true;
+}
+
 async function exercisePeopleUi() {
   const report = featureReport.people = {};
   const label = "Человек FACE742", renamed = "Наблюдатель FACE742";
@@ -1161,6 +1283,10 @@ async function completeDebugSearch() {
   if (debugOptions.people) {
     try { await exercisePeopleUi(); }
     catch (error) { state.error = String(error.message || error); featureReport.people = { ...featureReport.people, error: state.error, failure: people.debug() }; }
+  }
+  if (debugOptions.autoFaces) {
+    try { await exerciseAutomaticFacesUi(); }
+    catch (error) { state.error = String(error.message || error); featureReport.autoFaces = { ...featureReport.autoFaces, error: state.error, failure: faceSearch.autoDebug() }; }
   }
   report();
 }

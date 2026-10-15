@@ -20,7 +20,7 @@
       <button id="stats-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="index-overview" data-i18n="Index">Index</button>
       <button id="graph-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="graph-view" disabled title="Select a search result to explore related files" data-i18n-title="Select a search result to explore related files" data-i18n="Graph">Graph</button>
       <button id="faces-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="faces-view" data-i18n="Faces">Faces</button>
-      <button id="people-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="people-view" data-i18n="People">People</button>
+      <button id="people-toggle" class="quiet-button" type="button" aria-expanded="false" aria-controls="people-view"><span data-i18n="People">People</span><span id="people-pending-badge" class="people-pending-badge" hidden></span></button>
       <select class="language-select" aria-label="Language" data-i18n-aria-label="Language"><option value="en">English</option><option value="ru">Русский</option></select>
     </header>
     <p id="language-error" class="language-error" role="alert"></p>
@@ -31,6 +31,9 @@
       </div>
       <p id="index-detail" data-i18n="Checking the local index.">Checking the local index.</p>
       <progress id="index-progress" aria-label="Current indexing pass" data-i18n-aria-label="Current indexing pass" hidden></progress>
+    </section>
+    <section id="face-auto-status" class="face-auto-row" aria-label="Automatic face indexing" data-i18n-aria-label="Automatic face indexing">
+      <label><input id="face-auto-enabled" type="checkbox"><span data-i18n="Auto-index faces">Auto-index faces</span></label><span id="face-auto-message" role="status" aria-live="polite" data-i18n="Checking the face index…">Checking the face index…</span><progress id="face-auto-progress" aria-label="Face indexing progress" data-i18n-aria-label="Face indexing progress" hidden></progress><button id="face-auto-open" type="button" class="quiet-button" data-i18n="Set up Faces">Set up Faces</button>
     </section>
     <section id="index-overview" class="index-overview" aria-label="Index overview" data-i18n-aria-label="Index overview" hidden>
       <div class="overview-heading"><h2 data-i18n="Your local index">Your local index</h2><button id="stats-refresh" class="quiet-button" type="button" data-i18n="Refresh">Refresh</button></div>

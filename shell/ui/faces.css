@@ -1,4 +1,15 @@
 /* An investigation workspace within the existing graphite search/graph shell. */
+.face-auto-row { height: 44px; flex: none; display: flex; align-items: center; gap: 10px; padding: 5px 18px; border-top: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; }
+.face-auto-row label { display: flex; align-items: center; gap: 6px; flex: none; cursor: pointer; }
+.face-auto-row input { accent-color: var(--amber); }
+#face-auto-message { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--secondary); font-variant-numeric: tabular-nums; }
+#face-auto-message.face-error { color: #ad3930; }
+.graph-active #face-auto-message.face-error, .faces-active #face-auto-message.face-error, .people-active #face-auto-message.face-error { color: #f0cfcd; }
+@media (prefers-color-scheme: dark) { #face-auto-message.face-error { color: #f0cfcd; } }
+.face-auto-row progress { width: 80px; height: 5px; accent-color: var(--amber); flex: none; }
+.face-auto-row .quiet-button { flex: none; white-space: nowrap; font-size: 12px; padding: 5px 8px; }
+.face-auto-row :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.people-pending-badge { display: inline-block; margin-left: 5px; font-size: 10px; font-variant-numeric: tabular-nums; padding: 1px 5px; border-radius: 8px; background: var(--selected); color: var(--text); }
 html.faces-mode, html.faces-mode body { background: #202429; }
 .faces-active { --surface: #202429; --text: #eef2f6; --secondary: #b4bec8; --tertiary: #a4aeba; --line: #414952; --chip: #30363d; --selected: #3e5062; background: #202429; color: #eef2f6; }
 .faces-active .field, .faces-active .index-status { background: #252b32; border-color: #414952; }

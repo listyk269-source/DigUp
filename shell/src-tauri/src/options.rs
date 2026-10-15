@@ -53,6 +53,7 @@ pub struct Options {
     pub debug_ui_features: bool,
     pub debug_faces: bool,
     pub debug_people: bool,
+    pub debug_auto_faces: bool,
 }
 
 impl Options {
@@ -94,6 +95,7 @@ impl Options {
             debug_ui_features: false,
             debug_faces: false,
             debug_people: false,
+            debug_auto_faces: false,
         };
         while let Some(arg) = args.next() {
             let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -126,6 +128,7 @@ impl Options {
                 "--debug-ui-features" => options.debug_ui_features = true,
                 "--debug-faces" => options.debug_faces = true,
                 "--debug-people" => options.debug_people = true,
+                "--debug-auto-faces" => options.debug_auto_faces = true,
                 _ => return Err(format!("unknown argument {arg}")),
             }
         }
@@ -158,6 +161,9 @@ impl Options {
         }
         if options.debug_people && !options.debug_isolated {
             return Err("--debug-people requires --debug-isolated".into());
+        }
+        if options.debug_auto_faces && !options.debug_isolated {
+            return Err("--debug-auto-faces requires --debug-isolated".into());
         }
         if options.debug_graph && !options.debug_isolated {
             return Err("--debug-graph requires --debug-isolated".into());
@@ -287,6 +293,7 @@ mod tests {
         assert!(parse(&["--debug-ui-features"], None, None).is_err());
         assert!(parse(&["--debug-faces"], None, None).is_err());
         assert!(parse(&["--debug-people"], None, None).is_err());
+        assert!(parse(&["--debug-auto-faces"], None, None).is_err());
         assert!(parse(&["--debug-reconfigure-folder", "relative"], None, None).is_err());
         let root = std::env::temp_dir().join("DigUp test кириллица");
         let args = [

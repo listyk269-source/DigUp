@@ -3,6 +3,37 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const state = require("../shell/ui/people-state.js");
 const query = { seed_face_id: 7, minimum_cosine: .5, index_revision: 12 };
+test("background refresh preserves explicit checks, active previews, rename edits and extra pages", () => {
+  const idle = { visible: true, mode: "suggestions", offset: 40 };
+  assert.equal(state.backgroundRefreshPolicy(idle), "refresh");
+  for (const protection of [{ checked: 1 }, { editing: true }, { busy: true }, { previewTouched: true }, { playing: true }, { offset: 80 }]) {
+    assert.equal(state.backgroundRefreshPolicy({ ...idle, ...protection }), "hold");
+  }
+  assert.equal(state.backgroundRefreshPolicy({ ...idle, visible: false }), "none");
+  assert.equal(state.backgroundRefreshPolicy({ ...idle, mode: "assigned" }), "none");
+  assert.notEqual(state.revisionKey({ index_revision: 2, people_revision: 1, scope_revision: 1 }), state.revisionKey({ index_revision: 2, people_revision: 1, scope_revision: 2 }));
+});
+test("a background result arriving after the user checks a face cannot replace the review page", async () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} }, PeopleState: state, t: (key) => key, document: { activeElement: null } };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/people.js"), "utf8"), context);
+  const view = Object.create(context.module.exports.prototype), id = "D8422F9A-5361-467B-81F8-EE9DD7FD65C1";
+  const page = new state.PersonPage(); page.open(id, "suggestions"); page.indexRevision = 1; page.peopleRevision = 2;
+  const oldHit = { face_id: 7, anchor_key: "same-observation" }; page.hits = [oldHit];
+  view.page = page; view.visible = true; view.selectedFaces = new Set(); view.selectedPreview = "same-observation";
+  view.renderStatus = view.renderDirectory = view.renderPage = () => {};
+  view.el = (key) => key === "person-rename" ? { hidden: true } : { querySelectorAll: () => [] };
+  let complete;
+  view.ask = () => new Promise((resolve) => { complete = resolve; });
+  const task = view.backgroundSummary({ state: "ready", index_revision: 2, people_revision: 2, scope_revision: 1 });
+  view.selectedFaces.add("same-observation");
+  complete({ ok: true, person: { id }, hits: [{ face_id: 8, anchor_key: "new" }], index_revision: 2, people_revision: 2, total: 1, next_offset: 1 });
+  await task;
+  assert.equal(view.page, page);
+  assert.deepEqual(view.page.hits, [oldHit]);
+  assert.equal(view.selectedFaces.has("same-observation"), true);
+  assert.equal(view.backgroundNotice, true);
+});
 test("opaque person UUIDs remain exact in selected-face assignment and person paging", async () => {
   const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
   const context = { module: { exports: {} }, PeopleState: state, t: (key) => key };

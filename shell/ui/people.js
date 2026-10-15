@@ -32,6 +32,7 @@ class PeopleView {
     this.el("person-rename").onsubmit = (event) => { event.preventDefault(); this.mutationTask = this.rename(); };
     for (const id of ["people-undo", "face-label-undo"]) this.el(id).querySelector("button").onclick = () => { this.mutationTask = this.undo(); };
     document.addEventListener("ui-language-changed", () => { this.renderFaceControls(); if (this.visible) this.render(); });
+    this.auto = new FaceAutoStatus({ faces: faceSearch, people: this, ask }); faceSearch.auto = this.auto; faceSearch.background = this.auto; window.faceAuto = this.auto;
   }
   text(tag, className, value) { const node = document.createElement(tag); node.className = className; if (value != null) node.textContent = value; return node; }
   person() { return this.people.find((person) => PeopleState.samePerson(person.id, this.page.personId)); }
@@ -53,9 +54,14 @@ class PeopleView {
       this.renderDirectory(); this.renderFaceControls();
     } catch (error) { if (generation === this.directoryGeneration) { this.directoryError = String(error.message || error); this.renderStatus(); this.renderFaceControls(); } }
   }
-  async refresh() { await this.refreshDirectory(); if (this.visible && this.page.personId) await this.selectPerson(this.page.personId, this.page.mode); }
+  async refresh() {
+    await this.refreshDirectory();
+    if (this.visible && this.page.personId) await this.selectPerson(this.page.personId, this.page.mode);
+    await this.auto?.refreshSummary(true);
+  }
   async selectPerson(id, mode = "assigned") {
     this.page.open(id, mode); this.pageBusy = false; this.selectedFaces.clear(); this.selectedPreview = null; this.previewKey = null; this.pageError = null; this.expired = false;
+    this.previewTouched = false; this.backgroundNotice = false; this.backgroundProtected = false;
     this.el("person-rename").hidden = true; this.render(); return this.loadPage();
   }
   async loadPage(more = false) {
@@ -76,6 +82,13 @@ class PeopleView {
   render() { this.renderStatus(); this.renderDirectory(); this.renderPage(); this.renderUndo(); }
   renderStatus() {
     this.el("people-status").textContent = this.mutationError ? t(this.mutationError) : this.directoryError ? t(this.directoryError) : this.notice ? (this.undoOperation ? t("Changes saved locally") : this.notice) : "";
+    if (!this.mutationError && !this.directoryError && this.auto?.summary) {
+      const summary = this.auto.summary;
+      const pending = summary.state === "ready" ? t("Pending person-observation suggestions: {count}", { count: summary.total || 0 }) :
+        summary.state === "computing" ? t("Calculating pending person-observation suggestions…") : summary.state === "error" ? t("Suggestion counts unavailable. Open People and refresh.") : "";
+      if (pending) this.el("people-status").textContent += (this.el("people-status").textContent ? " · " : "") + pending;
+    }
+    if (!this.mutationError && !this.directoryError && this.auto?.summaryError) this.el("people-status").textContent += " " + t("Suggestion counts unavailable. Open People and refresh.");
     this.el("people-status").classList.toggle("face-error", !!this.mutationError || !!this.directoryError);
     this.el("people-refresh").disabled = !!this.mutationBusy;
     for (const form of ["people-create", "face-person-create", "person-rename"]) for (const control of this.el(form).querySelectorAll("input,button")) control.disabled = !!this.mutationBusy;
@@ -87,6 +100,8 @@ class PeopleView {
       const button = this.text("button", ""); button.type = "button"; button.dataset.personId = String(person.id); button.setAttribute("aria-pressed", String(PeopleState.samePerson(person.id, this.page.personId)));
       button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22V19A8 8 0 0 1 20 19V22"/></svg>';
       const label = this.text("span", ""); label.append(this.text("strong", "", person.name), this.text("small", "", t("{count} assigned observations", { count: person.assigned_count || 0 })));
+      const summary = this.auto?.summary, pending = summary?.state === "ready" ? summary.people?.find((item) => PeopleState.samePerson(item.person_id, person.id))?.pending_count : null;
+      if (Number.isFinite(pending) && pending > 0) label.append(this.text("small", "people-person-pending", t("{count} pending observations", { count: pending })));
       button.append(label); button.onclick = () => { this.pageTask = this.selectPerson(person.id); }; list.append(button);
     }
     if (!people.length) list.append(this.text("p", "", t(query ? "No matching person labels" : "Create a person label, then assign confirmed face observations.")));
@@ -101,6 +116,7 @@ class PeopleView {
     const message = this.el("person-message"); message.classList.toggle("face-error", !!this.pageError);
     message.textContent = this.pageError ? t(this.pageError) : this.pageBusy ? t("Loading person observations…") : !person ? t("Choose a person") :
       t(messages[mode]) + " " + t("{loaded} of {total} observations loaded", { loaded: this.page.hits.length, total: this.page.total });
+    if (this.backgroundNotice && !this.pageBusy) message.textContent += " " + t("New face-index changes are available. Refresh to update this review; your current selection is unchanged.");
     const list = this.el("person-faces"), scroll = list.scrollTop; list.replaceChildren();
     for (const hit of this.page.hits) {
       const key = this.faceRowKey(hit), row = this.text("div", "people-face-row"), check = document.createElement("input");
@@ -115,7 +131,7 @@ class PeopleView {
         this.text("span", "", hit.kind === "video" && Number.isFinite(hit.loc) ? this.clock(hit.loc) : t("Photograph")));
       if (Number.isFinite(hit.cosine)) label.append(this.text("span", "", t("Cosine {value}", { value: hit.cosine.toFixed(3) })));
       if (hit.person && !PeopleState.samePerson(hit.person.id, person?.id)) label.append(this.text("span", "", t("Already labelled: {name}", { name: hit.person.name })));
-      button.append(mode === "stale" ? this.text("span", "face-crop") : this.faceSearch.crop(hit), label); button.onclick = () => { this.stopPreview(); this.selectedPreview = key; this.renderPage(); }; row.append(check, button); list.append(row);
+      button.append(mode === "stale" ? this.text("span", "face-crop") : this.faceSearch.crop(hit), label); button.onclick = () => { this.stopPreview(); this.previewTouched = true; this.selectedPreview = key; this.renderPage(); }; row.append(check, button); list.append(row);
     }
     list.scrollTop = scroll;
     const selected = this.selectedFaces.size; this.el("person-selection-count").textContent = t("{count} selected", { count: selected });
@@ -163,7 +179,7 @@ class PeopleView {
       if (this.faceSearch.selection.seed) await this.loadFaceLabel();
       return reply;
     } catch (error) { this.mutationError = String(error.message || error); return null; }
-    finally { this.mutationBusy = false; this.renderStatus(); this.renderFaceControls(); if (this.visible) this.renderPage(); this.renderUndo(); }
+    finally { this.mutationBusy = false; this.renderStatus(); this.renderFaceControls(); if (this.visible) this.renderPage(); this.renderUndo(); this.auto?.refreshSummary(); }
   }
   async undo() {
     if (!this.undoOperation) return;
@@ -228,6 +244,37 @@ class PeopleView {
     if (this.page.mode === "stale") request.anchor_keys = chosen.map((face) => face.anchor_key);
     else request.face_ids = chosen.map((face) => Number(PeopleState.idOf(face)));
     return this.mutate(request, t(action === "reject" ? "Observations excluded for this person" : "Face labels updated"));
+  }
+  backgroundPolicy() {
+    return PeopleState.backgroundRefreshPolicy({ visible: this.visible, mode: this.page.mode, checked: this.selectedFaces.size,
+      editing: !this.el("person-rename").hidden, busy: !!this.mutationBusy || !!this.pageBusy, previewTouched: this.previewTouched,
+      playing: [...this.el("person-preview").querySelectorAll("audio,video")].some((player) => !player.paused), offset: this.page.offset });
+  }
+  async backgroundSummary(summary) {
+    const key = PeopleState.revisionKey(summary), changed = this.backgroundSummaryKey !== key;
+    this.renderStatus();
+    const focus = document.activeElement?.dataset.personId; this.renderDirectory();
+    if (focus) [...this.el("people-list").querySelectorAll("button")].find((button) => button.dataset.personId === focus)?.focus({ preventScroll: true });
+    if (!changed || summary.state !== "ready") return;
+    this.backgroundSummaryKey = key;
+    if (!this.visible || this.page.mode !== "suggestions" || !this.page.personId ||
+      this.page.indexRevision === summary.index_revision && this.page.peopleRevision === summary.people_revision) return;
+    if (this.backgroundPolicy() !== "refresh") { this.backgroundNotice = true; this.backgroundProtected = true; this.renderPage(); return; }
+    const generation = this.page.generation, personId = this.page.personId, preview = this.selectedPreview;
+    try {
+      const fresh = new PeopleState.PersonPage(), token = fresh.open(personId, "suggestions");
+      const reply = await this.ask(fresh.request());
+      if (generation !== this.page.generation || !this.visible) return;
+      if (reply.ok === false) throw new Error(reply.error);
+      fresh.merge(reply, token);
+      if (this.backgroundPolicy() !== "refresh" || preview && !fresh.hits.some((face) => this.faceRowKey(face) === preview)) {
+        this.backgroundNotice = true; this.backgroundProtected = true; this.renderPage(); return;
+      }
+      fresh.generation = generation + 1; this.page = fresh; this.selectedPreview = preview || (fresh.hits.length ? this.faceRowKey(fresh.hits[0]) : null);
+      this.peopleRevision = reply.people_revision; this.backgroundNotice = false; this.backgroundProtected = false; this.renderPage();
+    } catch {
+      if (generation === this.page.generation) { this.backgroundNotice = true; this.backgroundProtected = true; this.renderPage(); }
+    }
   }
   debug() { return { visible: this.visible, people: this.people, personId: this.page.personId, mode: this.page.mode, hits: this.page.hits, total: this.page.total,
     hasMore: this.page.hasMore, indexRevision: this.page.indexRevision, peopleRevision: this.peopleRevision, error: this.mutationError || this.directoryError || this.pageError,

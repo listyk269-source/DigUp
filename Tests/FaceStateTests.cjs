@@ -3,6 +3,31 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const faces = require("../shell/ui/face-state.js");
 const box = [.1, .2, .3, .4];
+test("automatic preference sends only explicit face_auto with the selected device, never face_start", async () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} } };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/faces.js"), "utf8"), context);
+  const controller = Object.create(context.module.exports.FaceAutoStatus.prototype), requests = [];
+  controller.faces = { el: () => ({ value: "gpu" }), statusGeneration: 0, visible: false };
+  controller.render = controller.statusChanged = () => {};
+  controller.refreshSummary = async () => {};
+  controller.ask = async (request) => { requests.push(JSON.parse(JSON.stringify(request))); return { ok: true, auto_enabled: request.enabled }; };
+  await controller.setEnabled(true); await controller.setEnabled(false);
+  assert.deepEqual(requests, [{ op: "face_auto", enabled: true, device: "gpu" }, { op: "face_auto", enabled: false, device: "gpu" }]);
+});
+test("polling reuses summary errors while explicit refresh asks the helper to retry", async () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} }, FaceState: faces, t: (key) => key };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/faces.js"), "utf8"), context);
+  const controller = Object.create(context.module.exports.FaceAutoStatus.prototype), requests = [];
+  Object.assign(controller, { summaryGeneration: 1, summaryHistory: [], renderSummary() {}, people: { backgroundSummary() {} },
+    ask: async (request) => { requests.push(JSON.parse(JSON.stringify(request))); return { ok: true, state: "ready", total: 0 }; } });
+  await controller.readSummary(1);
+  await controller.readSummary(1, true);
+  assert.equal(requests[0].refresh, undefined);
+  assert.equal(requests[1].refresh, true);
+});
+
 test("a late face query cannot replace a newly selected person or file", () => {
   const state = new faces.Selection();
   const old = state.select({ id: 1, model_id: "sface-v1" });

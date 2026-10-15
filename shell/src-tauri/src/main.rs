@@ -21,7 +21,7 @@ use options::{Options, DEFAULT_HOTKEY};
 use serde_json::{json, Value};
 use settings::{Device, Language, Settings};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
@@ -101,6 +101,7 @@ struct Shell {
     debug_panel_reopened: AtomicBool,
     debug_setup_history: Mutex<Vec<Value>>,
     debug_index_history: Mutex<Vec<Value>>,
+    debug_face_starts: AtomicUsize,
     indexing_paused: AtomicBool,
     shutting_down: AtomicBool,
     logs: PathBuf,
@@ -219,6 +220,7 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
         "face_status",
         "face_start",
         "face_cancel",
+        "face_auto",
         "face_file",
         "face_search",
         "people_list",
@@ -227,6 +229,7 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
         "face_label",
         "people_undo",
         "face_people",
+        "people_suggestions",
         "embed_ahead",
         "text",
         "render",
@@ -237,6 +240,9 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
     .contains(&op)
     {
         return Err(format!("not a question the panel asks: {op}"));
+    }
+    if shell.options.debug_isolated && op == "face_start" {
+        shell.debug_face_starts.fetch_add(1, Ordering::SeqCst);
     }
     shell.search.ask(request).await
 }
@@ -516,7 +522,8 @@ fn panel_height(app: AppHandle, height: f64, graph: Option<bool>) {
         let smoke_viewport = shell.options.debug_isolated
             && (shell.options.debug_ui_features
                 || shell.options.debug_faces
-                || shell.options.debug_people)
+                || shell.options.debug_people
+                || shell.options.debug_auto_faces)
             && graph.unwrap_or(false);
         let monitor = panel.current_monitor().ok().flatten();
         let scale = monitor
@@ -578,7 +585,7 @@ async fn debug_query(shell: State<'_, Arc<Shell>>) -> Result<Option<String>, Str
 
 #[tauri::command]
 fn debug_search_options(shell: State<'_, Arc<Shell>>) -> Value {
-    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features, "faces": shell.options.debug_faces, "people": shell.options.debug_people})
+    json!({"loadAll": shell.options.debug_load_all, "graph": shell.options.debug_graph, "features": shell.options.debug_ui_features, "faces": shell.options.debug_faces, "people": shell.options.debug_people, "autoFaces": shell.options.debug_auto_faces})
 }
 
 #[tauri::command]
@@ -598,7 +605,8 @@ async fn debug_capture(
     if !shell.options.debug_isolated
         || !(shell.options.debug_ui_features
             || shell.options.debug_faces
-            || shell.options.debug_people)
+            || shell.options.debug_people
+            || shell.options.debug_auto_faces)
         || ![
             "documents",
             "media",
@@ -611,6 +619,11 @@ async fn debug_capture(
             "people-assigned",
             "people-suggestions",
             "people-rename",
+            "auto-waiting",
+            "auto-progress",
+            "auto-suggestions",
+            "auto-paused",
+            "auto-resumed",
         ]
         .contains(&label.as_str())
     {
@@ -632,6 +645,7 @@ async fn debug_capture(
 /// Debug runs: what the page showed for the debug query, printed (and the shell quits, if asked).
 #[tauri::command]
 fn debug_report(app: AppHandle, shell: State<'_, Arc<Shell>>, mut report: Value) {
+    report["nativeFaceStartRequests"] = json!(shell.debug_face_starts.load(Ordering::SeqCst));
     #[cfg(windows)]
     {
         report["nativeCornerRegionRounded"] = json!(app
@@ -858,6 +872,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
         debug_panel_reopened: AtomicBool::new(false),
         debug_setup_history: Mutex::new(Vec::new()),
         debug_index_history: Mutex::new(Vec::new()),
+        debug_face_starts: AtomicUsize::new(0),
         indexing_paused: AtomicBool::new(false),
         shutting_down: AtomicBool::new(false),
         logs,
