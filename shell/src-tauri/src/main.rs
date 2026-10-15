@@ -441,21 +441,33 @@ fn retry_model(app: AppHandle) {
 #[tauri::command]
 fn panel_height(app: AppHandle, height: f64, graph: Option<bool>) {
     if let Some(panel) = app.get_webview_window("panel") {
+        let shell = app.state::<Arc<Shell>>();
+        // A canonical native WebView viewport makes isolated visual checks independent
+        // of a CI runner's virtual desktop size. Normal windows still fit their monitor.
+        let smoke_viewport = shell.options.debug_isolated
+            && shell.options.debug_ui_features
+            && graph.unwrap_or(false);
         let monitor = panel.current_monitor().ok().flatten();
         let scale = monitor
             .as_ref()
             .map(|screen| screen.scale_factor())
             .unwrap_or(1.0);
-        let maximum_height = monitor
-            .as_ref()
-            .map(|screen| screen.work_area().size.height as f64 / scale - 24.0)
-            .unwrap_or(900.0)
-            .max(FIELD_HEIGHT);
-        let maximum_width = monitor
-            .as_ref()
-            .map(|screen| screen.work_area().size.width as f64 / scale - 24.0)
-            .unwrap_or(1280.0)
-            .max(320.0);
+        let maximum_height = if smoke_viewport {
+            None
+        } else {
+            monitor.as_ref()
+        }
+        .map(|screen| screen.work_area().size.height as f64 / scale - 24.0)
+        .unwrap_or(900.0)
+        .max(FIELD_HEIGHT);
+        let maximum_width = if smoke_viewport {
+            None
+        } else {
+            monitor.as_ref()
+        }
+        .map(|screen| screen.work_area().size.width as f64 / scale - 24.0)
+        .unwrap_or(1280.0)
+        .max(320.0);
         let actual = height.clamp(FIELD_HEIGHT, 900.0).min(maximum_height);
         let width = (if graph.unwrap_or(false) {
             1280.0_f64
