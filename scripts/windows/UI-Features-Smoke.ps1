@@ -130,7 +130,9 @@ foreach ($pass in 'first','restart') {
     if ($ui.error -or $ui.savedLanguage -ne 'ru' -or $ui.language -ne 'ru' -or $f.initial.lang -ne 'ru' -or
         $f.english.action -ne 'Find similar' -or $f.russian.action -ne 'Найти похожие' -or
         'Documents' -notin $f.english.groups -or 'Документы' -notin $f.russian.groups -or
-        $f.english.indexLabel -notmatch '^Index' -or $f.russian.indexLabel -notmatch '^Индекс' -or
+        [string]::IsNullOrWhiteSpace($f.english.indexLabel) -or [string]::IsNullOrWhiteSpace($f.russian.indexLabel) -or
+        $f.english.indexLabel -match '[А-Яа-яЁё]' -or $f.russian.indexLabel -notmatch '[А-Яа-яЁё]' -or
+        $f.english.indexLabel -eq $f.russian.indexLabel -or
         $f.englishAgain.action -ne 'Find similar' -or $f.final.action -ne 'Найти похожие' -or
         $f.english.query -ne $f.russian.query -or $f.english.selected -ne $f.russian.selected -or
         !$f.graph.visible -or $f.graph.error -or $f.graph.preview.tag -ne 'DIV' -or $f.graph.preview.text -notmatch 'UIFEATURE742' -or
