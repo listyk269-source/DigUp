@@ -12,10 +12,8 @@ const fileURL = (path) => tauri.core.convertFileSrc(path);
 
 const TYPING_PAUSE = 120;          // ms after the last keystroke until the meaning results show
 const PAGE_SIZE = 40;
-const FIELD_HEIGHT = 56;
-const INDEX_HEIGHT = 80;
-const FACE_AUTO_HEIGHT = 44;
-const PANEL_HEIGHT = 560;
+const FIELD_HEIGHT = 64;
+const PANEL_HEIGHT = 900;
 const WEAKER = "\u0000weaker";     // the selectable row that folds and unfolds the weaker matches
 const isMac = /Mac/.test(navigator.platform);
 const isWindows = /Win/.test(navigator.platform);
@@ -357,13 +355,14 @@ function render() {
   document.documentElement.classList.toggle("faces-mode", facesVisible);
   document.querySelector(".panel").classList.toggle("people-active", peopleVisible);
   document.documentElement.classList.toggle("people-mode", peopleVisible);
-  const height = graph.visible || facesVisible || peopleVisible ? 900 : empty && !state.statsOpen ? FIELD_HEIGHT + INDEX_HEIGHT + FACE_AUTO_HEIGHT : PANEL_HEIGHT;
+  const height = PANEL_HEIGHT;
   if (height !== state.height) {
     state.height = height;
-    invoke("panel_height", { height, graph: graph.visible || facesVisible || peopleVisible }).catch(() => {});
+    invoke("panel_height", { height, graph: true }).catch(() => {});
   }
-  $body.hidden = empty || state.statsOpen || graph.visible || facesVisible || peopleVisible;
-  $footer.hidden = empty || state.statsOpen || graph.visible || facesVisible || peopleVisible;
+  $body.hidden = empty || graph.visible || facesVisible || peopleVisible;
+  $footer.hidden = empty || graph.visible || facesVisible || peopleVisible;
+  $("search-home").hidden = !empty || graph.visible || facesVisible || peopleVisible;
   $("graph-view").hidden = !graph.visible;
   $("faces-view").hidden = !facesVisible;
   $("faces-toggle").setAttribute("aria-expanded", String(facesVisible));
@@ -374,7 +373,14 @@ function render() {
   $("graph-toggle").disabled = !selectedHit();
   $("graph-toggle").setAttribute("aria-expanded", String(graph.visible));
   $("index-overview").hidden = !state.statsOpen;
+  $("workspace-drawer").hidden = !state.statsOpen;
   $("stats-toggle").setAttribute("aria-expanded", String(state.statsOpen));
+  $("settings-toggle").setAttribute("aria-expanded", String(state.statsOpen));
+  for (const [id, active] of [["search-toggle", !graph.visible && !facesVisible && !peopleVisible], ["graph-toggle", graph.visible], ["people-toggle", peopleVisible], ["faces-toggle", facesVisible]]) {
+    if (active) $(id).setAttribute("aria-current", "page"); else $(id).removeAttribute("aria-current");
+  }
+  $("query-clear").disabled = !$query.value;
+  renderCompactStatus();
   renderPaging();
   if (empty) return;
   renderList();
@@ -765,14 +771,22 @@ ICONS.screenshot = ICONS.image;
 
 $query.addEventListener("input", queryChanged);
 $("load-more").addEventListener("click", () => state.page?.expired ? queryChanged() : loadMore());
-$("stats-toggle").addEventListener("click", () => {
-  if (people.visible) people.close();
-  if (faceSearch.visible) faceSearch.close(false);
-  if (graph.visible) graph.close();
-  state.statsOpen = !state.statsOpen;
+let drawerReturnFocus = null;
+function toggleDrawer(force) {
+  if (force !== false && !state.statsOpen) drawerReturnFocus = document.activeElement;
+  state.statsOpen = force ?? !state.statsOpen;
   render();
-  if (state.statsOpen) refreshStats();
-});
+  if (state.statsOpen) { refreshStats(); $("drawer-close").focus(); }
+  else if (drawerReturnFocus?.isConnected) drawerReturnFocus.focus();
+}
+$("stats-toggle").addEventListener("click", () => toggleDrawer());
+$("settings-toggle").addEventListener("click", () => toggleDrawer());
+$("status-details").addEventListener("click", () => toggleDrawer(true));
+$("compact-face-open").onclick = () => toggleDrawer(true);
+$("compact-people-open").onclick = () => { if (!people.visible) people.openTask = people.open(); };
+$("drawer-close").onclick = () => toggleDrawer(false);
+$("query-clear").onclick = () => { $query.value = ""; queryChanged(); $query.focus(); };
+$("search-toggle").onclick = () => { if (people.visible) people.close(); if (faceSearch.visible) faceSearch.close(false); if (graph.visible) graph.close(); state.statsOpen = false; render(); $query.focus(); };
 $("graph-toggle").addEventListener("click", () => graph.visible ? graph.close() : graph.show(selectedHit(), state.isCode));
 $("faces-toggle").addEventListener("click", () => faceSearch.visible ? faceSearch.close() : openFaces(graph.visible ? graph.model.nodes.get(graph.selected) : selectedHit()));
 $("people-toggle").addEventListener("click", () => { if (people.visible) people.close(); else people.openTask = people.open(); });
@@ -784,13 +798,16 @@ setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh
 
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return; // an input method is composing: its keys
+  if (state.statsOpen && event.key === "Escape") { event.preventDefault(); toggleDrawer(false); return; }
+  if (people.visible && event.key === "Escape" && $("people-info").open) { event.preventDefault(); $("people-info").open = false; $("people-info").querySelector("summary").focus(); return; }
+  if (event.target.closest?.("#workspace-drawer")) return;
   if (people.visible && event.key === "Escape") { event.preventDefault(); if (!$("person-rename").hidden) $("person-rename-cancel").click(); else people.close(); return; }
   if (people.visible && event.target.closest?.("#people-view")) return;
   if (faceSearch.visible && event.key === "Escape") { event.preventDefault(); faceSearch.close(); return; }
   if (faceSearch.visible && event.target.closest?.("#faces-view")) return;
   if (graph.visible && event.key === "Escape") { event.preventDefault(); graph.close(); return; }
   if (graph.visible && event.target.closest?.("#graph-view")) return;
-  if (event.target.closest?.("button, select")) return; // native Tab/Space/Enter behavior for page and overview controls
+  if (event.target.closest?.("button, select, input:not(#query), textarea")) return; // retain native field and control keys
   const modifier = isMac ? event.metaKey : event.ctrlKey;
   switch (event.key) {
     case "Escape":
@@ -885,7 +902,7 @@ function renderIndexStatus() {
   const number = (n) => n.toLocaleString(I18n.locale());
   const counted = Number.isFinite(s.done) && Number.isFinite(s.total);
   const overall = [s.searchable != null ? t("{count} files searchable", { count: number(s.searchable) }) : "",
-    s.pending != null ? t("{count} remaining", { count: number(s.pending) }) : ""].filter(Boolean).join(" · ");
+    s.pending != null && s.stage !== "scanning" && s.stage !== "starting" ? t("{count} remaining", { count: number(s.pending) }) : ""].filter(Boolean).join(" · ");
   const raw = Math.min(s.failed || 0, s.unsupported_raw || 0);
   const failedFiles = Math.max(0, (s.failed || 0) - raw);
   $indexStatus.dataset.stage = s.stage;
@@ -904,7 +921,26 @@ function renderIndexStatus() {
     $indexProgress.value = s.done;
     $indexProgress.setAttribute("aria-valuetext", $indexCount.textContent);
   }
+  renderCompactStatus();
 }
+
+function renderCompactStatus() {
+  const n = (value) => Number(value).toLocaleString(I18n.locale());
+  const status = state.indexStatus, faces = faceSearch.index || {}, auto = people.auto;
+  document.querySelector(".workspace-status").dataset.stage = status?.stage || "starting";
+  const scanning = ["starting", "scanning"].includes(status?.stage);
+  $("compact-index-status").textContent = scanning ? t("Scanning · total not known yet") : $indexTitle.textContent + (Number.isFinite(status?.searchable) ? " · " + t("Files: {count}", { count: n(status.searchable) }) : "");
+  $("stats-toggle").title = [$indexTitle.textContent, $indexCount.textContent, $indexDetail.textContent].filter(Boolean).join(" · ");
+  const busy = faces.active || ["running", "downloading", "cancelling"].includes(faces.state);
+  $("compact-face-status").textContent = busy ? t("Faces: {done} / {total}", { done: n(faces.done || 0), total: n(faces.total || 0) }) :
+    faces.state === "error" || faces.auto_error ? t("Faces need attention") : faces.auto_enabled ? t("Auto-index faces") : t("Face indexing off");
+  $("compact-face-open").title = $("face-auto-message").textContent;
+  const progress = $("compact-face-progress"); progress.hidden = !busy;
+  if (faces.total > 0) { progress.max = faces.total; progress.value = Math.min(faces.total, faces.done || 0); } else progress.removeAttribute("value");
+  $("compact-suggestions").textContent = auto?.summary?.state === "ready" ? t("{count} suggestions", { count: n(auto.summary.total || 0) }) : "";
+  $("compact-people-open").hidden = !$("compact-suggestions").textContent;
+}
+document.addEventListener("background-status-changed", renderCompactStatus);
 
 document.addEventListener("ui-language-changed", () => {
   $("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
@@ -1290,6 +1326,8 @@ async function exercisePeopleUi() {
     check(!people.pageError, people.pageError || "Gallery query failed");
   };
   check(initialGalleryOptions.sort === (report.phase === "first" ? "date_desc" : "date_asc") && initialGalleryOptions.media === (report.phase === "first" ? "all" : "photo"), "Gallery preferences were not restored after restart");
+  check(report.phase === "first" ? initialGalleryOptions.fromYear == null && initialGalleryOptions.throughYear == null : initialGalleryOptions.fromYear === 2000 && initialGalleryOptions.throughYear === 2003, "Year period preference was not restored after restart");
+  people.changeGallery({ fromYear: null, throughYear: null }); await people.pageTask;
   await chooseGallery("date_desc", "all");
   const gallery = report.gallery = { mode: people.page.mode, firstPage: people.page.hits.length, total: people.page.total };
   check(gallery.mode === "gallery" && gallery.firstPage === 40 && gallery.total > 40, "The default person view must page unique labelled files");
@@ -1336,8 +1374,9 @@ async function exercisePeopleUi() {
   await invoke("debug_capture", { label: "people-gallery-viewer" });
   people.closeViewer();
   const allGalleryFiles = people.page.hits.slice(), filtered = report.galleryFilters = {};
-  const sortedDates = (hits, descending) => hits.every((hit, index) => !index || (hit.modified === hits[index - 1].modified ?
-    Number(PeopleState.idOf(hit)) > Number(PeopleState.idOf(hits[index - 1])) : descending ? hit.modified < hits[index - 1].modified : hit.modified > hits[index - 1].modified));
+  const albumTime = (hit) => hit.gallery_timestamp ?? hit.modified;
+  const sortedDates = (hits, descending) => hits.every((hit, index) => !index || (albumTime(hit) === albumTime(hits[index - 1]) ?
+    Number(PeopleState.idOf(hit)) > Number(PeopleState.idOf(hits[index - 1])) : descending ? albumTime(hit) < albumTime(hits[index - 1]) : albumTime(hit) > albumTime(hits[index - 1])));
   await chooseGallery("date_desc", "photo"); await allPages();
   filtered.photos = people.page.total; filtered.photoOnly = people.page.hits.every((hit) => ["image", "screenshot"].includes(hit.kind));
   filtered.newestSorted = sortedDates(people.page.hits, true); filtered.distinctDates = new Set(people.page.hits.map((hit) => hit.modified)).size;
@@ -1346,7 +1385,7 @@ async function exercisePeopleUi() {
   filtered.oldestSorted = sortedDates(people.page.hits, false); filtered.datesVisible = !!$("person-faces").querySelector(".people-tile-date")?.textContent;
   const accessibleTile = $("person-faces").querySelector(".people-tile"), accessibleHit = people.page.hits[0], accessibleLabel = accessibleTile.getAttribute("aria-label");
   filtered.accessibleMetadata = accessibleLabel.includes(t("View {name}", { name: nameOf(accessibleHit.path) })) && accessibleLabel.includes(t("Photograph")) &&
-    accessibleLabel.includes(t("File modification date") + ": " + accessibleTile.querySelector(".people-tile-date").textContent);
+    accessibleLabel.includes(t(accessibleHit.gallery_date_source === "taken" ? "Capture date" : "File modification date") + ": " + accessibleTile.querySelector(".people-tile-date").textContent);
   check(filtered.accessibleMetadata, "The real photo tile's accessible name must expose its full filename, media type and localized modification date");
   check(filtered.oldestSorted && filtered.datesVisible && people.page.total === filtered.photos, "Oldest photo order or visible file dates failed");
   await wait(() => visibleGalleryMedia().length > 0 && visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
@@ -1354,6 +1393,8 @@ async function exercisePeopleUi() {
   await chooseGallery("date_desc", "video");
   filtered.videos = people.page.total; filtered.videoOnly = people.page.hits.length > 0 && people.page.hits.every((hit) => hit.kind === "video");
   check(filtered.videoOnly && filtered.videos === allGalleryFiles.filter((hit) => hit.kind === "video").length, "Video filter leaked photos or repeated video frames");
+  filtered.provenanceVisible = !!$("person-faces").querySelector(".people-tile-date-source")?.textContent;
+  check(filtered.provenanceVisible, "File-date fallback must be visible without hover");
   await wait(() => visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
   const videoTile = $("person-faces").querySelector(".people-tile"); videoTile.click();
   const videoAccessibleLabel = videoTile.getAttribute("aria-label");
@@ -1369,6 +1410,80 @@ async function exercisePeopleUi() {
   const savedGallery = JSON.parse(localStorage.getItem("digup.people.gallery"));
   filtered.preferencesPersisted = savedGallery.sort === "date_asc" && savedGallery.media === "photo";
   check(filtered.rapidSwitch && filtered.preferencesPersisted, "A late gallery reply replaced the active filter or preferences were not saved");
+  const period = report.period = {};
+  const choosePeriod = async (from, through) => {
+    $("person-year-from").value = from; $("person-year-through").value = through;
+    $("person-year-through").dispatchEvent(new Event("change", { bubbles: true })); await people.pageTask; await allPages();
+    check(!people.pageError && !people.periodError, "Actual year-period query failed");
+  };
+  await choosePeriod(2000, 2003);
+  period.files = people.page.total;
+  period.captureBeforeCopy = people.page.hits.every((hit) => hit.gallery_date_source === "taken" && /^200[0-3]-/.test(hit.gallery_date) && new Date(hit.modified * 1000).getFullYear() === 2022);
+  period.unique = new Set(people.page.hits.map((hit) => hit.path)).size === people.page.total;
+  period.endpoints = [2000,2003].every((year) => people.page.hits.some((hit) => hit.gallery_date.startsWith(year + "-")));
+  check(period.files > 40 && period.captureBeforeCopy && period.unique && period.endpoints, "Capture period must include both ends across every page, ignoring recent copy dates");
+  $("person-faces").scrollTop = 0;
+  await wait(() => visibleGalleryMedia().length > 0 && visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
+  await invoke("debug_capture", { label: "people-period" });
+  if (report.phase === "first") {
+    let width = 1586, height = 992;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await invoke("debug_viewport", { width, height }); await new Promise((resolve) => setTimeout(resolve, 160));
+      const dx = 1586 - window.innerWidth, dy = 992 - window.innerHeight;
+      if (!dx && !dy) break;
+      width += dx; height += dy;
+    }
+    check(window.innerWidth === 1586 && window.innerHeight === 992, "Hero must use the exact approved CSS viewport");
+    $("person-faces").scrollTop = 0; await wait(() => visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
+    period.heroViewport = { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio };
+    await invoke("debug_capture", { label: "people-period-hero" });
+    await invoke("panel_height", { height: 900, graph: true }); await new Promise((resolve) => setTimeout(resolve, 160));
+  }
+  const generation = people.page.generation;
+  $("person-year-from").value = 2004; $("person-year-through").value = 2000;
+  $("person-year-through").dispatchEvent(new Event("change", { bubbles: true }));
+  period.invalidRetainsAlbum = !!people.periodError && people.page.generation === generation && people.page.total === period.files;
+  check(period.invalidRetainsAlbum, "An invalid interval must explain the error without replacing the saved album");
+  await choosePeriod(1900,1901); period.empty = people.page.total === 0 && !!$("person-message").textContent;
+  $("person-period-reset").click(); await people.pageTask; await allPages();
+  period.resetRestoresAlbum = people.page.total === filtered.photos;
+  await choosePeriod(2000,2003);
+  const slider = $("person-year-from-range"); slider.value = 2001;
+  slider.dispatchEvent(new Event("input", { bubbles: true })); slider.dispatchEvent(new Event("change", { bubbles: true })); await people.pageTask; await allPages();
+  period.sliderWorks = people.galleryOptions.fromYear === 2001 && people.page.hits.every((hit) => hit.gallery_date >= "2001-01-01");
+  await choosePeriod(2000,2003);
+  const savedPeriod = JSON.parse(localStorage.getItem("digup.people.gallery"));
+  period.persisted = savedPeriod.fromYear === 2000 && savedPeriod.throughYear === 2003;
+  period.passed = period.empty && period.resetRestoresAlbum && period.sliderWorks && period.persisted;
+  check(period.passed, "Actual empty/reset/slider or saved-period behavior failed");
+  const workspace = report.workspace = {};
+  $("people-info").open = true;
+  workspace.labelInformation = !!$("people-info").querySelector("p")?.textContent && (!people.notice || !!$("people-change-detail").textContent);
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  workspace.infoEscapeKeepsAlbum = !$("people-info").open && people.visible;
+  $("settings-toggle").click(); await wait(() => state.statsOpen && !!state.stats);
+  workspace.drawerKeepsAlbum = people.visible && !$("people-view").hidden && !$("workspace-drawer").hidden;
+  workspace.statusHeight = document.querySelector(".workspace-status").getBoundingClientRect().height;
+  workspace.detailsUnclipped = getComputedStyle($("index-detail")).whiteSpace === "normal";
+  workspace.languageAndAuto = !!$("workspace-drawer").querySelector(".language-select") && $("workspace-drawer").contains($("face-auto-enabled"));
+  await invoke("debug_capture", { label: "workspace-settings" });
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  workspace.escapeKeepsAlbum = !state.statsOpen && people.visible;
+  $("search-toggle").click(); workspace.searchNavigation = !people.visible && !graph.visible && !faceSearch.visible;
+  await invoke("debug_capture", { label: "workspace-search" });
+  $("graph-toggle").click(); await wait(() => graph.visible && !graph.loading);
+  workspace.graphNavigation = graph.model.nodes.size > 0 && $("graph-toggle").getAttribute("aria-current") === "page";
+  await invoke("debug_capture", { label: "workspace-graph" });
+  $("people-toggle").click(); await people.openTask; await allPages();
+  workspace.peopleNavigation = people.visible && $("people-toggle").getAttribute("aria-current") === "page";
+  await invoke("panel_height", { height: 900, graph: false }); await new Promise((resolve) => setTimeout(resolve, 200));
+  workspace.compactWidth = window.innerWidth;
+  workspace.noOverflow = [$("person-gallery-tools"), document.querySelector(".workspace-nav")].every((node) => node.scrollWidth <= node.clientWidth + 1);
+  $("person-faces").scrollTop = 0; await wait(() => visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
+  await invoke("debug_capture", { label: "people-period-compact" });
+  await invoke("panel_height", { height: 900, graph: true }); await new Promise((resolve) => setTimeout(resolve, 200));
+  workspace.passed = workspace.labelInformation && workspace.infoEscapeKeepsAlbum && workspace.drawerKeepsAlbum && workspace.statusHeight <= 36 && workspace.detailsUnclipped && workspace.languageAndAuto && workspace.escapeKeepsAlbum && workspace.searchNavigation && workspace.graphNavigation && workspace.peopleNavigation && workspace.noOverflow;
+  check(workspace.passed, "Actual workspace navigation, compact status, settings or responsive composition failed");
   await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total;
   if (!report.suggestionsCapturedBeforeDecision) { report.suggestionCapturedTotal = people.page.total; await capture("people-suggestions"); }
   $("person-rename-toggle").click(); $("person-name").value = renamed; $("person-rename").requestSubmit(); await people.mutationTask;

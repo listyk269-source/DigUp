@@ -5,8 +5,8 @@ const state = require("../shell/ui/people-state.js");
 const query = { seed_face_id: 7, minimum_cosine: .5, index_revision: 12 };
 
 test("gallery options validate preferences and bind every page to its date/media query", () => {
-  assert.deepEqual(state.galleryOptions(null), { sort: "date_desc", media: "all" });
-  assert.deepEqual(state.galleryOptions({ sort: "invalid", media: "bad" }), { sort: "date_desc", media: "all" });
+  assert.deepEqual(state.galleryOptions(null), { sort: "date_desc", media: "all", fromYear: null, throughYear: null });
+  assert.deepEqual(state.galleryOptions({ sort: "invalid", media: "bad" }), { sort: "date_desc", media: "all", fromYear: null, throughYear: null });
   const page = new state.PersonPage(), generation = page.open("person", "gallery", { sort: "date_asc", media: "photo" });
   assert.equal(page.request().gallery_sort, "date_asc"); assert.equal(page.request().gallery_media, "photo");
   const reply = { person: { id: "person" }, hits: [{ path: "one.jpg" }], index_revision: 1, people_revision: 2,
@@ -27,7 +27,22 @@ test("changing a gallery filter preserves its sort preference and restarts the g
   const view = Object.create(context.module.exports.prototype); view.page = { personId: "person" }; view.galleryOptions = { sort: "date_asc", media: "all" };
   let opened; view.selectPerson = async (...args) => { opened = args; };
   view.changeGallery({ media: "video" }); await view.pageTask;
-  assert.deepEqual(view.galleryOptions, { sort: "date_asc", media: "video" }); assert.deepEqual(opened, ["person", "gallery"]);
+  assert.deepEqual(view.galleryOptions, { sort: "date_asc", media: "video", fromYear: null, throughYear: null }); assert.deepEqual(opened, ["person", "gallery"]);
+});
+
+test("year periods bind pages, survive storage serialization and reject late range replies", () => {
+  for (const invalid of [{ fromYear: 2003, throughYear: 2000 }, { fromYear: -1, throughYear: 10000 }, { fromYear: true, throughYear: "NaN" }]) {
+    const value = state.galleryOptions(invalid); assert.equal(value.fromYear, null); assert.equal(value.throughYear, null);
+  }
+  const options = state.galleryOptions(JSON.parse(JSON.stringify({ fromYear: 2000, throughYear: 2003 })));
+  const page = new state.PersonPage(), old = page.open("person", "gallery", options);
+  assert.equal(page.request().gallery_from_year, 2000); assert.equal(page.request().gallery_through_year, 2003);
+  const reply = { person: { id: "person" }, gallery_from_year: 2000, gallery_through_year: 2003, gallery_year_min: 1999, gallery_year_max: 2026,
+    hits: [], next_offset: 0, total: 0, index_revision: 1, people_revision: 2 };
+  assert.equal(page.merge(reply, old), true); assert.equal(page.yearMin, 1999); assert.equal(page.yearMax, 2026);
+  assert.throws(() => page.merge({ ...reply, gallery_through_year: 2002 }, old), /filters changed/);
+  page.open("person", "gallery", { fromYear: 2004 }); assert.equal(page.merge(reply, old), false);
+  assert.equal(page.request().gallery_through_year, null);
 });
 
 test("file gallery deduplicates repeated face/frame observations across pages without normalizing paths", () => {

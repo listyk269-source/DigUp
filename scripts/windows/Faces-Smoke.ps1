@@ -21,11 +21,27 @@ $index = Join-Path $testRoot 'Private index'
 $settings = Join-Path $testRoot 'settings.json'
 New-Item -ItemType Directory -Path $fixture | Out-Null
 Copy-Item -LiteralPath $fixturePhoto -Destination "$fixture/FACE742 crew.jpg"
+# Public fixture pixels are unchanged. Add a minimal camera DateTimeOriginal APP1 segment to copies,
+# then give them recent mtimes: this exercises actual EXIF extraction rather than injecting DB replies.
+function Write-FixtureCaptureDate([string]$Path, [string]$Date) {
+    $bytes=[IO.File]::ReadAllBytes($Path)
+    $stream=[IO.MemoryStream]::new(); $writer=[IO.BinaryWriter]::new($stream)
+    try {
+        $writer.Write([Text.Encoding]::ASCII.GetBytes("Exif`0`0II")); $writer.Write([uint16]42); $writer.Write([uint32]8)
+        $writer.Write([uint16]1); $writer.Write([uint16]0x8769); $writer.Write([uint16]4); $writer.Write([uint32]1); $writer.Write([uint32]26); $writer.Write([uint32]0)
+        $writer.Write([uint16]1); $writer.Write([uint16]0x9003); $writer.Write([uint16]2); $writer.Write([uint32]20); $writer.Write([uint32]44); $writer.Write([uint32]0)
+        $writer.Write([Text.Encoding]::ASCII.GetBytes($Date+"`0")); $writer.Flush(); $payload=$stream.ToArray()
+        $length=$payload.Length+2
+        $segment=[byte[]]@(255,216,255,225,($length -shr 8),($length -band 255)) + $payload + $bytes[2..($bytes.Length-1)]
+        [IO.File]::WriteAllBytes($Path,$segment)
+    } finally { $writer.Dispose(); $stream.Dispose() }
+}
 $fixtureDate = [DateTime]::new(2022,1,1,0,0,0,[DateTimeKind]::Utc)
 [IO.File]::SetLastWriteTimeUtc("$fixture/FACE742 crew.jpg", $fixtureDate)
 for ($number=1; $number -le 42; $number++) {
     $photoPath = Join-Path $fixture ('FACE742 Снимок {0:D2}.jpg' -f $number)
     Copy-Item -LiteralPath $fixturePhoto -Destination $photoPath
+    Write-FixtureCaptureDate $photoPath ('{0}:02:{1:D2} 12:00:00' -f (2000+(($number-1)%4)), (1+[int][math]::Floor(($number-1)/4)))
     [IO.File]::SetLastWriteTimeUtc($photoPath, $fixtureDate.AddDays($number))
 }
 $cli = Join-Path $package 'helper/digup.exe'
@@ -106,6 +122,7 @@ foreach ($pass in $passes) {
         $album=$peopleReport.albumAccess
         $gallery=$peopleReport.gallery
         $filters=$peopleReport.galleryFilters
+        if (!$peopleReport.period.passed -or !$peopleReport.workspace.passed) { throw 'Actual year-range/EXIF or workspace navigation checks failed.' }
         if (!$filters -or !$filters.newestSorted -or !$filters.oldestSorted -or !$filters.photoOnly -or !$filters.videoOnly -or
             !$filters.filteredViewer -or !$filters.rapidSwitch -or !$filters.preferencesPersisted -or !$filters.datesVisible -or !$filters.accessibleMetadata -or
             $filters.photos -le 40 -or $filters.distinctDates -le 1) { throw 'Actual date/media gallery filtering, paging or preference persistence failed.' }
@@ -127,7 +144,9 @@ foreach ($pass in $passes) {
             throw 'The native suggestion capture must show both genuine new proposals before decisions.'
         }
         if ($pass -eq 'verify' -and !$peopleReport.persistenceVerified) { throw 'Accepted/rejected labels did not survive restart.' }
-        foreach ($phase in @('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-gallery-filtered','people-gallery-videos')) {
+        $peopleCaptures=@('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-gallery-filtered','people-gallery-videos','people-period','people-period-compact','workspace-settings','workspace-search','workspace-graph')
+        if($pass -eq 'first') { $peopleCaptures += 'people-period-hero' }
+        foreach ($phase in $peopleCaptures) {
             $capture = Join-Path $index "capture-$phase.png"
             $bytes = [IO.File]::ReadAllBytes($capture)
             if ($bytes.Length -lt 24 -or [Convert]::ToHexString($bytes[0..7]) -ne '89504E470D0A1A0A') { throw 'Invalid native People PNG.' }

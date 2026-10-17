@@ -405,6 +405,7 @@ class FaceAutoStatus {
     if (busy && state.total > 0) { bar.max = state.total; bar.value = Math.min(state.total, state.done || 0); } else bar.removeAttribute("value");
     const open = this.el("face-auto-open"); open.disabled = this.preferenceBusy || !!this.faces.actionBusy || state.state === "cancelling";
     open.textContent = t(busy ? "Pause indexing" : state.models_ready && state.worker_available ? "Faces" : "Set up Faces");
+    document.dispatchEvent(new Event("background-status-changed"));
   }
   async refreshSummary(retry = false) {
     if (this.summaryBusy) {
@@ -439,6 +440,7 @@ class FaceAutoStatus {
     const title = summary?.state === "ready" ? t("{count} pending person-observation suggestions", { count: summary.total || 0 }) : summary?.state === "error" || this.summaryError ?
       t("Suggestion counts unavailable. Open People and refresh.") : t("Calculating pending person-observation suggestions…");
     badge.title = title; this.el("people-toggle").setAttribute("aria-label", t("People") + ": " + title);
+    document.dispatchEvent(new Event("background-status-changed"));
   }
   invalidateScope() {
     this.summaryGeneration++; this.summary = null; this.summaryDue = 0; this.people.backgroundSummaryKey = null;

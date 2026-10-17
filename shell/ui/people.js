@@ -31,6 +31,18 @@ class PeopleView {
     for (const button of document.querySelectorAll("[data-person-mode]")) button.onclick = () => { this.pageTask = this.selectPerson(this.page.personId, button.dataset.personMode); };
     this.el("person-gallery-sort").onchange = () => this.changeGallery({ sort: this.el("person-gallery-sort").value });
     for (const button of document.querySelectorAll("[data-gallery-media]")) button.onclick = () => this.changeGallery({ media: button.dataset.galleryMedia });
+    for (const end of ["from", "through"]) {
+      this.el("person-year-" + end).onchange = () => this.commitPeriod();
+      const slider = this.el("person-year-" + end + "-range");
+      slider.oninput = () => {
+        const other = this.el("person-year-" + (end === "from" ? "through" : "from") + "-range");
+        if (end === "from" && +slider.value > +other.value || end === "through" && +slider.value < +other.value) other.value = slider.value;
+        for (const key of ["from", "through"]) this.el("person-year-" + key).value = this.el("person-year-" + key + "-range").value;
+        this.drawRail();
+      };
+      slider.onchange = () => this.commitPeriod();
+    }
+    this.el("person-period-reset").onclick = () => { this.periodError = null; this.changeGallery({ fromYear: null, throughYear: null }); };
     this.el("person-more").onclick = () => { this.pageTask = this.loadPage(true); };
     this.el("person-select-loaded").onclick = () => {
       const keys = this.page.hits.map((face) => face.anchor_key || PeopleState.idOf(face));
@@ -100,9 +112,46 @@ class PeopleView {
     this.el("person-rename").hidden = true; this.render(); return this.loadPage();
   }
   changeGallery(change) {
+    this.periodError = null;
     this.galleryOptions = PeopleState.galleryOptions({ ...this.galleryOptions, ...change });
     try { localStorage.setItem("digup.people.gallery", JSON.stringify(this.galleryOptions)); } catch { /* The current selection still works without storage. */ }
     this.pageTask = this.selectPerson(this.page.personId, "gallery");
+  }
+  commitPeriod() {
+    const first = this.el("person-year-from"), last = this.el("person-year-through");
+    const fromYear = first.value === "" ? null : Number(first.value), throughYear = last.value === "" ? null : Number(last.value);
+    const valid = first.checkValidity() && last.checkValidity() && (fromYear == null || throughYear == null || fromYear <= throughYear);
+    this.periodError = valid ? null : t("The first year must not exceed the last. Use years from 1 to 9999.");
+    this.el("person-period-error").textContent = this.periodError || "";
+    first.setAttribute("aria-invalid", String(!valid)); last.setAttribute("aria-invalid", String(!valid));
+    if (valid) this.changeGallery({ fromYear, throughYear });
+  }
+  drawRail() {
+    const first = this.el("person-year-from-range"), last = this.el("person-year-through-range");
+    const span = +first.max - +first.min || 1;
+    const rail = this.el("person-year-rail");
+    rail.style.setProperty("--range-start", ((+first.value - +first.min) / span * 100) + "%");
+    rail.style.setProperty("--range-end", ((+last.value - +first.min) / span * 100) + "%");
+    first.setAttribute("aria-valuetext", first.value); last.setAttribute("aria-valuetext", last.value);
+  }
+  renderPeriod(person) {
+    const options = this.galleryOptions, now = new Date().getFullYear();
+    const min = Math.min(this.page.yearMin ?? 1900, options.fromYear ?? 9999, options.throughYear ?? 9999);
+    const max = Math.max(this.page.yearMax ?? now, options.fromYear ?? 1, options.throughYear ?? 1, min + 1);
+    for (const key of ["from", "through"]) {
+      const input = this.el("person-year-" + key), slider = this.el("person-year-" + key + "-range");
+      input.value = options[key + "Year"] ?? ""; input.disabled = !person || !!this.mutationBusy;
+      input.setAttribute("aria-invalid", String(!!this.periodError));
+      slider.min = min; slider.max = max; slider.value = options[key + "Year"] ?? (key === "from" ? min : max); slider.disabled = input.disabled;
+    }
+    this.el("person-period-error").textContent = this.periodError || "";
+    this.el("person-period-label").textContent = options.fromYear == null && options.throughYear == null ? t("All dates") :
+      (options.fromYear ?? min) + " — " + (options.throughYear ?? max);
+    this.el("person-period-reset").disabled = options.fromYear == null && options.throughYear == null && !this.periodError;
+    const ticks = this.el("person-year-ticks"); ticks.replaceChildren();
+    const intervals = Math.min(6, max - min);
+    for (let index = 0; index <= intervals; index++) ticks.append(this.text("span", "", Math.round(min + (max - min) * index / intervals)));
+    this.drawRail();
   }
   async loadPage(more = false) {
     if (!this.page.personId || this.pageBusy) return;
@@ -121,15 +170,13 @@ class PeopleView {
   faceRowKey(face) { return face.anchor_key || PeopleState.idOf(face); }
   render() { this.renderStatus(); this.renderDirectory(); this.renderPage(); this.renderUndo(); }
   renderStatus() {
-    this.el("people-status").textContent = this.mutationError ? t(this.mutationError) : this.directoryError ? t(this.directoryError) : this.notice ? (this.undoOperation ? t("Changes saved locally") : this.notice) : "";
-    if (!this.mutationError && !this.directoryError && this.auto?.summary) {
-      const summary = this.auto.summary;
-      const pending = summary.state === "ready" ? t("Pending person-observation suggestions: {count}", { count: summary.total || 0 }) :
-        summary.state === "computing" ? t("Calculating pending person-observation suggestions…") : summary.state === "error" ? t("Suggestion counts unavailable. Open People and refresh.") : "";
-      if (pending) this.el("people-status").textContent += (this.el("people-status").textContent ? " · " : "") + pending;
-    }
+    this.el("people-status").textContent = this.mutationError ? t(this.mutationError) : this.directoryError ? t(this.directoryError) : this.notice ? t("Changes saved locally") : "";
+    this.el("people-status").title = this.notice || "";
     if (!this.mutationError && !this.directoryError && this.auto?.summaryError) this.el("people-status").textContent += " " + t("Suggestion counts unavailable. Open People and refresh.");
     this.el("people-status").classList.toggle("face-error", !!this.mutationError || !!this.directoryError);
+    this.el("people-status").parentElement.hidden = !this.mutationError && !this.directoryError && !this.auto?.summaryError;
+    this.el("people-announcement").textContent = this.mutationError || this.directoryError || this.notice || "";
+    this.el("people-change-detail").textContent = this.notice || "";
     this.el("people-refresh").disabled = !!this.mutationBusy;
     for (const form of ["people-create", "face-person-create", "person-rename"]) for (const control of this.el(form).querySelectorAll("input,button")) control.disabled = !!this.mutationBusy;
   }
@@ -139,6 +186,8 @@ class PeopleView {
     for (const person of people) {
       const button = this.text("button", ""); button.type = "button"; button.dataset.personId = String(person.id); button.setAttribute("aria-pressed", String(PeopleState.samePerson(person.id, this.page.personId)));
       button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22V19A8 8 0 0 1 20 19V22"/></svg>';
+      const cover = PeopleState.samePerson(person.id, this.page.personId) && ["gallery", "assigned"].includes(this.page.mode) ? this.page.hits[0] : null;
+      if (cover) button.replaceChildren(this.faceSearch.crop(cover));
       const label = this.text("span", ""); label.append(this.text("strong", "", person.name), this.text("small", "", t("{files} files · {count} assigned faces", { files: person.assigned_file_count || 0, count: person.assigned_count || 0 })));
       const summary = this.auto?.summary, pending = summary?.state === "ready" ? summary.people?.find((item) => PeopleState.samePerson(item.person_id, person.id))?.pending_count : null;
       if (Number.isFinite(pending) && pending > 0) label.append(this.text("small", "people-person-pending", t("{count} pending observations", { count: pending })));
@@ -150,9 +199,12 @@ class PeopleView {
     const person = this.person(), mode = this.page.mode;
     if (this.rowsLanguage !== I18n.language) { this.resetRows(); this.rowsLanguage = I18n.language; }
     this.el("person-title").textContent = person?.name || t("Choose a person");
+    this.el("person-album-count").textContent = person ? t("{count} files", { count: person.assigned_file_count || 0 }) : "";
     this.el("person-rename-toggle").disabled = !person || !!this.mutationBusy;
     for (const button of document.querySelectorAll("[data-person-mode]")) { button.setAttribute("aria-pressed", String(button.dataset.personMode === mode)); button.disabled = !person || !!this.pageBusy; }
     const gallery = mode === "gallery";
+    const statusNode = this.el("person-message");
+    if (gallery) this.el("gallery-count-slot").append(statusNode); else this.el("person-gallery-tools").after(statusNode);
     this.el("person-gallery-tools").hidden = !gallery;
     this.el("person-faces").classList.toggle("people-gallery", gallery);
     this.el("person-faces").parentElement.classList.toggle("people-results-gallery", gallery);
@@ -220,6 +272,7 @@ class PeopleView {
   renderGallery(person) {
     const list = this.el("person-faces"), retained = new Set(), message = this.el("person-message");
     const options = this.galleryOptions;
+    this.renderPeriod(person);
     this.el("person-gallery-sort").value = options.sort; this.el("person-gallery-sort").disabled = !person || !!this.mutationBusy;
     for (const button of document.querySelectorAll("[data-gallery-media]")) {
       button.setAttribute("aria-pressed", String(button.dataset.galleryMedia === options.media)); button.disabled = !person || !!this.mutationBusy;
@@ -227,7 +280,7 @@ class PeopleView {
     message.classList.toggle("face-error", !!this.pageError);
     message.textContent = this.pageError ? t(this.pageError) : this.pageBusy ? t("Loading labelled files…") : !person ? t("Choose a person") :
       this.page.total ? t("{loaded} of {total} files loaded", { loaded: this.page.hits.length, total: this.page.total }) :
-        t(options.media !== "all" && person?.assigned_file_count ? "No labelled files match this filter. Choose All media." : "No labelled files yet. Confirm suggestions or assign a face to this person.");
+        t((options.media !== "all" || options.fromYear != null || options.throughYear != null) && person?.assigned_file_count ? "No labelled files match this period or media type. Reset the filters." : "No labelled files yet. Confirm suggestions or assign a face to this person.");
     const empty = list.querySelector(".people-gallery-empty"); if (empty) empty.remove();
     for (const hit of this.page.hits) {
       const key = PeopleState.fileKey(hit); retained.add(key);
@@ -244,10 +297,15 @@ class PeopleView {
       };
       this.thumbnailLoads.set(stage, load); this.thumbnailObserver.observe(stage);
       const mediaLabel = hit.kind === "video" ? t("Video") + (Number.isFinite(hit.loc) ? " · " + this.clock(hit.loc) : "") : t("Photograph");
-      const dateLabel = Number.isFinite(hit.modified) ? new Date(hit.modified * 1000).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" }) : "";
+      const albumDate = hit.gallery_date ? new Date(hit.gallery_date + "T12:00:00") : Number.isFinite(hit.modified) ? new Date(hit.modified * 1000) : null;
+      const dateLabel = albumDate ? albumDate.toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" }) : "";
+      const dateSource = t(hit.gallery_date_source === "taken" ? "Capture date" : "File modification date");
       const caption = this.text("span", "people-tile-caption"); caption.append(this.text("strong", "", this.nameOf(hit.path)), this.text("small", "", mediaLabel));
-      if (dateLabel) caption.append(this.text("small", "people-tile-date", dateLabel));
-      tile.setAttribute("aria-label", [t("View {name}", { name: this.nameOf(hit.path) }), mediaLabel, dateLabel ? t("File modification date") + ": " + dateLabel : ""].filter(Boolean).join(". "));
+      if (dateLabel) {
+        const date = this.text("small", "people-tile-date", dateLabel); date.title = dateSource; caption.append(date);
+        if (hit.gallery_date_source !== "taken") caption.append(this.text("small", "people-tile-date-source", dateSource));
+      }
+      tile.setAttribute("aria-label", [t("View {name}", { name: this.nameOf(hit.path) }), mediaLabel, dateLabel ? dateSource + ": " + dateLabel : ""].filter(Boolean).join(". "));
       tile.append(stage, caption); tile.onclick = () => this.openViewer(key, tile); list.append(tile); this.rows.set(key, { row: tile });
     }
     for (const [key, entry] of this.rows) if (!retained.has(key)) { entry.row.remove(); this.rows.delete(key); }

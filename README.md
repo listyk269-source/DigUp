@@ -171,7 +171,7 @@ libraries; it does not depend on a user's FFmpeg or llama.cpp in `PATH` and does
 On first launch, choose folders and download the model (about 865 MB, checked against pinned SHA-256 hashes;
 interrupted downloads resume). Open the search panel with **Ctrl+Shift+Space**. Code folders and login startup
 are opt-in. Search loads 40 matches at a time; **Show more** continues through every qualifying match with no
-six-file limit per group. The **Index** button shows counts by type, pending/failed files, database size,
+six-file limit per group. The gear or bottom **Details** opens index/settings with counts by type, pending/failed files, database size,
 fragments/vectors and recently indexed files. Statistics stay local and do not record query or opening history.
 The tray offers folder settings, pause/resume, retrying the model download, and Quit. Subsequent
 indexing and searching are local. Installation needs the Microsoft WebView2 runtime; if absent the installer
@@ -245,7 +245,7 @@ Face weights download separately on first use; see [Face search](docs/face-searc
 privacy, accuracy limits and validation. Object detection and Windows OCR extraction are not included.
 
 **People** opens labelled files as a deduplicated whole-photo tile gallery, with click-to-preview,
-Left/Right navigation, progressive loading, file-date sorting and Photo/Video filters. It also adds local face labels, assignment to selected or all matches, rejected mistakes,
+Left/Right navigation, progressive loading, capture-date sorting (file-date fallback), an inclusive year-range rail and Photo/Video filters. Search, Graph and People have separate navigation; the gear or compact bottom status opens index details and settings. People also adds local face labels, assignment to selected or all matches, rejected mistakes,
 renaming, undo and unconfirmed label suggestions after new media are indexed. Once face search is enabled,
 new photos and videos are processed automatically, with background progress, persistent pause/resume and
 pending proposal counts. See [People](docs/people.md).

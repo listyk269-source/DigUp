@@ -23,7 +23,7 @@ Several observations of the same video can retain their separate matched timesta
 
 ## Browse and correct People
 
-Open **People** from the search header. Filter labels by name and open a person: **Gallery** shows
+Open **People** from the workspace navigation. Filter labels by name and open a person: **Gallery** shows
 the whole photograph in each tile, with one tile per labelled file. Several labelled faces or video
 frames in the same file do not create duplicates. Video tiles show a representative matched frame;
 the individual timestamps remain available in **Face annotations**.
@@ -35,13 +35,27 @@ repeating face inference. **Face annotations**, **Suggestions**, **Excluded** an
 retain their separate observation-level checkboxes and label corrections; gallery navigation itself
 does not change labels. Rename the person without running inference again.
 
-Use **File modification date → Newest first / Oldest first** and **All media / Photos / Videos**
-to narrow an album. Newest first is the UI default. Photos includes images and screenshots;
-Videos shows one representative labelled frame per video. The date under each tile is the indexed
-file modification date, **not EXIF capture time**. Both choices persist locally in this WebView
-profile across people, review tabs and app restarts. Changing them starts a fresh first page and
-closes the old viewer. Filtering and stable date ordering happen before pagination; arrow browsing
-stays within that filtered order, including subsequent pages. No face inference or reindex is needed.
+Use **Newest first / Oldest first**, **All media / Photos / Videos**, and the **Period** year rail
+to narrow an album. Drag either handle or enter **From year / Through year**, for example 2000–2003;
+both endpoint years are included. Blank ends mean no bound; **Reset period** returns to all dates.
+Invalid intervals explain the error and keep the current album. Photos includes images and screenshots;
+Videos shows one representative labelled frame per video.
+
+Dates and ordering prefer valid indexed EXIF `DateTimeOriginal`. Its camera-local calendar day is
+preserved without guessing a timezone. Missing or invalid EXIF falls back to the indexed file
+modification date in the operating system's local timezone. Hover a tile's date to see its source;
+the source is also included in its accessible name. Video currently uses file dates. Capture metadata
+must already be in the ordinary index: updating the app does not invent missing EXIF or rerun extraction.
+All three preferences persist in the local WebView profile across people, tabs and restarts.
+Changing them starts a fresh page and closes the old viewer. The complete album is filtered and
+stably sorted before pagination; arrow browsing stays within that order. No face inference or schema
+migration is needed. A selected period does not change any labels.
+
+Search, Graph and People have separate navigation below the global search field. **Find faces** keeps
+the face investigation workflow available. The gear or compact bottom status opens **Index and settings**:
+language, automatic face indexing, actual progress, and index statistics. This drawer leaves the current
+album open. **Esc** closes it and returns focus. During folder scanning, the total is explicitly unknown;
+the footer does not claim that zero files remain. Detailed counters and errors wrap inside the drawer.
 
 Assigned albums open directly from saved labels, without scanning every face descriptor or starting
 YuNet/SFace again. The directory shows both unique file counts and labelled observations: several
@@ -136,6 +150,10 @@ then adds new photographs through the real ordinary index and face backfill befo
 and restart persistence. It does not replace face inference or the native media player with mocks.
 The People phases also verify actual automatic scrolling past 40, decoded later-page photographs,
 deferred offscreen thumbnails and preserved DOM/media elements when checking observations.
+Copies of the verified public JPEG receive real EXIF dates in 2000–2003 and recent file mtimes. The native
+smoke verifies EXIF extraction, period endpoints, more than 40 filtered files, empty/invalid/reset and
+slider cases, persisted year bounds, navigation/settings, and a compact desktop width. It preserves the
+public original and does not inject date replies into the GUI.
 The automatic smoke additionally copies a real photograph and H.264 video while the GUI is running.
 The native filesystem watcher, ordinary indexer and background face scheduler must publish their
 actual observations without a `face_start` request. It verifies progress, proposal counts after

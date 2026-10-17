@@ -595,6 +595,31 @@ fn debug_setup_snapshot(shell: State<'_, Arc<Shell>>, report: Value) {
     }
 }
 
+/// A bounded CSS viewport override for an isolated People design check only.
+#[tauri::command]
+fn debug_viewport(
+    app: AppHandle,
+    shell: State<'_, Arc<Shell>>,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    if !shell.options.debug_isolated
+        || !shell.options.debug_people
+        || !width.is_finite()
+        || !height.is_finite()
+        || !(600.0..=1800.0).contains(&width)
+        || !(400.0..=1100.0).contains(&height)
+    {
+        return Err(
+            "Viewport override requires an isolated People smoke and bounded dimensions".into(),
+        );
+    }
+    app.get_webview_window("panel")
+        .ok_or("Missing panel")?
+        .set_size(LogicalSize::new(width, height))
+        .map_err(|error| error.to_string())
+}
+
 /// Native pixels of the test WebView only; no desktop capture and no arbitrary destination.
 #[tauri::command]
 async fn debug_capture(
@@ -621,6 +646,12 @@ async fn debug_capture(
             "people-gallery-viewer",
             "people-gallery-filtered",
             "people-gallery-videos",
+            "people-period",
+            "people-period-compact",
+            "people-period-hero",
+            "workspace-settings",
+            "workspace-search",
+            "workspace-graph",
             "people-suggestions",
             "people-rename",
             "auto-waiting",
@@ -756,6 +787,7 @@ fn main() {
             debug_search_options,
             debug_report,
             debug_capture,
+            debug_viewport,
             graph_annotations,
             save_graph_annotations,
             debug_setup_snapshot,
