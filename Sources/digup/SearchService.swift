@@ -16,6 +16,9 @@ import LlamaRuntime
 ///   {"op":"search_page", "cursor":…, "offset":40, "limit":40} → next page of that stable ranking.
 ///         Complete FTS candidate retrieval; no 100-file/1000-segment cutoff. Metadata is read per page.
 ///         New queries/folder settings replace the cursor. Reload preserves the ranking; deleted files are skipped.
+///         Optional integer from_year/through_year (1...9999) filter inclusive indexed capture/file years before
+///         candidate budgets and pagination. Empty q with bounds or kinds browses dates without an encoder.
+///   {"op":"search_calendar","kinds":[…]} → year_min/year_max for selected folders, without opening media.
 ///   {"op":"index_stats"} → selected-folder metadata counts, recent indexed files and whole-database size.
 ///   {"op":"face_status"} → opt-in face-job state, file/frame/face counts, device and fallback reason.
 ///   {"op":"face_start","download":true,"device":"auto|cpu|gpu","sample_seconds":2} → starts/resumes the
@@ -67,6 +70,8 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private var snapshot: SearchSnapshot?
     private var snapshotToken = ""
     private var snapshotMeaning = false
+    private var snapshotPeriod: MediaDates.Period?
+    private var snapshotBrowsing = false
     private let lock = NSLock()
     private let output = NSLock()
     /// Renders for previews: two at a time, beside the request loop, each made once per file version.
@@ -247,10 +252,19 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 "total": related.total, "next_offset": next, "has_more": next < related.total,
                 "basis": related.basis, "vector_source": selected.vectorSource as Any? ?? NSNull(),
                 "ms": Int(Date().timeIntervalSince(started) * 1000)]
+        case "search_calendar":
+            let kinds = (request["kinds"] as? [String]).map { Set($0.compactMap(FileKind.init(rawValue:))) }
+            let years = try searcher.calendarYears(kinds: kinds, acceptsPath: { [self] in accepts($0, code: false) })
+            return ["year_min": years.min as Any? ?? NSNull(), "year_max": years.max as Any? ?? NSNull()]
         case "search", "search_page":
             if op == "search_page", let cursor = request["cursor"] as? String {
                 guard cursor == snapshotToken, snapshot != nil else {
                     return ["ok": false, "expired": true, "error": "Search changed. Refresh results to continue."]
+                }
+                if request.keys.contains("from_year") || request.keys.contains("through_year") {
+                    guard try searchPeriod(request) == snapshotPeriod else {
+                        return ["ok": false, "expired": true, "error": "Search changed. Refresh results to continue."]
+                    }
                 }
                 return try readPage(request)
             }
@@ -258,6 +272,9 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             let code = request["code"] as? Bool ?? false
             let kinds = (request["kinds"] as? [String]).map { Set($0.compactMap(FileKind.init(rawValue:))) }
             let limit = request["limit"] as? Int ?? 40
+            let period = try searchPeriod(request)
+            let browsing = !code && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                (period.from != nil || period.through != nil || kinds != nil)
             let wantMeaning = request["meaning"] as? Bool ?? true
             let prefixLast = request["prefix_last"] as? Bool ?? false
             let started = Date()
@@ -278,10 +295,11 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             let embedded = Date()
             if op == "search_page" {
                 let selected = code ? codeSearcher : searcher
-                snapshot = try selected?.snapshot(text, queryVector: vector, kinds: kinds, prefixLast: prefixLast,
+                snapshot = try selected?.snapshot(text, queryVector: vector, kinds: kinds, prefixLast: prefixLast, period: period, browse: browsing,
                     acceptsPath: { [self] in accepts($0, code: code) })
                 snapshotToken = UUID().uuidString
                 snapshotMeaning = vector != nil
+                snapshotPeriod = period; snapshotBrowsing = browsing
                 var reply = try readPage(request)
                 reply["ms"] = ["embed": Int(embedded.timeIntervalSince(started) * 1000),
                                "search": Int(Date().timeIntervalSince(embedded) * 1000)]
@@ -291,11 +309,11 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             let hits: [SearchHit]
             if code {
                 guard let codeSearcher else { return ["hits": [], "strong": 0, "meaning": false] }
-                hits = try codeSearcher.search(text, queryVector: vector, limit: limit, prefixLast: prefixLast,
+                hits = try codeSearcher.search(text, queryVector: vector, limit: limit, prefixLast: prefixLast, period: period,
                     acceptsPath: { [self] in FolderSelection.isSearched($0, folders: codeRoots, skipped: codeSkipped) })
                     .filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }
             } else {
-                hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast,
+                hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast, period: period,
                     acceptsPath: { [self] path in
                         (roots.map { FolderSelection.isSearched(path, folders: $0, skipped: skipped) } ?? true)
                             && !types.contains((path as NSString).pathExtension.lowercased())
@@ -373,6 +391,18 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             && !types.contains((path as NSString).pathExtension.lowercased())
     }
 
+    private func searchPeriod(_ request: [String: Any]) throws -> MediaDates.Period {
+        func year(_ key: String) throws -> Int? {
+            guard let value = request[key], !(value is NSNull) else { return nil }
+            guard let number = value as? NSNumber, String(cString: number.objCType) != "c",
+                  number.doubleValue.isFinite, number.doubleValue == Double(number.intValue),
+                  (1...9999).contains(number.intValue) else { throw CLIError("Choose a valid year range: the first year must not exceed the last.") }
+            return number.intValue
+        }
+        do { return try MediaDates.Period(from: year("from_year"), through: year("through_year")) }
+        catch { throw CLIError("Choose a valid year range: the first year must not exceed the last.") }
+    }
+
     private func readPage(_ request: [String: Any]) throws -> [String: Any] {
         lastQuery = Date()
         let total = snapshot?.total ?? 0
@@ -382,7 +412,8 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         let hits = try (snapshot?.page(offset: offset, limit: limit) ?? [])
             .filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }
         return ["hits": hits.map(hitFields), "strong": hits.prefix { $0.score >= (snapshot?.strongThreshold ?? 0) }.count,
-                "meaning": snapshotMeaning, "total": total, "offset": offset, "next_offset": next,
+                "meaning": snapshotMeaning, "browsing": snapshotBrowsing,
+                "from_year": snapshotPeriod?.from as Any? ?? NSNull(), "through_year": snapshotPeriod?.through as Any? ?? NSNull(), "total": total, "offset": offset, "next_offset": next,
                 "has_more": next < total, "cursor": snapshotToken]
     }
 
@@ -518,6 +549,9 @@ func hitFields(_ hit: SearchHit) -> [String: Any] {
     var row: [String: Any] = ["path": hit.path, "kind": hit.kind.rawValue, "segment": hit.segment.rawValue,
                               "segment_id": hit.segmentID, "score": hit.score, "modified": hit.modified,
                               "size": hit.size, "info": hit.info]
+    if let date = MediaDates.date(captured: hit.info["taken"], modified: hit.modified) {
+        row["media_date"] = date.day; row["media_date_source"] = date.source
+    }
     if let z = hit.z { row["z"] = z }
     if let cosine = hit.cosine { row["cosine"] = cosine }
     if let rank = hit.keywordRank { row["keyword_rank"] = rank }

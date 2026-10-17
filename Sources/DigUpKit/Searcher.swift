@@ -71,6 +71,7 @@ public final class Searcher {
     private var rowSetsScale: [Bool] = []
     private var fileKind: [Int64: FileKind] = [:]
     private var filePath: [Int64: String] = [:]
+    private var indexedDates: [Int64: MediaDates.MediaDate]?
     public private(set) var vectorSource: String?
     /// False after `releaseVectors()` (or `loadVectors: false`): keyword search still works, and the next search with
     /// a query vector loads them again.
@@ -134,6 +135,7 @@ public final class Searcher {
     }
 
     private func reloadFiles() throws {
+        indexedDates = nil
         fileKind.removeAll(keepingCapacity: true)
         filePath.removeAll(keepingCapacity: true)
         try store.db.query("SELECT id, kind, path FROM files") { row in
@@ -141,6 +143,26 @@ public final class Searcher {
             filePath[row.int(0)] = row.text(2) ?? ""
         }
         vectorSource = try store.meta("vector_source")
+    }
+
+    /// Read indexed date metadata once per refreshed searcher. No source files or models are opened.
+    private func mediaDates() throws -> [Int64: MediaDates.MediaDate] {
+        if let indexedDates { return indexedDates }
+        var dates: [Int64: MediaDates.MediaDate] = [:]
+        try store.db.query("SELECT id, mtime, CASE WHEN json_valid(info) THEN json_extract(info, '$.taken') END FROM files") { row in
+            dates[row.int(0)] = MediaDates.date(captured: row.text(2), modified: row.double(1))
+        }
+        indexedDates = dates
+        return dates
+    }
+
+    public func calendarYears(kinds: Set<FileKind>? = nil, acceptsPath: ((String) -> Bool)? = nil) throws -> (min: Int?, max: Int?) {
+        let dates = try mediaDates()
+        let years = filePath.compactMap { id, path -> Int? in
+            guard acceptsPath?(path) ?? true, kinds == nil || fileKind[id].map({ kinds!.contains($0) }) ?? false else { return nil }
+            return dates[id]?.year
+        }
+        return (years.min(), years.max())
     }
 
     /// How much finding the query's words counts against meaning (`search`). Code's words count for less: they're
@@ -291,27 +313,30 @@ public final class Searcher {
     }
 
     public func search(_ text: String, queryVector: [Float]?, kinds: Set<FileKind>? = nil, limit: Int = 20,
-                       zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false,
+                       zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false, period: MediaDates.Period? = nil,
                        acceptsPath: ((String) -> Bool)? = nil) throws -> [SearchHit] {
         try snapshot(text, queryVector: queryVector, kinds: kinds, zGate: zGate, wordWeight: wordWeight,
-                     prefixLast: prefixLast, acceptsPath: acceptsPath, complete: false).page(offset: 0, limit: limit)
+                     prefixLast: prefixLast, period: period, acceptsPath: acceptsPath, complete: false).page(offset: 0, limit: limit)
     }
 
     /// Complete candidate retrieval for paged search. The existing CLI/Mac top-k API retains its candidate budget.
     public func snapshot(_ text: String, queryVector: [Float]?, kinds: Set<FileKind>? = nil,
-                         zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false,
+                         zGate: Double = 2.0, wordWeight: Double? = nil, prefixLast: Bool = false, period: MediaDates.Period? = nil, browse: Bool = false,
                          acceptsPath: ((String) -> Bool)? = nil, complete: Bool = true) throws -> SearchSnapshot {
         let wordWeight = wordWeight ?? (isCode ? Self.codeWordWeight : Self.wordWeight)
         if queryVector != nil, !vectorsLoaded { try reload() }
         let fileKind = self.fileKind
         let accepted = acceptsPath.map { predicate in Set(filePath.compactMap { predicate($0.value) ? $0.key : nil }) }
+        let dateFilter = period.map { $0.from != nil || $0.through != nil } ?? false
+        let dates = (dateFilter || browse) ? try mediaDates() : [:]
         let allowed = { (file: Int64) -> Bool in
             (accepted?.contains(file) ?? true) && (kinds == nil || fileKind[file].map { kinds!.contains($0) } ?? false)
+                && (!dateFilter || period!.accepts(dates[file]))
         }
         // Filter before both candidate limits: retained rows outside the current selection must not crowd out its
         // matches. Only database-generated integer IDs enter SQL; folder names and document contents never do.
         var fileConstraint = ""
-        if accepted != nil || kinds != nil {
+        if accepted != nil || kinds != nil || dateFilter {
             let files = fileKind.keys.filter(allowed).sorted()
             guard !files.isEmpty else { return SearchSnapshot(scores: [], read: { _ in [] }) }
             fileConstraint = " AND s.file IN (" + files.map(String.init).joined(separator: ",") + ")"
@@ -374,6 +399,16 @@ public final class Searcher {
             }
         }
 
+        // An explicit empty-query browse lists eligible indexed files once, in calendar date order.
+        // It does not pretend these are keyword matches and never starts a query encoder.
+        let browsing = browse && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && queryVector == nil
+        if browsing {
+            try store.db.query("SELECT s.file, MIN(s.id) FROM segments s WHERE 1=1 \(fileConstraint) GROUP BY s.file") { row in
+                let file = row.int(0)
+                if allowed(file) { words.append((file, row.int(1), nil)); coverage[file] = 1 }
+            }
+        }
+
         // A file qualifies by standing out in meaning, or by containing at least half of the query's words.
         // Score: meaning z + a bonus that grows with word coverage, + 1 for the kind the query asks for.
         // One common word can't beat a strong meaning match; all the words of an exact lookup usually do.
@@ -392,7 +427,12 @@ public final class Searcher {
 
         let wordRank = Dictionary(words.enumerated().map { ($0.element.file, ($0.offset + 1, $0.element)) },
                                   uniquingKeysWith: { first, _ in first })
-        let ranking = scored.sorted(by: { $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key) })
+        let ranking = scored.sorted {
+            if browsing, dates[$0.key]?.sortKey != dates[$1.key]?.sortKey {
+                return (dates[$0.key]?.sortKey ?? -.infinity) > (dates[$1.key]?.sortKey ?? -.infinity)
+            }
+            return $0.value > $1.value || ($0.value == $1.value && $0.key < $1.key)
+        }
         return SearchSnapshot(scores: ranking.map(\.value)) { [self, rowSegment, filePath] range in
             var hits: [SearchHit] = []
             for rank in range {
@@ -423,6 +463,7 @@ public final class Searcher {
                 }
                 // SQLite path identity is byte-based; Swift String equality also equates distinct Unicode spellings.
                 guard !path.isEmpty, filePath[file]?.utf8.elementsEqual(path.utf8) == true else { continue }
+                if dateFilter && !period!.accepts(MediaDates.date(captured: info["taken"], modified: modified)) { continue }
                 var segment = SegmentKind.name, loc: Double?, locEnd: Double?, storedExcerpt: String?
                 var foundSegment = false
                 try store.db.query("SELECT kind, loc, loc_end, excerpt FROM segments WHERE id = ? AND file = ?", [.int(segmentID), .int(file)]) {
@@ -447,7 +488,7 @@ public final class Searcher {
                     if matchedKind != SegmentKind.name.rawValue { snippet = excerpt(text, limit: 400) }
                 }
                 hits.append(SearchHit(path: path, kind: kind, score: score, z: semantic?.z, cosine: semantic?.cosine,
-                                      keywordRank: keyword?.0, segment: segment, segmentID: segmentID, loc: loc,
+                                      keywordRank: browsing ? nil : keyword?.0, segment: segment, segmentID: segmentID, loc: loc,
                                       locEnd: locEnd,
                                       excerpt: snippet ?? storedExcerpt, modified: modified, size: size, info: info,
                                       focus: focus))
