@@ -602,12 +602,14 @@ final class FaceService: @unchecked Sendable {
         let main = try Database(path: directory.appendingPathComponent(IndexStore.mainFile).path)
         var checked = Set<Data>(), byPath: [Data: FaceFileVersion] = [:], reachable: [Data: Bool] = [:]
         var lookupFailure: Error?
+        var capturedDates: [Data: String] = [:]
         let handler = try FacePeopleService(directory: directory, acceptsCurrent: { file in
             let key = Data(file.path.utf8)
             if checked.insert(key).inserted {
                 do {
-                    try main.query("SELECT kind,size,mtime FROM files WHERE path = ? AND kind IN ('image','screenshot','video') AND state IN ('done','partial')", [.text(file.path)]) { row in
+                    try main.query("SELECT kind,size,mtime,CASE WHEN json_valid(info) THEN json_extract(info, '$.taken') END FROM files WHERE path = ? AND kind IN ('image','screenshot','video') AND state IN ('done','partial')", [.text(file.path)]) { row in
                         byPath[key] = FaceFileVersion(path: file.path, kind: row.text(0) ?? "", size: row.int(1), modified: row.double(2))
+                        capturedDates[key] = row.text(3)
                     }
                 } catch { lookupFailure = error }
             }
@@ -619,7 +621,7 @@ final class FaceService: @unchecked Sendable {
         }, checkScope: { [self] in
             if let lookupFailure { throw lookupFailure }
             try unchangedScope(revision)
-        })
+        }, mediaDate: { FacePeopleAlbum.date(captured: capturedDates[Data($0.path.utf8)], modified: $0.modified) })
         return try handler.handle(op, request)
     }
     static func fields(_ observation: IndexedFace) -> [String: Any] {

@@ -9,16 +9,18 @@ final class FacePeopleService {
     private let acceptsCurrent: (FaceFileVersion) -> Bool
     private let acceptsScope: (FaceFileVersion) -> Bool
     private let checkScope: () throws -> Void
+    private let mediaDate: (FaceFileVersion) -> FacePeopleAlbum.MediaDate?
     private let indexRevision: Int64
     private let peopleRevision: Int64
     private var currentAnchors: [String: Int64]?
     private var currentFiles: [Data: Bool] = [:]
     private var savedIDs: [String: Int64] = [:]
     init(directory: URL, acceptsCurrent: @escaping (FaceFileVersion) -> Bool, acceptsScope: @escaping (FaceFileVersion) -> Bool,
-         checkScope: @escaping () throws -> Void) throws {
+         checkScope: @escaping () throws -> Void, mediaDate: @escaping (FaceFileVersion) -> FacePeopleAlbum.MediaDate? = { FacePeopleAlbum.date(captured: nil, modified: $0.modified) }) throws {
         index = try FaceIndexStore(directory: directory)
         store = FacePeopleStore(index: index)
         self.acceptsCurrent = acceptsCurrent; self.acceptsScope = acceptsScope; self.checkScope = checkScope
+        self.mediaDate = mediaDate
         indexRevision = try index.revision(); peopleRevision = try store.revision()
     }
     private func valid(_ observation: IndexedFace) -> Bool {
@@ -186,6 +188,8 @@ final class FacePeopleService {
         var references = FacePeopleReferences()
         var fileObservationCounts: [Int64: Int] = [:]
         var galleryOrder = FacePeopleAlbum.Order.indexed, galleryMedia = FacePeopleAlbum.Media.all
+        var galleryDates: [Data: FacePeopleAlbum.MediaDate] = [:]
+        var galleryPeriod: FacePeopleAlbum.Period?
         let minimum = try threshold(request)
         if mode == "gallery" {
             guard let order = FacePeopleAlbum.Order(rawValue: request["gallery_sort"] as? String ?? "indexed"),
@@ -193,10 +197,24 @@ final class FacePeopleService {
                 throw CLIError("Choose a valid gallery sort and media filter.")
             }
             galleryOrder = order; galleryMedia = media
+            func year(_ key: String) throws -> Int? {
+                guard let value = request[key], !(value is NSNull) else { return nil }
+                guard let number = value as? NSNumber, String(cString: number.objCType) != "c",
+                      number.doubleValue.isFinite, number.doubleValue == Double(number.intValue), (1...9999).contains(number.intValue) else {
+                    throw CLIError("Choose a valid year from 1 to 9999.")
+                }
+                return number.intValue
+            }
+            do { galleryPeriod = try FacePeopleAlbum.Period(from: year("gallery_from_year"), through: year("gallery_through_year")) }
+            catch { throw CLIError("Choose a valid year range: the first year must not exceed the last.") }
+            for annotation in own where annotation.state == "assigned" && current[annotation.anchor] != nil {
+                let file = annotation.snapshot.file, key = Data(file.path.utf8)
+                if galleryDates[key] == nil { galleryDates[key] = mediaDate(file) }
+            }
             let files = FacePeopleAlbum.files(own.filter { $0.state == "assigned" }.compactMap { annotation in
                 current[annotation.anchor].map { (id: $0, path: annotation.snapshot.file.path,
                     kind: annotation.snapshot.file.kind, modified: annotation.snapshot.file.modified) }
-            }, order: order, media: media)
+            }, order: order, media: media, dates: galleryDates, period: galleryPeriod)
             ranked = files.map { ($0.representativeID, nil) }
             fileObservationCounts = Dictionary(uniqueKeysWithValues: files.map { ($0.representativeID, $0.observationCount) })
         } else if mode == "suggestions" {
@@ -240,6 +258,10 @@ final class FacePeopleService {
                 fields["person_status"] = mode == "suggestions" ? "suggestion" : mode
                 fields["name"] = (observation.file.path as NSString).lastPathComponent
                 if let count = fileObservationCounts[item.id] { fields["observation_count"] = count }
+                if let date = galleryDates[Data(observation.file.path.utf8)] {
+                    fields["gallery_date"] = date.day; fields["gallery_date_source"] = date.source
+                    fields["gallery_timestamp"] = date.sortKey
+                }
                 if let score = item.cosine { fields["cosine"] = score; fields["score"] = score }
                 hits.append(fields)
             }
@@ -250,7 +272,13 @@ final class FacePeopleService {
                 "index_revision": indexRevision, "people_revision": peopleRevision,
                 "reference_count": references.count, "reference_limit": FacePeopleReferences.limit,
                 "reference_source_count": references.sourceCount, "references_sampled": references.sampled]
-        if mode == "gallery" { result["gallery_sort"] = galleryOrder.rawValue; result["gallery_media"] = galleryMedia.rawValue }
+        if mode == "gallery" {
+            result["gallery_sort"] = galleryOrder.rawValue; result["gallery_media"] = galleryMedia.rawValue
+            result["gallery_from_year"] = galleryPeriod?.from as Any? ?? NSNull()
+            result["gallery_through_year"] = galleryPeriod?.through as Any? ?? NSNull()
+            result["gallery_year_min"] = galleryDates.values.map(\.year).min() as Any? ?? NSNull()
+            result["gallery_year_max"] = galleryDates.values.map(\.year).max() as Any? ?? NSNull()
+        }
         return result
     }
 }
