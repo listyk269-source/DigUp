@@ -4,6 +4,32 @@ const assert = require("node:assert/strict");
 const state = require("../shell/ui/people-state.js");
 const query = { seed_face_id: 7, minimum_cosine: .5, index_revision: 12 };
 
+test("gallery options validate preferences and bind every page to its date/media query", () => {
+  assert.deepEqual(state.galleryOptions(null), { sort: "date_desc", media: "all" });
+  assert.deepEqual(state.galleryOptions({ sort: "invalid", media: "bad" }), { sort: "date_desc", media: "all" });
+  const page = new state.PersonPage(), generation = page.open("person", "gallery", { sort: "date_asc", media: "photo" });
+  assert.equal(page.request().gallery_sort, "date_asc"); assert.equal(page.request().gallery_media, "photo");
+  const reply = { person: { id: "person" }, hits: [{ path: "one.jpg" }], index_revision: 1, people_revision: 2,
+    gallery_sort: "date_asc", gallery_media: "photo", next_offset: 1, total: 2, has_more: true };
+  page.merge(reply, generation);
+  assert.equal(page.request().offset, 1); assert.equal(page.request().gallery_media, "photo");
+  assert.throws(() => page.merge({ ...reply, gallery_media: "video" }, generation), /filters changed/);
+  page.open("person", "gallery", { sort: "date_desc", media: "video" });
+  assert.equal(page.offset, 0); assert.equal(page.hits.length, 0);
+  assert.equal(page.merge(reply, generation), false); assert.equal(page.hits.length, 0);
+  page.open("person", "assigned"); assert.equal(page.request().gallery_media, undefined);
+});
+
+test("changing a gallery filter preserves its sort preference and restarts the gallery", async () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} }, PeopleState: state, localStorage: { setItem() { throw new Error("storage unavailable"); } } };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/people.js"), "utf8"), context);
+  const view = Object.create(context.module.exports.prototype); view.page = { personId: "person" }; view.galleryOptions = { sort: "date_asc", media: "all" };
+  let opened; view.selectPerson = async (...args) => { opened = args; };
+  view.changeGallery({ media: "video" }); await view.pageTask;
+  assert.deepEqual(view.galleryOptions, { sort: "date_asc", media: "video" }); assert.deepEqual(opened, ["person", "gallery"]);
+});
+
 test("file gallery deduplicates repeated face/frame observations across pages without normalizing paths", () => {
   const page = new state.PersonPage(), generation = page.open("person", "gallery");
   const first = { face_id: 1, path: "D:/Фото с пробелом/😀 café.jpg", modified: 1, size: 42 };

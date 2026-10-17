@@ -35,6 +35,14 @@ repeating face inference. **Face annotations**, **Suggestions**, **Excluded** an
 retain their separate observation-level checkboxes and label corrections; gallery navigation itself
 does not change labels. Rename the person without running inference again.
 
+Use **File modification date → Newest first / Oldest first** and **All media / Photos / Videos**
+to narrow an album. Newest first is the UI default. Photos includes images and screenshots;
+Videos shows one representative labelled frame per video. The date under each tile is the indexed
+file modification date, **not EXIF capture time**. Both choices persist locally in this WebView
+profile across people, review tabs and app restarts. Changing them starts a fresh first page and
+closes the old viewer. Filtering and stable date ordering happen before pagination; arrow browsing
+stays within that filtered order, including subsequent pages. No face inference or reindex is needed.
+
 Assigned albums open directly from saved labels, without scanning every face descriptor or starting
 YuNet/SFace again. The directory shows both unique file counts and labelled observations: several
 faces or video frames in one file are not several photographs. Gallery grouping happens before
@@ -50,8 +58,9 @@ and does not remove labels or the index. Missing, changed or out-of-scope source
 through a cached preview. Original images remain unchanged.
 
 Grouping uses exact indexed file paths, not content hashes. Two separate copies of a photo at different
-paths remain separate files. Ordering follows saved observation IDs and stays stable within a revision;
-this is not a date-sorted album. Changing the selected folders or index revision requires refreshing
+paths remain separate files. Equal modification dates use saved observation IDs as a stable tie-break.
+Older CLI clients that omit `gallery_sort` retain observation-ID order; the optional values are
+`date_desc` / `date_asc` (`gallery_media`: `all` / `photo` / `video`). Changing the selected folders or index revision requires refreshing
 before further pagination; already shown tiles are retained with the error message.
 
 Remove a label to leave the observation unassigned. **This is another person** records an explicit

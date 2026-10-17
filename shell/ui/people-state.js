@@ -5,6 +5,10 @@
 const PeopleState = (() => {
   const idOf = (face) => String(face.face_id ?? face.id);
   const fileKey = (file) => JSON.stringify([file.path, file.size, file.modified]);
+  const galleryOptions = (value) => ({
+    sort: ["date_desc", "date_asc"].includes(value?.sort) ? value.sort : "date_desc",
+    media: ["all", "photo", "video"].includes(value?.media) ? value.media : "all",
+  });
   const viewerTarget = (page, index, delta) => {
     const target = index + delta;
     return { index: target >= 0 && target < page.hits.length ? target : index,
@@ -62,9 +66,10 @@ const PeopleState = (() => {
   }
   class PersonPage {
     constructor() { this.generation = 0; this.open(null, "assigned"); }
-    open(id, mode) { this.generation++; this.personId = id; this.mode = mode; this.hits = []; this.offset = 0; this.total = 0; this.hasMore = false; this.indexRevision = null; this.peopleRevision = null; return this.generation; }
+    open(id, mode, options) { this.generation++; this.personId = id; this.mode = mode; this.gallery = galleryOptions(options); this.hits = []; this.offset = 0; this.total = 0; this.hasMore = false; this.indexRevision = null; this.peopleRevision = null; return this.generation; }
     merge(reply, generation) {
       if (generation !== this.generation || !samePerson(reply.person?.id, this.personId)) return false;
+      if (this.mode === "gallery" && (reply.gallery_sort != null && reply.gallery_sort !== this.gallery.sort || reply.gallery_media != null && reply.gallery_media !== this.gallery.media)) throw new Error("Gallery filters changed. Refresh this gallery.");
       if (this.offset && (reply.index_revision !== this.indexRevision || reply.people_revision !== this.peopleRevision)) throw new Error("People or face index changed. Refresh this list.");
       const key = this.mode === "gallery" ? fileKey : (face) => face.anchor_key || idOf(face), known = new Set(this.hits.map(key));
       this.hits.push(...(reply.hits || []).filter((face) => !known.has(key(face)) && known.add(key(face))));
@@ -73,8 +78,9 @@ const PeopleState = (() => {
       this.offset = Number.isSafeInteger(next) ? next : this.offset; this.total = reply.total || 0; return true;
     }
     request(minimum = .5) { return { op: "person_faces", person_id: this.personId, mode: this.mode, offset: this.offset, limit: 40, minimum_cosine: minimum,
+      ...(this.mode === "gallery" ? { gallery_sort: this.gallery.sort, gallery_media: this.gallery.media } : {}),
       ...(this.offset ? { index_revision: this.indexRevision, people_revision: this.peopleRevision } : {}) }; }
   }
-  return { BulkSelection, PersonPage, ThumbnailQueue, idOf, fileKey, viewerTarget, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
+  return { BulkSelection, PersonPage, ThumbnailQueue, idOf, fileKey, galleryOptions, viewerTarget, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
 })();
 if (typeof module !== "undefined") module.exports = PeopleState;

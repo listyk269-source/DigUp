@@ -50,6 +50,13 @@ html.people-mode, html.people-mode body { background: #202429; }
 .people-view :is(.people-list, .people-face-list):hover { scrollbar-color: #8999a8 #252b32; }
 .people-view .people-face-list .face-result-text strong { max-width: 100%; }
 .people-results-gallery { display: flex; }
+.people-gallery-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 0 18px 12px; }
+.people-gallery-tools label, .people-gallery-tools [role="group"] { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.people-gallery-tools label { color: #b4bec8; font-size: 12px; }
+.people-gallery-tools select { color-scheme: dark; color: #eef2f6; background: #252b32; border: 1px solid #505962; border-radius: 8px; font: inherit; padding: 7px 10px; }
+.people-gallery-tools button[aria-pressed="true"] { background: #293b47; border-color: #77acc5; }
+.people-gallery-tools select:disabled { opacity: .5; }
+.people-tile-date { font-variant-numeric: tabular-nums; }
 .people-results-gallery .people-gallery { flex: 1; max-height: none; }
 .people-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-rows: max-content; gap: 16px; padding: 4px 18px 18px; align-content: start; }
 .people-tile { display: flex; flex-direction: column; min-width: 0; padding: 0; color: #eef2f6; background: transparent; border: 1px solid #414952; border-radius: 8px; overflow: hidden; text-align: left; cursor: pointer; }

@@ -1163,6 +1163,7 @@ async function exerciseAutomaticFacesUi() {
 
 async function exercisePeopleUi() {
   const report = featureReport.people = {};
+  const initialGalleryOptions = { ...people.galleryOptions };
   const label = "Человек FACE742", renamed = "Наблюдатель FACE742";
   const wait = async (predicate) => {
     const deadline = Date.now() + 60000;
@@ -1283,6 +1284,13 @@ async function exercisePeopleUi() {
   report.assignedTotal = people.page.total; await capture("people-assigned");
   // The gallery is a distinct file-level view; keep all observation review checks above intact.
   await people.selectPerson(person.id);
+  const chooseGallery = async (sort, media) => {
+    if (sort) { $("person-gallery-sort").value = sort; $("person-gallery-sort").dispatchEvent(new Event("change", { bubbles: true })); await people.pageTask; }
+    if (media) { document.querySelector(`[data-gallery-media="${media}"]`).click(); await people.pageTask; }
+    check(!people.pageError, people.pageError || "Gallery query failed");
+  };
+  check(initialGalleryOptions.sort === (report.phase === "first" ? "date_desc" : "date_asc") && initialGalleryOptions.media === (report.phase === "first" ? "all" : "photo"), "Gallery preferences were not restored after restart");
+  await chooseGallery("date_desc", "all");
   const gallery = report.gallery = { mode: people.page.mode, firstPage: people.page.hits.length, total: people.page.total };
   check(gallery.mode === "gallery" && gallery.firstPage === 40 && gallery.total > 40, "The default person view must page unique labelled files");
   const tile = $("person-faces").querySelector(".people-tile"), tileImage = tile.querySelector("img");
@@ -1327,6 +1335,33 @@ async function exercisePeopleUi() {
   tile.click(); await wait(() => { const image = $("person-viewer-media").querySelector("img"); return image?.complete && image.naturalWidth > 0; });
   await invoke("debug_capture", { label: "people-gallery-viewer" });
   people.closeViewer();
+  const allGalleryFiles = people.page.hits.slice(), filtered = report.galleryFilters = {};
+  const sortedDates = (hits, descending) => hits.every((hit, index) => !index || (hit.modified === hits[index - 1].modified ?
+    Number(PeopleState.idOf(hit)) > Number(PeopleState.idOf(hits[index - 1])) : descending ? hit.modified < hits[index - 1].modified : hit.modified > hits[index - 1].modified));
+  await chooseGallery("date_desc", "photo"); await allPages();
+  filtered.photos = people.page.total; filtered.photoOnly = people.page.hits.every((hit) => ["image", "screenshot"].includes(hit.kind));
+  filtered.newestSorted = sortedDates(people.page.hits, true); filtered.distinctDates = new Set(people.page.hits.map((hit) => hit.modified)).size;
+  check(filtered.photos > 40 && filtered.photoOnly && filtered.newestSorted && filtered.photos === allGalleryFiles.filter((hit) => hit.kind !== "video").length, "Photo filter or newest ordering across pages failed");
+  await chooseGallery("date_asc", "photo"); await allPages();
+  filtered.oldestSorted = sortedDates(people.page.hits, false); filtered.datesVisible = !!$("person-faces").querySelector(".people-tile-date")?.textContent;
+  check(filtered.oldestSorted && filtered.datesVisible && people.page.total === filtered.photos, "Oldest photo order or visible file dates failed");
+  await wait(() => visibleGalleryMedia().length > 0 && visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
+  await invoke("debug_capture", { label: "people-gallery-filtered" });
+  await chooseGallery("date_desc", "video");
+  filtered.videos = people.page.total; filtered.videoOnly = people.page.hits.length > 0 && people.page.hits.every((hit) => hit.kind === "video");
+  check(filtered.videoOnly && filtered.videos === allGalleryFiles.filter((hit) => hit.kind === "video").length, "Video filter leaked photos or repeated video frames");
+  await wait(() => visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
+  const videoTile = $("person-faces").querySelector(".people-tile"); videoTile.click();
+  filtered.filteredViewer = people.page.total === 1 && $("person-viewer-previous").disabled && $("person-viewer-next").disabled;
+  check(filtered.filteredViewer, "Filtered viewer escaped its one-video album"); people.closeViewer();
+  await invoke("debug_capture", { label: "people-gallery-videos" });
+  $("person-gallery-sort").value = "date_asc"; $("person-gallery-sort").dispatchEvent(new Event("change", { bubbles: true }));
+  const outdatedGalleryTask = people.pageTask;
+  document.querySelector('[data-gallery-media="photo"]').click(); await Promise.all([outdatedGalleryTask, people.pageTask]);
+  filtered.rapidSwitch = !people.pageError && people.page.gallery.sort === "date_asc" && people.page.gallery.media === "photo" && people.page.hits.every((hit) => hit.kind !== "video") && sortedDates(people.page.hits, false);
+  const savedGallery = JSON.parse(localStorage.getItem("digup.people.gallery"));
+  filtered.preferencesPersisted = savedGallery.sort === "date_asc" && savedGallery.media === "photo";
+  check(filtered.rapidSwitch && filtered.preferencesPersisted, "A late gallery reply replaced the active filter or preferences were not saved");
   await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total;
   if (!report.suggestionsCapturedBeforeDecision) { report.suggestionCapturedTotal = people.page.total; await capture("people-suggestions"); }
   $("person-rename-toggle").click(); $("person-name").value = renamed; $("person-rename").requestSubmit(); await people.mutationTask;

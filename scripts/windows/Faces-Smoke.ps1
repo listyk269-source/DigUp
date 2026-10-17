@@ -21,8 +21,12 @@ $index = Join-Path $testRoot 'Private index'
 $settings = Join-Path $testRoot 'settings.json'
 New-Item -ItemType Directory -Path $fixture | Out-Null
 Copy-Item -LiteralPath $fixturePhoto -Destination "$fixture/FACE742 crew.jpg"
+$fixtureDate = [DateTime]::new(2022,1,1,0,0,0,[DateTimeKind]::Utc)
+[IO.File]::SetLastWriteTimeUtc("$fixture/FACE742 crew.jpg", $fixtureDate)
 for ($number=1; $number -le 42; $number++) {
-    Copy-Item -LiteralPath $fixturePhoto -Destination (Join-Path $fixture ('FACE742 Снимок {0:D2}.jpg' -f $number))
+    $photoPath = Join-Path $fixture ('FACE742 Снимок {0:D2}.jpg' -f $number)
+    Copy-Item -LiteralPath $fixturePhoto -Destination $photoPath
+    [IO.File]::SetLastWriteTimeUtc($photoPath, $fixtureDate.AddDays($number))
 }
 $cli = Join-Path $package 'helper/digup.exe'
 $gui = Join-Path $package 'DigUp.exe'
@@ -101,6 +105,10 @@ foreach ($pass in $passes) {
         if ($peopleReport.phase -ne $pass) { throw "People persistence phase mismatch ($pass)." }
         $album=$peopleReport.albumAccess
         $gallery=$peopleReport.gallery
+        $filters=$peopleReport.galleryFilters
+        if (!$filters -or !$filters.newestSorted -or !$filters.oldestSorted -or !$filters.photoOnly -or !$filters.videoOnly -or
+            !$filters.filteredViewer -or !$filters.rapidSwitch -or !$filters.preferencesPersisted -or !$filters.datesVisible -or
+            $filters.photos -le 40 -or $filters.distinctDates -le 1) { throw 'Actual date/media gallery filtering, paging or preference persistence failed.' }
         if (!$gallery -or $gallery.mode -ne 'gallery' -or !$gallery.wholeImage -or !$gallery.arrowLoadedNextPage -or !$gallery.offscreenDeferred -or $gallery.visibleDecoded -le 0 -or
             !$gallery.repeatedVideoFramesGrouped -or !$gallery.escapeRestoresFocus -or $gallery.uniqueFiles -ne $gallery.total -or $gallery.loaded -ne $gallery.total) {
             throw 'Actual labelled gallery must show whole media, group files and navigate all pages with focus restoration.'
@@ -119,7 +127,7 @@ foreach ($pass in $passes) {
             throw 'The native suggestion capture must show both genuine new proposals before decisions.'
         }
         if ($pass -eq 'verify' -and !$peopleReport.persistenceVerified) { throw 'Accepted/rejected labels did not survive restart.' }
-        foreach ($phase in @('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer')) {
+        foreach ($phase in @('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-gallery-filtered','people-gallery-videos')) {
             $capture = Join-Path $index "capture-$phase.png"
             $bytes = [IO.File]::ReadAllBytes($capture)
             if ($bytes.Length -lt 24 -or [Convert]::ToHexString($bytes[0..7]) -ne '89504E470D0A1A0A') { throw 'Invalid native People PNG.' }

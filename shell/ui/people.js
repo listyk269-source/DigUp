@@ -5,6 +5,8 @@ class PeopleView {
     Object.assign(this, { ask, faceSearch, invoke, picture, nameOf, clock, onVisibility, onFace });
     this.el = (id) => document.getElementById(id); this.people = []; this.page = new PeopleState.PersonPage(); this.faceBulk = new PeopleState.BulkSelection();
     this.selectedFaces = new Set(); this.visible = false; this.directoryGeneration = 0; this.faceLabelGeneration = 0;
+    try { this.galleryOptions = PeopleState.galleryOptions(JSON.parse(localStorage.getItem("digup.people.gallery"))); }
+    catch { this.galleryOptions = PeopleState.galleryOptions(); }
     this.rows = new Map(); this.thumbnails = new PeopleState.ThumbnailQueue(2); this.thumbnailLoads = new Map();
     this.thumbnailObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) if (entry.isIntersecting) {
@@ -27,6 +29,8 @@ class PeopleView {
     this.el("face-assign-matches").onclick = () => { this.mutationTask = this.mutateFaceBulk("assign"); };
     this.el("face-reject-matches").onclick = () => { this.mutationTask = this.mutateFaceBulk("reject"); };
     for (const button of document.querySelectorAll("[data-person-mode]")) button.onclick = () => { this.pageTask = this.selectPerson(this.page.personId, button.dataset.personMode); };
+    this.el("person-gallery-sort").onchange = () => this.changeGallery({ sort: this.el("person-gallery-sort").value });
+    for (const button of document.querySelectorAll("[data-gallery-media]")) button.onclick = () => this.changeGallery({ media: button.dataset.galleryMedia });
     this.el("person-more").onclick = () => { this.pageTask = this.loadPage(true); };
     this.el("person-select-loaded").onclick = () => {
       const keys = this.page.hits.map((face) => face.anchor_key || PeopleState.idOf(face));
@@ -91,9 +95,14 @@ class PeopleView {
     this.closeViewer();
     this.stopPreview(); this.el("person-preview").replaceChildren();
     this.resetRows(); this.el("person-faces").scrollTop = 0;
-    this.page.open(id, mode); this.pageBusy = false; this.selectedFaces.clear(); this.selectedPreview = null; this.previewKey = null; this.pageError = null; this.expired = false;
+    this.page.open(id, mode, this.galleryOptions); this.pageBusy = false; this.selectedFaces.clear(); this.selectedPreview = null; this.previewKey = null; this.pageError = null; this.expired = false;
     this.previewTouched = false; this.backgroundNotice = false; this.backgroundProtected = false;
     this.el("person-rename").hidden = true; this.render(); return this.loadPage();
+  }
+  changeGallery(change) {
+    this.galleryOptions = PeopleState.galleryOptions({ ...this.galleryOptions, ...change });
+    try { localStorage.setItem("digup.people.gallery", JSON.stringify(this.galleryOptions)); } catch { /* The current selection still works without storage. */ }
+    this.pageTask = this.selectPerson(this.page.personId, "gallery");
   }
   async loadPage(more = false) {
     if (!this.page.personId || this.pageBusy) return;
@@ -144,6 +153,7 @@ class PeopleView {
     this.el("person-rename-toggle").disabled = !person || !!this.mutationBusy;
     for (const button of document.querySelectorAll("[data-person-mode]")) { button.setAttribute("aria-pressed", String(button.dataset.personMode === mode)); button.disabled = !person || !!this.pageBusy; }
     const gallery = mode === "gallery";
+    this.el("person-gallery-tools").hidden = !gallery;
     this.el("person-faces").classList.toggle("people-gallery", gallery);
     this.el("person-faces").parentElement.classList.toggle("people-results-gallery", gallery);
     this.el("person-preview").hidden = gallery;
@@ -209,10 +219,15 @@ class PeopleView {
   }
   renderGallery(person) {
     const list = this.el("person-faces"), retained = new Set(), message = this.el("person-message");
+    const options = this.galleryOptions;
+    this.el("person-gallery-sort").value = options.sort; this.el("person-gallery-sort").disabled = !person || !!this.mutationBusy;
+    for (const button of document.querySelectorAll("[data-gallery-media]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.galleryMedia === options.media)); button.disabled = !person || !!this.mutationBusy;
+    }
     message.classList.toggle("face-error", !!this.pageError);
     message.textContent = this.pageError ? t(this.pageError) : this.pageBusy ? t("Loading labelled files…") : !person ? t("Choose a person") :
       this.page.total ? t("{loaded} of {total} files loaded", { loaded: this.page.hits.length, total: this.page.total }) :
-        t("No labelled files yet. Confirm suggestions or assign a face to this person.");
+        t(options.media !== "all" && person?.assigned_file_count ? "No labelled files match this filter. Choose All media." : "No labelled files yet. Confirm suggestions or assign a face to this person.");
     const empty = list.querySelector(".people-gallery-empty"); if (empty) empty.remove();
     for (const hit of this.page.hits) {
       const key = PeopleState.fileKey(hit); retained.add(key);
@@ -230,6 +245,7 @@ class PeopleView {
       this.thumbnailLoads.set(stage, load); this.thumbnailObserver.observe(stage);
       const caption = this.text("span", "people-tile-caption"); caption.append(this.text("strong", "", this.nameOf(hit.path)),
         this.text("small", "", hit.kind === "video" ? t("Video") + (Number.isFinite(hit.loc) ? " · " + this.clock(hit.loc) : "") : t("Photograph")));
+      if (Number.isFinite(hit.modified)) caption.append(this.text("small", "people-tile-date", new Date(hit.modified * 1000).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" })));
       tile.append(stage, caption); tile.onclick = () => this.openViewer(key, tile); list.append(tile); this.rows.set(key, { row: tile });
     }
     for (const [key, entry] of this.rows) if (!retained.has(key)) { entry.row.remove(); this.rows.delete(key); }

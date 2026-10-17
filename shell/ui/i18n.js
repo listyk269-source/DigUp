@@ -3,6 +3,16 @@
 const I18n = (() => {
   const ru = {
   "Gallery": "Галерея",
+  "File modification date": "Дата изменения файла",
+  "Newest first": "Сначала новые",
+  "Oldest first": "Сначала старые",
+  "Media type": "Тип медиа",
+  "All media": "Все",
+  "Photos": "Фото",
+  "Videos": "Видео",
+  "No labelled files match this filter. Choose All media.": "В этом фильтре нет размеченных файлов. Выберите «Все».",
+  "Gallery filters changed. Refresh this gallery.": "Фильтры галереи изменились. Обновите галерею.",
+  "Choose a valid gallery sort and media filter.": "Выберите допустимый порядок и тип файлов в галерее.",
   "Close": "Закрыть",
   "Face annotations": "Разметка",
   "Loading labelled files…": "Загрузка размеченных файлов…",
