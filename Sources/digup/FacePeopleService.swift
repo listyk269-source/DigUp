@@ -167,7 +167,7 @@ final class FacePeopleService {
     }
     private func faces(_ request: [String: Any]) throws -> [String: Any] {
         let id = try personID(request), person = try store.person(id), mode = request["mode"] as? String ?? "assigned"
-        guard ["assigned", "suggestions", "rejected", "stale"].contains(mode) else { throw CLIError("Choose assigned faces, suggestions, rejected faces or stale annotations.") }
+        guard ["gallery", "assigned", "suggestions", "rejected", "stale"].contains(mode) else { throw CLIError("Choose a person gallery, assigned faces, suggestions, rejected faces or stale annotations.") }
         let offset = max(0, request["offset"] as? Int ?? 0), limit = min(max(1, request["limit"] as? Int ?? 40), 200)
         if offset > 0, number(request, "index_revision") != indexRevision || number(request, "people_revision") != peopleRevision { return expired() }
         // Opening an assigned album is a saved-label lookup, not a face search. Only suggestions need the
@@ -184,8 +184,15 @@ final class FacePeopleService {
         var ranked: [(id: Int64, cosine: Double?)] = []
         var stale: [FacePersonAnnotation] = []
         var references = FacePeopleReferences()
+        var fileObservationCounts: [Int64: Int] = [:]
         let minimum = try threshold(request)
-        if mode == "suggestions" {
+        if mode == "gallery" {
+            let files = FacePeopleAlbum.files(own.filter { $0.state == "assigned" }.compactMap { annotation in
+                current[annotation.anchor].map { (id: $0, path: annotation.snapshot.file.path) }
+            })
+            ranked = files.map { ($0.representativeID, nil) }
+            fileObservationCounts = Dictionary(uniqueKeysWithValues: files.map { ($0.representativeID, $0.observationCount) })
+        } else if mode == "suggestions" {
             // A bounded deterministic sample spans confirmed descriptors instead of taking the first video frames.
             // Every retained example is explicitly confirmed; candidate suggestions never become references.
             for annotation in own where annotation.state == "assigned" {
@@ -225,6 +232,7 @@ final class FacePeopleService {
                 var fields = try FaceService.labeledFields(observation, store: store, people: names)
                 fields["person_status"] = mode == "suggestions" ? "suggestion" : mode
                 fields["name"] = (observation.file.path as NSString).lastPathComponent
+                if let count = fileObservationCounts[item.id] { fields["observation_count"] = count }
                 if let score = item.cosine { fields["cosine"] = score; fields["score"] = score }
                 hits.append(fields)
             }
