@@ -13,6 +13,7 @@ final class FacePeopleService {
     private let peopleRevision: Int64
     private var currentAnchors: [String: Int64]?
     private var currentFiles: [Data: Bool] = [:]
+    private var savedIDs: [String: Int64] = [:]
     init(directory: URL, acceptsCurrent: @escaping (FaceFileVersion) -> Bool, acceptsScope: @escaping (FaceFileVersion) -> Bool,
          checkScope: @escaping () throws -> Void) throws {
         index = try FaceIndexStore(directory: directory)
@@ -38,6 +39,14 @@ final class FacePeopleService {
         }
         currentAnchors = result
         return result
+    }
+    private func savedID(_ annotation: FacePersonAnnotation) throws -> Int64? {
+        if let value = savedIDs[annotation.anchor] { return value > 0 ? value : nil }
+        let snapshot = annotation.snapshot
+        let value = snapshot.model == FaceModels.modelID && acceptsCurrent(snapshot.file)
+            ? try index.observationID(matching: snapshot) : nil
+        savedIDs[annotation.anchor] = value ?? -1
+        return value
     }
     private func current(_ id: Int64) throws -> IndexedFace {
         guard let face = try index.observations(model: FaceModels.modelID, id: id).first, valid(face) else {
@@ -95,13 +104,16 @@ final class FacePeopleService {
                                               accepts: { [self] in acceptsScope($0.file) }, checkScope: checkScope))
         case "face_label": return try label(request)
         case "people_list":
-            let current = try anchors(), annotations = try store.annotations().filter { acceptsScope($0.snapshot.file) }
+            let annotations = try store.annotations().filter { acceptsScope($0.snapshot.file) }
+            var current: [String: Int64] = [:]
+            for annotation in annotations { if let id = try savedID(annotation) { current[annotation.anchor] = id } }
             let grouped = Dictionary(grouping: annotations, by: \.personID)
             let query = request["q"] as? String ?? ""
             let people = try store.people().filter { FacePeopleStore.matches(name: $0.name, query: query) }.map { person -> [String: Any] in
                 let own = grouped[person.id] ?? []
                 return ["id": person.id, "name": person.name,
                         "assigned_count": own.filter { $0.state == "assigned" && current[$0.anchor] != nil }.count,
+                        "assigned_file_count": Set(own.filter { $0.state == "assigned" && current[$0.anchor] != nil }.map { Data($0.snapshot.file.path.utf8) }).count,
                         "rejected_count": own.filter { $0.state == "rejected" && current[$0.anchor] != nil }.count,
                         "stale_count": own.filter { current[$0.anchor] == nil }.count, "suggestion_count": NSNull()]
             }
@@ -158,8 +170,15 @@ final class FacePeopleService {
         guard ["assigned", "suggestions", "rejected", "stale"].contains(mode) else { throw CLIError("Choose assigned faces, suggestions, rejected faces or stale annotations.") }
         let offset = max(0, request["offset"] as? Int ?? 0), limit = min(max(1, request["limit"] as? Int ?? 40), 200)
         if offset > 0, number(request, "index_revision") != indexRevision || number(request, "people_revision") != peopleRevision { return expired() }
-        let current = try anchors(), all = try store.annotations(), own = all.filter { $0.personID == id && acceptsScope($0.snapshot.file) }
+        // Opening an assigned album is a saved-label lookup, not a face search. Only suggestions need the
+        // global descriptor scan. Even the directory counts inspect labelled observations rather than the corpus.
+        let all = mode == "suggestions" ? try store.annotations() : try store.annotations(person: id)
+        let own = all.filter { $0.personID == id && acceptsScope($0.snapshot.file) }
+        var current: [String: Int64] = [:]
+        if mode == "suggestions" { current = try anchors() }
+        else { for annotation in own { if let faceID = try savedID(annotation) { current[annotation.anchor] = faceID } } }
         var counts = ["assigned": own.filter { $0.state == "assigned" && current[$0.anchor] != nil }.count,
+                      "assigned_files": Set(own.filter { $0.state == "assigned" && current[$0.anchor] != nil }.map { Data($0.snapshot.file.path.utf8) }).count,
                       "rejected": own.filter { $0.state == "rejected" && current[$0.anchor] != nil }.count,
                       "stale": own.filter { current[$0.anchor] == nil }.count, "suggestions": 0]
         var ranked: [(id: Int64, cosine: Double?)] = []

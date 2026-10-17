@@ -597,12 +597,29 @@ final class FaceService: @unchecked Sendable {
     }
     func people(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
         let (selected, revision) = stateLock.withLock { (scope, scopeRevision) }
-        let byPath = Dictionary(uniqueKeysWithValues: try indexedFiles().map { (Data($0.path.utf8), $0) })
+        // Album access usually touches a tiny fraction of the main index. Resolve only the saved files that
+        // the handler asks about; do not rebuild the complete media-version dictionary on every page/click.
+        let main = try Database(path: directory.appendingPathComponent(IndexStore.mainFile).path)
+        var checked = Set<Data>(), byPath: [Data: FaceFileVersion] = [:], reachable: [Data: Bool] = [:]
+        var lookupFailure: Error?
         let handler = try FacePeopleService(directory: directory, acceptsCurrent: { file in
-            byPath[Data(file.path.utf8)] == file && Self.current(file, scope: selected)
+            let key = Data(file.path.utf8)
+            if checked.insert(key).inserted {
+                do {
+                    try main.query("SELECT kind,size,mtime FROM files WHERE path = ? AND kind IN ('image','screenshot','video') AND state IN ('done','partial')", [.text(file.path)]) { row in
+                        byPath[key] = FaceFileVersion(path: file.path, kind: row.text(0) ?? "", size: row.int(1), modified: row.double(2))
+                    }
+                } catch { lookupFailure = error }
+            }
+            guard byPath[key] == file else { return false }
+            if let value = reachable[key] { return value }
+            let value = Self.current(file, scope: selected); reachable[key] = value; return value
         }, acceptsScope: { file in
             selected.accepts(file.path) && selected.accepts(FolderSelection.realPath(file.path))
-        }, checkScope: { [self] in try unchangedScope(revision) })
+        }, checkScope: { [self] in
+            if let lookupFailure { throw lookupFailure }
+            try unchangedScope(revision)
+        })
         return try handler.handle(op, request)
     }
     static func fields(_ observation: IndexedFace) -> [String: Any] {

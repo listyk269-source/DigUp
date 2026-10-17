@@ -37,7 +37,7 @@ import LlamaRuntime
 ///                                               thumbnail (a PDF's page `loc`, a video's frame at `loc` seconds, or a
 ///                                               picture a web view can't show, such as HEIC), made beside the requests
 ///                                               (typing never waits on one) and kept in <index>/previews until the
-///                                               next start
+///                                               cache eviction (versioned local cache, approximately 512 MiB)
 ///   {"op":"reload"}                           → {"ok":true,"vectors":n,"code_vectors":n}: after indexing changed the index
 ///   {"op":"folders","roots":[…],"skipped":[…],"types":[…],"code_roots":[…],"code_skipped":[…]} → {"ok":true}
 ///   {"op":"prewarm"}                          → {"ok":true}: starts the encoder and loads the vectors (the panel opening)
@@ -71,10 +71,13 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private let output = NSLock()
     /// Renders for previews: two at a time, beside the request loop, each made once per file version.
     private let previews: URL
-    private var rendered: [String: String] = [:]
-    private let renderLock = NSLock()
-    private let renderSlots = DispatchSemaphore(value: 2)
+    private let previewCache: PreviewCache
+    private let renderQueue: OperationQueue = {
+        let queue = OperationQueue(); queue.name = "DigUp.previews"; queue.maxConcurrentOperationCount = 2
+        queue.qualityOfService = .utility; return queue
+    }()
     private let faceQueries = DispatchQueue(label: "DigUp.face-queries", qos: .utility)
+    private let peopleQueries = DispatchQueue(label: "DigUp.saved-people", qos: .userInitiated)
 
     init(index: URL, roots: [String]?, skipped: [String], types: Set<String>, codeRoots: [String],
          codeSkipped: [String], idleSeconds: Double, device: LlamaDevice?) throws {
@@ -90,9 +93,8 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         self.device = device
         faces = FaceService(directory: index, roots: roots, skipped: skipped, types: types)
         log = index.appendingPathComponent("worker-query.log")
-        previews = index.appendingPathComponent("previews")
-        try? FileManager.default.removeItem(at: previews)
-        try FileManager.default.createDirectory(at: previews, withIntermediateDirectories: true)
+        previews = index.appendingPathComponent("preview-cache-v1")
+        previewCache = try PreviewCache(directory: previews)
         try openCode()
     }
 
@@ -115,6 +117,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
             do {
                 guard let op = request["op"] as? String else { throw CLIError("no op") }
                 if op == "quit" {
+                    renderQueue.cancelAllOperations()
                     write(["id": id, "ok": true])
                     faces.shutdown()
                     lock.withLock { stopEncoder() }
@@ -122,7 +125,9 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 }
                 if ["face_file", "face_search", "people_list", "person_save", "person_faces", "face_label", "people_undo", "face_people", "people_suggestions"].contains(op) {
                     let request = UncheckedSendable(request)
-                    faceQueries.async { [self] in
+                    // A semantic face ranking can take time. It must not hold a saved person's album hostage.
+                    let ranking = op == "face_search" || op == "face_file" || (op == "person_faces" && request.value["mode"] as? String == "suggestions")
+                    (ranking ? faceQueries : peopleQueries).async { [self] in
                         var reply: [String: Any]
                         do {
                             if op == "face_file" { reply = try faces.file(request.value) }
@@ -137,10 +142,8 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                     continue
                 }
                 if op == "render" || op == "media_details" {
-                    renderSlots.wait()
                     let request = UncheckedSendable(request)
-                    Thread.detachNewThread { [self] in
-                        defer { renderSlots.signal() }
+                    renderQueue.addOperation { [self] in
                         var reply: [String: Any]
                         do { reply = try op == "render" ? render(request.value) : mediaDetails(request.value) } catch {
                             reply = ["ok": false, "error": String("\(error)".prefix(500))]
@@ -416,16 +419,29 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
         let kind = request["kind"] as? String ?? "image"
         let loc = (request["loc"] as? NSNumber)?.doubleValue
         let pixels = min(max(request["pixels"] as? Int ?? 1024, 32), 2048)
-        let modified = (try? FileManager.default.attributesOfItem(atPath: path)[.modificationDate] as? Date)?
-            .timeIntervalSince1970 ?? 0
-        let key = "\(path)|\(modified)|\(kind)|\(loc ?? -1)|\(pixels)"
-        if let done = renderLock.withLock({ rendered[key] }), FileManager.default.fileExists(atPath: done) {
-            return ["image": done]
+        guard let renderKind = PreviewImages.Kind(rawValue: kind), loc == nil || (loc!.isFinite && loc! >= 0) else { throw CLIError("Invalid preview options") }
+        let real = FolderSelection.realPath(path)
+        func allowed() -> Bool { lock.withLock { (accepts(path, code: false) && accepts(real, code: false)) || (accepts(path, code: true) && accepts(real, code: true)) } }
+        guard allowed() else { throw CLIError("The preview is outside the selected folders.") }
+        func version() throws -> FaceFileVersion {
+            let attributes = try FileManager.default.attributesOfItem(atPath: FileAccess.path(path))
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  let size = (attributes[.size] as? NSNumber)?.int64Value,
+                  let modified = attributes[.modificationDate] as? Date else { throw CLIError("Preview source unavailable") }
+            return FaceFileVersion(path: path, kind: kind, size: size, modified: modified.timeIntervalSince1970)
         }
-        let image = try PreviewImages.make(PreviewImages.Kind(rawValue: kind) ?? .image, of: path, at: loc,
-                                           pixels: pixels, in: previews)
-        renderLock.withLock { rendered[key] = image }
-        return ["image": image]
+        let before = try version(), key = try PreviewCache.key(file: before, kind: kind, loc: loc, pixels: pixels)
+        if let expected = request["expected_modified"] as? Double,
+           abs(expected - before.modified) >= 0.001 || (request["expected_size"] as? NSNumber)?.int64Value != before.size {
+            throw CLIError("The preview source changed. Retry after indexing.")
+        }
+        let image = try previewCache.image(key: key) { folder in
+            let result = try PreviewImages.make(renderKind, of: path, at: loc, pixels: pixels, in: folder)
+            guard try version() == before, allowed() else { throw CLIError("The preview source changed. Retry after indexing.") }
+            return result
+        }
+        guard try version() == before, allowed() else { throw CLIError("The preview source changed. Retry after indexing.") }
+        return ["image": image.path, "cached": image.cached]
     }
 
     // MARK: The query encoder

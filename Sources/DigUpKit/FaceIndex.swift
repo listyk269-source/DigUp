@@ -59,6 +59,7 @@ public final class FaceIndexStore {
                 id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL REFERENCES face_jobs(path) ON DELETE CASCADE,
                 bbox BLOB NOT NULL, landmarks BLOB NOT NULL, score REAL NOT NULL, loc REAL, embedding BLOB NOT NULL);
             CREATE INDEX IF NOT EXISTS faces_path ON faces(path);
+            CREATE INDEX IF NOT EXISTS faces_path_loc ON faces(path,loc);
             CREATE TABLE IF NOT EXISTS face_meta(key TEXT PRIMARY KEY, value INTEGER NOT NULL);
             INSERT OR IGNORE INTO face_meta(key, value) VALUES('revision', 0);
             """)
@@ -148,6 +149,24 @@ public final class FaceIndexStore {
         var result: [IndexedFace] = []
         try forEach(path: path, model: model, id: id, offset: offset, limit: limit) { result.append($0) }
         return result
+    }
+
+    /// Resolve a saved label by its exact file/model/frame/box identity. Album reads must not decode or compare
+    /// every embedding in the index. The path/frame index bounds this lookup to faces in one observed frame.
+    /// Numeric IDs may change after reindexing; a changed file or detector box never inherits an old label.
+    public func observationID(matching snapshot: FacePersonSnapshot) throws -> Int64? {
+        var found: Int64?
+        try db.query("""
+            SELECT f.id,f.bbox FROM faces f JOIN face_jobs j ON j.path = f.path
+            WHERE f.path = ? AND f.loc IS ? AND j.kind = ? AND j.size = ? AND j.modified = ?
+              AND j.model = ? AND j.state = 'done' ORDER BY f.id
+            """, [.text(snapshot.file.path), snapshot.loc.map(SQLValue.double) ?? .null, .text(snapshot.file.kind),
+                  .int(snapshot.file.size), .double(snapshot.file.modified), .text(snapshot.model)]) { row in
+            guard found == nil, let data = row.blob(1),
+                  let box = try? JSONDecoder().decode([Double].self, from: data), box == snapshot.bbox else { return }
+            found = row.int(0)
+        }
+        return found
     }
 
     /// Streaming vectors keeps a long-video search from materializing every 128-component embedding at once.

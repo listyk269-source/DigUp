@@ -61,6 +61,21 @@ import Testing
         var corrupt = observation().embedding; corrupt[0] = .nan
         #expect(FaceIndexStore.cosine(corrupt, observation().embedding).isNil)
     }
+    @Test func savedObservationLookupUsesExactVersionFrameAndBoxAfterNumericIDReplacement() throws {
+        let directory = folder(); defer { try? FileManager.default.removeItem(at: directory) }
+        let index = try FaceIndexStore(directory: directory)
+        let file = FaceFileVersion(path: "/Фото/Café 🦊.mp4", kind: "video", size: 10, modified: 20)
+        try index.replace(file, model: "sface", config: "v1", frames: 2, faces: [observation(0), observation(2)])
+        let face = try #require(index.observations(path: file.path).last), snapshot = FacePersonSnapshot(face)
+        #expect(try index.observationID(matching: snapshot) == face.face.id)
+        try index.replace(file, model: "sface", config: "v1", frames: 2, faces: [observation(0), observation(2)])
+        #expect(try index.observationID(matching: snapshot) != face.face.id)
+        #expect(try index.observationID(matching: snapshot) == index.observations(path: file.path).last?.face.id)
+        try index.replace(file, model: "new-model", config: "v1", frames: 2, faces: [observation(0), observation(2)])
+        #expect(try index.observationID(matching: snapshot) == nil)
+        try index.replace(FaceFileVersion(path: file.path, kind: "video", size: 11, modified: 20), model: "sface", config: "v1", frames: 2, faces: [observation(0), observation(2)])
+        #expect(try index.observationID(matching: snapshot) == nil)
+    }
     @Test func stagedVideoPublicationRollsBackTruncationAndHonorsCancellation() throws {
         let directory = folder()
         defer { try? FileManager.default.removeItem(at: directory) }
