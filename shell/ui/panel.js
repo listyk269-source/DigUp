@@ -959,6 +959,9 @@ async function exerciseFaceSearchUi() {
   await wait(() => faceSearch.debug().sourceLoaded && $("face-source-image").querySelectorAll(".face-box").length > 0);
   // A background-image URL being assigned is not proof that its pixels have
   // decoded. Capture the finished real selector, including every rendered crop.
+  // A previously assigned label can make the source controls taller. Exercise real scrolling to the
+  // deferred face choices rather than waiting for offscreen thumbnails to load themselves.
+  $("face-choices").scrollIntoView({ block: "nearest" });
   await wait(() => {
     const crops = [...$("face-choices").querySelectorAll(".face-crop")];
     return crops.length > 0 && crops.every((crop) => crop.dataset.loaded === "true" && getComputedStyle(crop).backgroundImage !== "none");
@@ -966,6 +969,7 @@ async function exerciseFaceSearchUi() {
   await Promise.all(faceSearch.fileFaces.map(async (face) => {
     const image = new Image(); image.src = await faceSearch.imageFor({ ...faceSearch.file, ...face }, 360); await image.decode();
   }));
+  document.querySelector(".face-source").scrollTop = 0;
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   report.index = faceSearch.index; report.progressHistory = faceSearch.statusHistory; report.source = photo.path;
   report.faceChoices = faceSearch.fileFaces.length; report.boxes = $("face-source-image").querySelectorAll(".face-box").length;
