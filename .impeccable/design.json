@@ -1,831 +1,916 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-15T18:41:08Z",
-  "title": "Design System: DigUp Graph Workspace",
+  "generatedAt": "2026-10-17T16:51:15.707Z",
+  "title": "Design System: DigUp Desktop Workspace",
   "extensions": {
     "colorMeta": {
       "graphite": {
         "role": "neutral",
         "displayName": "Graphite",
+        "canonical": "#202429",
         "tonalRamp": [
           "oklch(15% 0.0111 254.03)",
-          "oklch(26.43% 0.0111 254.03)",
-          "oklch(37.86% 0.0111 254.03)",
-          "oklch(49.29% 0.0111 254.03)",
-          "oklch(60.71% 0.0111 254.03)",
-          "oklch(72.14% 0.0111 254.03)",
-          "oklch(83.57% 0.0111 254.03)",
+          "oklch(26.4% 0.0111 254.03)",
+          "oklch(37.9% 0.0111 254.03)",
+          "oklch(49.3% 0.0111 254.03)",
+          "oklch(60.7% 0.0111 254.03)",
+          "oklch(72.1% 0.0111 254.03)",
+          "oklch(83.6% 0.0111 254.03)",
           "oklch(95% 0.0111 254.03)"
         ]
       },
       "inspector": {
         "role": "neutral",
         "displayName": "Inspector",
+        "canonical": "#252b32",
         "tonalRamp": [
           "oklch(15% 0.0154 252.36)",
-          "oklch(26.43% 0.0154 252.36)",
-          "oklch(37.86% 0.0154 252.36)",
-          "oklch(49.29% 0.0154 252.36)",
-          "oklch(60.71% 0.0154 252.36)",
-          "oklch(72.14% 0.0154 252.36)",
-          "oklch(83.57% 0.0154 252.36)",
+          "oklch(26.4% 0.0154 252.36)",
+          "oklch(37.9% 0.0154 252.36)",
+          "oklch(49.3% 0.0154 252.36)",
+          "oklch(60.7% 0.0154 252.36)",
+          "oklch(72.1% 0.0154 252.36)",
+          "oklch(83.6% 0.0154 252.36)",
           "oklch(95% 0.0154 252.36)"
         ]
       },
-      "glass-top": {
+      "inspector-overlay": {
         "role": "neutral",
-        "displayName": "Glass Top",
+        "displayName": "Inspector Overlay",
+        "canonical": "#252b32ed",
         "tonalRamp": [
-          "oklch(15% 0.0141 252.24)",
-          "oklch(26.43% 0.0141 252.24)",
-          "oklch(37.86% 0.0141 252.24)",
-          "oklch(49.29% 0.0141 252.24)",
-          "oklch(60.71% 0.0141 252.24)",
-          "oklch(72.14% 0.0141 252.24)",
-          "oklch(83.57% 0.0141 252.24)",
-          "oklch(95% 0.0141 252.24)"
+          "oklch(15% 0.0154 252.36)",
+          "oklch(26.4% 0.0154 252.36)",
+          "oklch(37.9% 0.0154 252.36)",
+          "oklch(49.3% 0.0154 252.36)",
+          "oklch(60.7% 0.0154 252.36)",
+          "oklch(72.1% 0.0154 252.36)",
+          "oklch(83.6% 0.0154 252.36)",
+          "oklch(95% 0.0154 252.36)"
         ]
       },
-      "glass-bottom": {
+      "media-stage": {
         "role": "neutral",
-        "displayName": "Glass Bottom",
+        "displayName": "Media Stage",
+        "canonical": "#181c21",
         "tonalRamp": [
-          "oklch(15% 0.0129 253.01)",
-          "oklch(26.43% 0.0129 253.01)",
-          "oklch(37.86% 0.0129 253.01)",
-          "oklch(49.29% 0.0129 253.01)",
-          "oklch(60.71% 0.0129 253.01)",
-          "oklch(72.14% 0.0129 253.01)",
-          "oklch(83.57% 0.0129 253.01)",
-          "oklch(95% 0.0129 253.01)"
+          "oklch(15% 0.0115 254.07)",
+          "oklch(26.4% 0.0115 254.07)",
+          "oklch(37.9% 0.0115 254.07)",
+          "oklch(49.3% 0.0115 254.07)",
+          "oklch(60.7% 0.0115 254.07)",
+          "oklch(72.1% 0.0115 254.07)",
+          "oklch(83.6% 0.0115 254.07)",
+          "oklch(95% 0.0115 254.07)"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Divider",
+        "canonical": "#3b434c",
+        "tonalRamp": [
+          "oklch(15% 0.0187 251.41)",
+          "oklch(26.4% 0.0187 251.41)",
+          "oklch(37.9% 0.0187 251.41)",
+          "oklch(49.3% 0.0187 251.41)",
+          "oklch(60.7% 0.0187 251.41)",
+          "oklch(72.1% 0.0187 251.41)",
+          "oklch(83.6% 0.0187 251.41)",
+          "oklch(95% 0.0187 251.41)"
+        ]
+      },
+      "evidence-divider": {
+        "role": "neutral",
+        "displayName": "Evidence Divider",
+        "canonical": "#414952",
+        "tonalRamp": [
+          "oklch(15% 0.0184 251.38)",
+          "oklch(26.4% 0.0184 251.38)",
+          "oklch(37.9% 0.0184 251.38)",
+          "oklch(49.3% 0.0184 251.38)",
+          "oklch(60.7% 0.0184 251.38)",
+          "oklch(72.1% 0.0184 251.38)",
+          "oklch(83.6% 0.0184 251.38)",
+          "oklch(95% 0.0184 251.38)"
+        ]
+      },
+      "control-stroke": {
+        "role": "neutral",
+        "displayName": "Control Stroke",
+        "canonical": "#505962",
+        "tonalRamp": [
+          "oklch(15% 0.0186 248.23)",
+          "oklch(26.4% 0.0186 248.23)",
+          "oklch(37.9% 0.0186 248.23)",
+          "oklch(49.3% 0.0186 248.23)",
+          "oklch(60.7% 0.0186 248.23)",
+          "oklch(72.1% 0.0186 248.23)",
+          "oklch(83.6% 0.0186 248.23)",
+          "oklch(95% 0.0186 248.23)"
+        ]
+      },
+      "search-stroke": {
+        "role": "neutral",
+        "displayName": "Search Stroke",
+        "canonical": "#46515c",
+        "tonalRamp": [
+          "oklch(15% 0.0230 248.36)",
+          "oklch(26.4% 0.0230 248.36)",
+          "oklch(37.9% 0.0230 248.36)",
+          "oklch(49.3% 0.0230 248.36)",
+          "oklch(60.7% 0.0230 248.36)",
+          "oklch(72.1% 0.0230 248.36)",
+          "oklch(83.6% 0.0230 248.36)",
+          "oklch(95% 0.0230 248.36)"
+        ]
+      },
+      "shell-chip": {
+        "role": "neutral",
+        "displayName": "Shell Chip",
+        "canonical": "#292f36",
+        "tonalRamp": [
+          "oklch(15% 0.0152 252.34)",
+          "oklch(26.4% 0.0152 252.34)",
+          "oklch(37.9% 0.0152 252.34)",
+          "oklch(49.3% 0.0152 252.34)",
+          "oklch(60.7% 0.0152 252.34)",
+          "oklch(72.1% 0.0152 252.34)",
+          "oklch(83.6% 0.0152 252.34)",
+          "oklch(95% 0.0152 252.34)"
+        ]
+      },
+      "shell-hover": {
+        "role": "neutral",
+        "displayName": "Shell Hover",
+        "canonical": "#2b323a",
+        "tonalRamp": [
+          "oklch(15% 0.0173 251.85)",
+          "oklch(26.4% 0.0173 251.85)",
+          "oklch(37.9% 0.0173 251.85)",
+          "oklch(49.3% 0.0173 251.85)",
+          "oklch(60.7% 0.0173 251.85)",
+          "oklch(72.1% 0.0173 251.85)",
+          "oklch(83.6% 0.0173 251.85)",
+          "oklch(95% 0.0173 251.85)"
         ]
       },
       "quiet-fill": {
         "role": "neutral",
         "displayName": "Quiet Fill",
+        "canonical": "#323940cc",
         "tonalRamp": [
-          "oklch(15% 0.0155 248.28 / 0.800)",
-          "oklch(26.43% 0.0155 248.28 / 0.800)",
-          "oklch(37.86% 0.0155 248.28 / 0.800)",
-          "oklch(49.29% 0.0155 248.28 / 0.800)",
-          "oklch(60.71% 0.0155 248.28 / 0.800)",
-          "oklch(72.14% 0.0155 248.28 / 0.800)",
-          "oklch(83.57% 0.0155 248.28 / 0.800)",
-          "oklch(95% 0.0155 248.28 / 0.800)"
+          "oklch(15% 0.0155 248.28)",
+          "oklch(26.4% 0.0155 248.28)",
+          "oklch(37.9% 0.0155 248.28)",
+          "oklch(49.3% 0.0155 248.28)",
+          "oklch(60.7% 0.0155 248.28)",
+          "oklch(72.1% 0.0155 248.28)",
+          "oklch(83.6% 0.0155 248.28)",
+          "oklch(95% 0.0155 248.28)"
+        ]
+      },
+      "quiet-solid": {
+        "role": "neutral",
+        "displayName": "Quiet Solid",
+        "canonical": "#323940",
+        "tonalRamp": [
+          "oklch(15% 0.0155 248.28)",
+          "oklch(26.4% 0.0155 248.28)",
+          "oklch(37.9% 0.0155 248.28)",
+          "oklch(49.3% 0.0155 248.28)",
+          "oklch(60.7% 0.0155 248.28)",
+          "oklch(72.1% 0.0155 248.28)",
+          "oklch(83.6% 0.0155 248.28)",
+          "oklch(95% 0.0155 248.28)"
         ]
       },
       "quiet-hover": {
         "role": "neutral",
         "displayName": "Quiet Hover",
+        "canonical": "#424c57",
         "tonalRamp": [
           "oklch(15% 0.0225 250.87)",
-          "oklch(26.43% 0.0225 250.87)",
-          "oklch(37.86% 0.0225 250.87)",
-          "oklch(49.29% 0.0225 250.87)",
-          "oklch(60.71% 0.0225 250.87)",
-          "oklch(72.14% 0.0225 250.87)",
-          "oklch(83.57% 0.0225 250.87)",
+          "oklch(26.4% 0.0225 250.87)",
+          "oklch(37.9% 0.0225 250.87)",
+          "oklch(49.3% 0.0225 250.87)",
+          "oklch(60.7% 0.0225 250.87)",
+          "oklch(72.1% 0.0225 250.87)",
+          "oklch(83.6% 0.0225 250.87)",
           "oklch(95% 0.0225 250.87)"
         ]
       },
       "active-fill": {
         "role": "neutral",
         "displayName": "Active Fill",
+        "canonical": "#3a4652",
         "tonalRamp": [
           "oklch(15% 0.0257 248.49)",
-          "oklch(26.43% 0.0257 248.49)",
-          "oklch(37.86% 0.0257 248.49)",
-          "oklch(49.29% 0.0257 248.49)",
-          "oklch(60.71% 0.0257 248.49)",
-          "oklch(72.14% 0.0257 248.49)",
-          "oklch(83.57% 0.0257 248.49)",
+          "oklch(26.4% 0.0257 248.49)",
+          "oklch(37.9% 0.0257 248.49)",
+          "oklch(49.3% 0.0257 248.49)",
+          "oklch(60.7% 0.0257 248.49)",
+          "oklch(72.1% 0.0257 248.49)",
+          "oklch(83.6% 0.0257 248.49)",
           "oklch(95% 0.0257 248.49)"
-        ]
-      },
-      "control-stroke": {
-        "role": "neutral",
-        "displayName": "Control Stroke",
-        "tonalRamp": [
-          "oklch(15% 0.0186 248.23)",
-          "oklch(26.43% 0.0186 248.23)",
-          "oklch(37.86% 0.0186 248.23)",
-          "oklch(49.29% 0.0186 248.23)",
-          "oklch(60.71% 0.0186 248.23)",
-          "oklch(72.14% 0.0186 248.23)",
-          "oklch(83.57% 0.0186 248.23)",
-          "oklch(95% 0.0186 248.23)"
-        ]
-      },
-      "divider": {
-        "role": "neutral",
-        "displayName": "Divider",
-        "tonalRamp": [
-          "oklch(15% 0.0184 251.38)",
-          "oklch(26.43% 0.0184 251.38)",
-          "oklch(37.86% 0.0184 251.38)",
-          "oklch(49.29% 0.0184 251.38)",
-          "oklch(60.71% 0.0184 251.38)",
-          "oklch(72.14% 0.0184 251.38)",
-          "oklch(83.57% 0.0184 251.38)",
-          "oklch(95% 0.0184 251.38)"
         ]
       },
       "text": {
         "role": "neutral",
         "displayName": "Text",
+        "canonical": "#eef2f6",
         "tonalRamp": [
           "oklch(15% 0.0069 247.90)",
-          "oklch(26.43% 0.0069 247.90)",
-          "oklch(37.86% 0.0069 247.90)",
-          "oklch(49.29% 0.0069 247.90)",
-          "oklch(60.71% 0.0069 247.90)",
-          "oklch(72.14% 0.0069 247.90)",
-          "oklch(83.57% 0.0069 247.90)",
+          "oklch(26.4% 0.0069 247.90)",
+          "oklch(37.9% 0.0069 247.90)",
+          "oklch(49.3% 0.0069 247.90)",
+          "oklch(60.7% 0.0069 247.90)",
+          "oklch(72.1% 0.0069 247.90)",
+          "oklch(83.6% 0.0069 247.90)",
           "oklch(95% 0.0069 247.90)"
         ]
       },
       "button-text": {
         "role": "neutral",
         "displayName": "Button Text",
+        "canonical": "#e1e7ee",
         "tonalRamp": [
           "oklch(15% 0.0115 252.09)",
-          "oklch(26.43% 0.0115 252.09)",
-          "oklch(37.86% 0.0115 252.09)",
-          "oklch(49.29% 0.0115 252.09)",
-          "oklch(60.71% 0.0115 252.09)",
-          "oklch(72.14% 0.0115 252.09)",
-          "oklch(83.57% 0.0115 252.09)",
+          "oklch(26.4% 0.0115 252.09)",
+          "oklch(37.9% 0.0115 252.09)",
+          "oklch(49.3% 0.0115 252.09)",
+          "oklch(60.7% 0.0115 252.09)",
+          "oklch(72.1% 0.0115 252.09)",
+          "oklch(83.6% 0.0115 252.09)",
           "oklch(95% 0.0115 252.09)"
         ]
       },
       "secondary-text": {
         "role": "neutral",
         "displayName": "Secondary Text",
+        "canonical": "#b4bec8",
         "tonalRamp": [
           "oklch(15% 0.0180 248.05)",
-          "oklch(26.43% 0.0180 248.05)",
-          "oklch(37.86% 0.0180 248.05)",
-          "oklch(49.29% 0.0180 248.05)",
-          "oklch(60.71% 0.0180 248.05)",
-          "oklch(72.14% 0.0180 248.05)",
-          "oklch(83.57% 0.0180 248.05)",
+          "oklch(26.4% 0.0180 248.05)",
+          "oklch(37.9% 0.0180 248.05)",
+          "oklch(49.3% 0.0180 248.05)",
+          "oklch(60.7% 0.0180 248.05)",
+          "oklch(72.1% 0.0180 248.05)",
+          "oklch(83.6% 0.0180 248.05)",
           "oklch(95% 0.0180 248.05)"
+        ]
+      },
+      "tertiary-text": {
+        "role": "neutral",
+        "displayName": "Tertiary Text",
+        "canonical": "#a4aeba",
+        "tonalRamp": [
+          "oklch(15% 0.0206 252.92)",
+          "oklch(26.4% 0.0206 252.92)",
+          "oklch(37.9% 0.0206 252.92)",
+          "oklch(49.3% 0.0206 252.92)",
+          "oklch(60.7% 0.0206 252.92)",
+          "oklch(72.1% 0.0206 252.92)",
+          "oklch(83.6% 0.0206 252.92)",
+          "oklch(95% 0.0206 252.92)"
+        ]
+      },
+      "amber": {
+        "role": "primary",
+        "displayName": "Amber",
+        "canonical": "#f0a048",
+        "tonalRamp": [
+          "oklch(15% 0.1393 65.39)",
+          "oklch(26.4% 0.1393 65.39)",
+          "oklch(37.9% 0.1393 65.39)",
+          "oklch(49.3% 0.1393 65.39)",
+          "oklch(60.7% 0.1393 65.39)",
+          "oklch(72.1% 0.1393 65.39)",
+          "oklch(83.6% 0.1393 65.39)",
+          "oklch(95% 0.1393 65.39)"
+        ]
+      },
+      "amber-hover": {
+        "role": "primary",
+        "displayName": "Amber Hover",
+        "canonical": "#f6b466",
+        "tonalRamp": [
+          "oklch(15% 0.1222 69.25)",
+          "oklch(26.4% 0.1222 69.25)",
+          "oklch(37.9% 0.1222 69.25)",
+          "oklch(49.3% 0.1222 69.25)",
+          "oklch(60.7% 0.1222 69.25)",
+          "oklch(72.1% 0.1222 69.25)",
+          "oklch(83.6% 0.1222 69.25)",
+          "oklch(95% 0.1222 69.25)"
+        ]
+      },
+      "amber-ink": {
+        "role": "primary",
+        "displayName": "Amber Ink",
+        "canonical": "#211b12",
+        "tonalRamp": [
+          "oklch(15% 0.0189 77.63)",
+          "oklch(26.4% 0.0189 77.63)",
+          "oklch(37.9% 0.0189 77.63)",
+          "oklch(49.3% 0.0189 77.63)",
+          "oklch(60.7% 0.0189 77.63)",
+          "oklch(72.1% 0.0189 77.63)",
+          "oklch(83.6% 0.0189 77.63)",
+          "oklch(95% 0.0189 77.63)"
+        ]
+      },
+      "person-selected": {
+        "role": "primary",
+        "displayName": "Person Selected",
+        "canonical": "#453725",
+        "tonalRamp": [
+          "oklch(15% 0.0352 73.23)",
+          "oklch(26.4% 0.0352 73.23)",
+          "oklch(37.9% 0.0352 73.23)",
+          "oklch(49.3% 0.0352 73.23)",
+          "oklch(60.7% 0.0352 73.23)",
+          "oklch(72.1% 0.0352 73.23)",
+          "oklch(83.6% 0.0352 73.23)",
+          "oklch(95% 0.0352 73.23)"
+        ]
+      },
+      "person-selected-stroke": {
+        "role": "primary",
+        "displayName": "Person Selected Stroke",
+        "canonical": "#8d673a",
+        "tonalRamp": [
+          "oklch(15% 0.0784 69.55)",
+          "oklch(26.4% 0.0784 69.55)",
+          "oklch(37.9% 0.0784 69.55)",
+          "oklch(49.3% 0.0784 69.55)",
+          "oklch(60.7% 0.0784 69.55)",
+          "oklch(72.1% 0.0784 69.55)",
+          "oklch(83.6% 0.0784 69.55)",
+          "oklch(95% 0.0784 69.55)"
+        ]
+      },
+      "invalid-stroke": {
+        "role": "secondary",
+        "displayName": "Invalid Stroke",
+        "canonical": "#e3a5a1",
+        "tonalRamp": [
+          "oklch(15% 0.0741 23.07)",
+          "oklch(26.4% 0.0741 23.07)",
+          "oklch(37.9% 0.0741 23.07)",
+          "oklch(49.3% 0.0741 23.07)",
+          "oklch(60.7% 0.0741 23.07)",
+          "oklch(72.1% 0.0741 23.07)",
+          "oklch(83.6% 0.0741 23.07)",
+          "oklch(95% 0.0741 23.07)"
+        ]
+      },
+      "error-text": {
+        "role": "secondary",
+        "displayName": "Error Text",
+        "canonical": "#f0cfcd",
+        "tonalRamp": [
+          "oklch(15% 0.0373 22.00)",
+          "oklch(26.4% 0.0373 22.00)",
+          "oklch(37.9% 0.0373 22.00)",
+          "oklch(49.3% 0.0373 22.00)",
+          "oklch(60.7% 0.0373 22.00)",
+          "oklch(72.1% 0.0373 22.00)",
+          "oklch(83.6% 0.0373 22.00)",
+          "oklch(95% 0.0373 22.00)"
+        ]
+      },
+      "scrollbar-thumb": {
+        "role": "neutral",
+        "displayName": "Scrollbar Thumb",
+        "canonical": "#687785",
+        "tonalRamp": [
+          "oklch(15% 0.0282 246.47)",
+          "oklch(26.4% 0.0282 246.47)",
+          "oklch(37.9% 0.0282 246.47)",
+          "oklch(49.3% 0.0282 246.47)",
+          "oklch(60.7% 0.0282 246.47)",
+          "oklch(72.1% 0.0282 246.47)",
+          "oklch(83.6% 0.0282 246.47)",
+          "oklch(95% 0.0282 246.47)"
+        ]
+      },
+      "scrollbar-hover": {
+        "role": "neutral",
+        "displayName": "Scrollbar Hover",
+        "canonical": "#8999a8",
+        "tonalRamp": [
+          "oklch(15% 0.0288 246.51)",
+          "oklch(26.4% 0.0288 246.51)",
+          "oklch(37.9% 0.0288 246.51)",
+          "oklch(49.3% 0.0288 246.51)",
+          "oklch(60.7% 0.0288 246.51)",
+          "oklch(72.1% 0.0288 246.51)",
+          "oklch(83.6% 0.0288 246.51)",
+          "oklch(95% 0.0288 246.51)"
+        ]
+      },
+      "glass-top": {
+        "role": "neutral",
+        "displayName": "Glass Top",
+        "canonical": "#454b52",
+        "tonalRamp": [
+          "oklch(15% 0.0141 252.24)",
+          "oklch(26.4% 0.0141 252.24)",
+          "oklch(37.9% 0.0141 252.24)",
+          "oklch(49.3% 0.0141 252.24)",
+          "oklch(60.7% 0.0141 252.24)",
+          "oklch(72.1% 0.0141 252.24)",
+          "oklch(83.6% 0.0141 252.24)",
+          "oklch(95% 0.0141 252.24)"
+        ]
+      },
+      "glass-bottom": {
+        "role": "neutral",
+        "displayName": "Glass Bottom",
+        "canonical": "#2b3036",
+        "tonalRamp": [
+          "oklch(15% 0.0129 253.01)",
+          "oklch(26.4% 0.0129 253.01)",
+          "oklch(37.9% 0.0129 253.01)",
+          "oklch(49.3% 0.0129 253.01)",
+          "oklch(60.7% 0.0129 253.01)",
+          "oklch(72.1% 0.0129 253.01)",
+          "oklch(83.6% 0.0129 253.01)",
+          "oklch(95% 0.0129 253.01)"
         ]
       },
       "node-text": {
         "role": "neutral",
         "displayName": "Node Text",
+        "canonical": "#f0f2f5",
         "tonalRamp": [
           "oklch(15% 0.0046 258.32)",
-          "oklch(26.43% 0.0046 258.32)",
-          "oklch(37.86% 0.0046 258.32)",
-          "oklch(49.29% 0.0046 258.32)",
-          "oklch(60.71% 0.0046 258.32)",
-          "oklch(72.14% 0.0046 258.32)",
-          "oklch(83.57% 0.0046 258.32)",
+          "oklch(26.4% 0.0046 258.32)",
+          "oklch(37.9% 0.0046 258.32)",
+          "oklch(49.3% 0.0046 258.32)",
+          "oklch(60.7% 0.0046 258.32)",
+          "oklch(72.1% 0.0046 258.32)",
+          "oklch(83.6% 0.0046 258.32)",
           "oklch(95% 0.0046 258.32)"
         ]
       },
       "node-secondary": {
         "role": "neutral",
         "displayName": "Node Secondary",
+        "canonical": "#afb8c1",
         "tonalRamp": [
           "oklch(15% 0.0163 248.04)",
-          "oklch(26.43% 0.0163 248.04)",
-          "oklch(37.86% 0.0163 248.04)",
-          "oklch(49.29% 0.0163 248.04)",
-          "oklch(60.71% 0.0163 248.04)",
-          "oklch(72.14% 0.0163 248.04)",
-          "oklch(83.57% 0.0163 248.04)",
+          "oklch(26.4% 0.0163 248.04)",
+          "oklch(37.9% 0.0163 248.04)",
+          "oklch(49.3% 0.0163 248.04)",
+          "oklch(60.7% 0.0163 248.04)",
+          "oklch(72.1% 0.0163 248.04)",
+          "oklch(83.6% 0.0163 248.04)",
           "oklch(95% 0.0163 248.04)"
-        ]
-      },
-      "amber": {
-        "role": "primary",
-        "displayName": "Amber",
-        "tonalRamp": [
-          "oklch(15% 0.1393 65.39)",
-          "oklch(26.43% 0.1393 65.39)",
-          "oklch(37.86% 0.1393 65.39)",
-          "oklch(49.29% 0.1393 65.39)",
-          "oklch(60.71% 0.1393 65.39)",
-          "oklch(72.14% 0.1393 65.39)",
-          "oklch(83.57% 0.1393 65.39)",
-          "oklch(95% 0.1393 65.39)"
         ]
       },
       "amber-fill": {
         "role": "primary",
         "displayName": "Amber Fill",
+        "canonical": "#483827",
         "tonalRamp": [
           "oklch(15% 0.0357 67.96)",
-          "oklch(26.43% 0.0357 67.96)",
-          "oklch(37.86% 0.0357 67.96)",
-          "oklch(49.29% 0.0357 67.96)",
-          "oklch(60.71% 0.0357 67.96)",
-          "oklch(72.14% 0.0357 67.96)",
-          "oklch(83.57% 0.0357 67.96)",
+          "oklch(26.4% 0.0357 67.96)",
+          "oklch(37.9% 0.0357 67.96)",
+          "oklch(49.3% 0.0357 67.96)",
+          "oklch(60.7% 0.0357 67.96)",
+          "oklch(72.1% 0.0357 67.96)",
+          "oklch(83.6% 0.0357 67.96)",
           "oklch(95% 0.0357 67.96)"
         ]
       },
       "amber-label": {
         "role": "primary",
         "displayName": "Amber Label",
+        "canonical": "#d6bd9b",
         "tonalRamp": [
           "oklch(15% 0.0539 75.37)",
-          "oklch(26.43% 0.0539 75.37)",
-          "oklch(37.86% 0.0539 75.37)",
-          "oklch(49.29% 0.0539 75.37)",
-          "oklch(60.71% 0.0539 75.37)",
-          "oklch(72.14% 0.0539 75.37)",
-          "oklch(83.57% 0.0539 75.37)",
+          "oklch(26.4% 0.0539 75.37)",
+          "oklch(37.9% 0.0539 75.37)",
+          "oklch(49.3% 0.0539 75.37)",
+          "oklch(60.7% 0.0539 75.37)",
+          "oklch(72.1% 0.0539 75.37)",
+          "oklch(83.6% 0.0539 75.37)",
           "oklch(95% 0.0539 75.37)"
         ]
       },
       "action-fill": {
         "role": "primary",
         "displayName": "Action Fill",
+        "canonical": "#52402d",
         "tonalRamp": [
           "oklch(15% 0.0391 67.76)",
-          "oklch(26.43% 0.0391 67.76)",
-          "oklch(37.86% 0.0391 67.76)",
-          "oklch(49.29% 0.0391 67.76)",
-          "oklch(60.71% 0.0391 67.76)",
-          "oklch(72.14% 0.0391 67.76)",
-          "oklch(83.57% 0.0391 67.76)",
+          "oklch(26.4% 0.0391 67.76)",
+          "oklch(37.9% 0.0391 67.76)",
+          "oklch(49.3% 0.0391 67.76)",
+          "oklch(60.7% 0.0391 67.76)",
+          "oklch(72.1% 0.0391 67.76)",
+          "oklch(83.6% 0.0391 67.76)",
           "oklch(95% 0.0391 67.76)"
         ]
       },
       "action-text": {
         "role": "primary",
         "displayName": "Action Text",
+        "canonical": "#f5d8af",
         "tonalRamp": [
           "oklch(15% 0.0626 76.33)",
-          "oklch(26.43% 0.0626 76.33)",
-          "oklch(37.86% 0.0626 76.33)",
-          "oklch(49.29% 0.0626 76.33)",
-          "oklch(60.71% 0.0626 76.33)",
-          "oklch(72.14% 0.0626 76.33)",
-          "oklch(83.57% 0.0626 76.33)",
+          "oklch(26.4% 0.0626 76.33)",
+          "oklch(37.9% 0.0626 76.33)",
+          "oklch(49.3% 0.0626 76.33)",
+          "oklch(60.7% 0.0626 76.33)",
+          "oklch(72.1% 0.0626 76.33)",
+          "oklch(83.6% 0.0626 76.33)",
           "oklch(95% 0.0626 76.33)"
         ]
       },
       "cyan": {
         "role": "secondary",
         "displayName": "Cyan",
+        "canonical": "#77acc5",
         "tonalRamp": [
           "oklch(15% 0.0666 229.05)",
-          "oklch(26.43% 0.0666 229.05)",
-          "oklch(37.86% 0.0666 229.05)",
-          "oklch(49.29% 0.0666 229.05)",
-          "oklch(60.71% 0.0666 229.05)",
-          "oklch(72.14% 0.0666 229.05)",
-          "oklch(83.57% 0.0666 229.05)",
+          "oklch(26.4% 0.0666 229.05)",
+          "oklch(37.9% 0.0666 229.05)",
+          "oklch(49.3% 0.0666 229.05)",
+          "oklch(60.7% 0.0666 229.05)",
+          "oklch(72.1% 0.0666 229.05)",
+          "oklch(83.6% 0.0666 229.05)",
           "oklch(95% 0.0666 229.05)"
         ]
       },
       "cyan-fill": {
         "role": "secondary",
         "displayName": "Cyan Fill",
+        "canonical": "#293b47",
         "tonalRamp": [
           "oklch(15% 0.0314 238.06)",
-          "oklch(26.43% 0.0314 238.06)",
-          "oklch(37.86% 0.0314 238.06)",
-          "oklch(49.29% 0.0314 238.06)",
-          "oklch(60.71% 0.0314 238.06)",
-          "oklch(72.14% 0.0314 238.06)",
-          "oklch(83.57% 0.0314 238.06)",
+          "oklch(26.4% 0.0314 238.06)",
+          "oklch(37.9% 0.0314 238.06)",
+          "oklch(49.3% 0.0314 238.06)",
+          "oklch(60.7% 0.0314 238.06)",
+          "oklch(72.1% 0.0314 238.06)",
+          "oklch(83.6% 0.0314 238.06)",
           "oklch(95% 0.0314 238.06)"
         ]
       },
       "cyan-label": {
         "role": "secondary",
         "displayName": "Cyan Label",
+        "canonical": "#a9cadc",
         "tonalRamp": [
           "oklch(15% 0.0435 231.85)",
-          "oklch(26.43% 0.0435 231.85)",
-          "oklch(37.86% 0.0435 231.85)",
-          "oklch(49.29% 0.0435 231.85)",
-          "oklch(60.71% 0.0435 231.85)",
-          "oklch(72.14% 0.0435 231.85)",
-          "oklch(83.57% 0.0435 231.85)",
+          "oklch(26.4% 0.0435 231.85)",
+          "oklch(37.9% 0.0435 231.85)",
+          "oklch(49.3% 0.0435 231.85)",
+          "oklch(60.7% 0.0435 231.85)",
+          "oklch(72.1% 0.0435 231.85)",
+          "oklch(83.6% 0.0435 231.85)",
           "oklch(95% 0.0435 231.85)"
         ]
       },
-      "inspector-overlay": {
-        "role": "neutral",
-        "displayName": "Inspector Overlay",
-        "tonalRamp": [
-          "oklch(15% 0.0154 252.36 / 0.929)",
-          "oklch(26.43% 0.0154 252.36 / 0.929)",
-          "oklch(37.86% 0.0154 252.36 / 0.929)",
-          "oklch(49.29% 0.0154 252.36 / 0.929)",
-          "oklch(60.71% 0.0154 252.36 / 0.929)",
-          "oklch(72.14% 0.0154 252.36 / 0.929)",
-          "oklch(83.57% 0.0154 252.36 / 0.929)",
-          "oklch(95% 0.0154 252.36 / 0.929)"
-        ]
-      },
       "confirmed": {
-        "role": "tertiary",
-        "displayName": "Confirmed Green",
+        "role": "secondary",
+        "displayName": "Confirmed",
+        "canonical": "#83cda2",
         "tonalRamp": [
           "oklch(15% 0.0966 157.76)",
-          "oklch(26.43% 0.0966 157.76)",
-          "oklch(37.86% 0.0966 157.76)",
-          "oklch(49.29% 0.0966 157.76)",
-          "oklch(60.71% 0.0966 157.76)",
-          "oklch(72.14% 0.0966 157.76)",
-          "oklch(83.57% 0.0966 157.76)",
+          "oklch(26.4% 0.0966 157.76)",
+          "oklch(37.9% 0.0966 157.76)",
+          "oklch(49.3% 0.0966 157.76)",
+          "oklch(60.7% 0.0966 157.76)",
+          "oklch(72.1% 0.0966 157.76)",
+          "oklch(83.6% 0.0966 157.76)",
           "oklch(95% 0.0966 157.76)"
         ]
       },
       "confirmed-fill": {
-        "role": "tertiary",
+        "role": "secondary",
         "displayName": "Confirmed Fill",
+        "canonical": "#2c4236",
         "tonalRamp": [
           "oklch(15% 0.0347 160.13)",
-          "oklch(26.43% 0.0347 160.13)",
-          "oklch(37.86% 0.0347 160.13)",
-          "oklch(49.29% 0.0347 160.13)",
-          "oklch(60.71% 0.0347 160.13)",
-          "oklch(72.14% 0.0347 160.13)",
-          "oklch(83.57% 0.0347 160.13)",
+          "oklch(26.4% 0.0347 160.13)",
+          "oklch(37.9% 0.0347 160.13)",
+          "oklch(49.3% 0.0347 160.13)",
+          "oklch(60.7% 0.0347 160.13)",
+          "oklch(72.1% 0.0347 160.13)",
+          "oklch(83.6% 0.0347 160.13)",
           "oklch(95% 0.0347 160.13)"
         ]
       },
       "confirmed-text": {
-        "role": "tertiary",
+        "role": "secondary",
         "displayName": "Confirmed Text",
+        "canonical": "#b8e5ca",
         "tonalRamp": [
           "oklch(15% 0.0596 158.58)",
-          "oklch(26.43% 0.0596 158.58)",
-          "oklch(37.86% 0.0596 158.58)",
-          "oklch(49.29% 0.0596 158.58)",
-          "oklch(60.71% 0.0596 158.58)",
-          "oklch(72.14% 0.0596 158.58)",
-          "oklch(83.57% 0.0596 158.58)",
+          "oklch(26.4% 0.0596 158.58)",
+          "oklch(37.9% 0.0596 158.58)",
+          "oklch(49.3% 0.0596 158.58)",
+          "oklch(60.7% 0.0596 158.58)",
+          "oklch(72.1% 0.0596 158.58)",
+          "oklch(83.6% 0.0596 158.58)",
           "oklch(95% 0.0596 158.58)"
         ]
       },
       "rejected": {
-        "role": "tertiary",
-        "displayName": "Rejected Red",
+        "role": "secondary",
+        "displayName": "Rejected",
+        "canonical": "#d99c99",
         "tonalRamp": [
           "oklch(15% 0.0736 22.14)",
-          "oklch(26.43% 0.0736 22.14)",
-          "oklch(37.86% 0.0736 22.14)",
-          "oklch(49.29% 0.0736 22.14)",
-          "oklch(60.71% 0.0736 22.14)",
-          "oklch(72.14% 0.0736 22.14)",
-          "oklch(83.57% 0.0736 22.14)",
+          "oklch(26.4% 0.0736 22.14)",
+          "oklch(37.9% 0.0736 22.14)",
+          "oklch(49.3% 0.0736 22.14)",
+          "oklch(60.7% 0.0736 22.14)",
+          "oklch(72.1% 0.0736 22.14)",
+          "oklch(83.6% 0.0736 22.14)",
           "oklch(95% 0.0736 22.14)"
         ]
       },
       "rejected-fill": {
-        "role": "tertiary",
+        "role": "secondary",
         "displayName": "Rejected Fill",
+        "canonical": "#483334",
         "tonalRamp": [
           "oklch(15% 0.0305 15.60)",
-          "oklch(26.43% 0.0305 15.60)",
-          "oklch(37.86% 0.0305 15.60)",
-          "oklch(49.29% 0.0305 15.60)",
-          "oklch(60.71% 0.0305 15.60)",
-          "oklch(72.14% 0.0305 15.60)",
-          "oklch(83.57% 0.0305 15.60)",
+          "oklch(26.4% 0.0305 15.60)",
+          "oklch(37.9% 0.0305 15.60)",
+          "oklch(49.3% 0.0305 15.60)",
+          "oklch(60.7% 0.0305 15.60)",
+          "oklch(72.1% 0.0305 15.60)",
+          "oklch(83.6% 0.0305 15.60)",
           "oklch(95% 0.0305 15.60)"
-        ]
-      },
-      "rejected-text": {
-        "role": "tertiary",
-        "displayName": "Rejected Text",
-        "tonalRamp": [
-          "oklch(15% 0.0373 22.00)",
-          "oklch(26.43% 0.0373 22.00)",
-          "oklch(37.86% 0.0373 22.00)",
-          "oklch(49.29% 0.0373 22.00)",
-          "oklch(60.71% 0.0373 22.00)",
-          "oklch(72.14% 0.0373 22.00)",
-          "oklch(83.57% 0.0373 22.00)",
-          "oklch(95% 0.0373 22.00)"
         ]
       },
       "modality-fill": {
         "role": "neutral",
         "displayName": "Modality Fill",
+        "canonical": "#293039",
         "tonalRamp": [
           "oklch(15% 0.0190 254.80)",
-          "oklch(26.43% 0.0190 254.80)",
-          "oklch(37.86% 0.0190 254.80)",
-          "oklch(49.29% 0.0190 254.80)",
-          "oklch(60.71% 0.0190 254.80)",
-          "oklch(72.14% 0.0190 254.80)",
-          "oklch(83.57% 0.0190 254.80)",
+          "oklch(26.4% 0.0190 254.80)",
+          "oklch(37.9% 0.0190 254.80)",
+          "oklch(49.3% 0.0190 254.80)",
+          "oklch(60.7% 0.0190 254.80)",
+          "oklch(72.1% 0.0190 254.80)",
+          "oklch(83.6% 0.0190 254.80)",
           "oklch(95% 0.0190 254.80)"
-        ]
-      },
-      "quiet-solid": {
-        "role": "neutral",
-        "displayName": "Quiet Solid",
-        "tonalRamp": [
-          "oklch(15.00% 0.0155 248.28)",
-          "oklch(26.43% 0.0155 248.28)",
-          "oklch(37.86% 0.0155 248.28)",
-          "oklch(49.29% 0.0155 248.28)",
-          "oklch(60.71% 0.0155 248.28)",
-          "oklch(72.14% 0.0155 248.28)",
-          "oklch(83.57% 0.0155 248.28)",
-          "oklch(95.00% 0.0155 248.28)"
-        ]
-      },
-      "media-stage": {
-        "role": "neutral",
-        "displayName": "Media Stage",
-        "tonalRamp": [
-          "oklch(15.00% 0.0115 254.07)",
-          "oklch(26.43% 0.0115 254.07)",
-          "oklch(37.86% 0.0115 254.07)",
-          "oklch(49.29% 0.0115 254.07)",
-          "oklch(60.71% 0.0115 254.07)",
-          "oklch(72.14% 0.0115 254.07)",
-          "oklch(83.57% 0.0115 254.07)",
-          "oklch(95.00% 0.0115 254.07)"
-        ]
-      },
-      "scrollbar-thumb": {
-        "role": "neutral",
-        "displayName": "Scrollbar Thumb",
-        "tonalRamp": [
-          "oklch(15.00% 0.0282 246.47)",
-          "oklch(26.43% 0.0282 246.47)",
-          "oklch(37.86% 0.0282 246.47)",
-          "oklch(49.29% 0.0282 246.47)",
-          "oklch(60.71% 0.0282 246.47)",
-          "oklch(72.14% 0.0282 246.47)",
-          "oklch(83.57% 0.0282 246.47)",
-          "oklch(95.00% 0.0282 246.47)"
-        ]
-      },
-      "scrollbar-hover": {
-        "role": "neutral",
-        "displayName": "Scrollbar Hover",
-        "tonalRamp": [
-          "oklch(15.00% 0.0288 246.51)",
-          "oklch(26.43% 0.0288 246.51)",
-          "oklch(37.86% 0.0288 246.51)",
-          "oklch(49.29% 0.0288 246.51)",
-          "oklch(60.71% 0.0288 246.51)",
-          "oklch(72.14% 0.0288 246.51)",
-          "oklch(83.57% 0.0288 246.51)",
-          "oklch(95.00% 0.0288 246.51)"
         ]
       }
     },
     "typographyMeta": {
-      "title": {
-        "displayName": "Graph title",
-        "purpose": "Compact graph heading."
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Current source role: wordmark."
       },
-      "file-name": {
-        "displayName": "File name",
-        "purpose": "Measured card identity with middle ellipsis."
+      "search": {
+        "displayName": "Search",
+        "purpose": "Current source role: search."
       },
-      "file-kind": {
-        "displayName": "File kind",
-        "purpose": "Supporting media type."
+      "person-title": {
+        "displayName": "Person Title",
+        "purpose": "Current source role: person title."
+      },
+      "drawer-title": {
+        "displayName": "Drawer Title",
+        "purpose": "Current source role: drawer title."
+      },
+      "workspace-title": {
+        "displayName": "Workspace Title",
+        "purpose": "Current source role: workspace title."
+      },
+      "period-title": {
+        "displayName": "Period Title",
+        "purpose": "Current source role: period title."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Inspector explanation and footer."
+        "purpose": "Inherited native desktop control and body type."
+      },
+      "directory-name": {
+        "displayName": "Directory Name",
+        "purpose": "Current source role: directory name."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Controls, status, and similarity values."
+        "purpose": "Current source role: label."
+      },
+      "explanation": {
+        "displayName": "Explanation",
+        "purpose": "Current source role: explanation."
       },
       "metadata": {
         "displayName": "Metadata",
-        "purpose": "Paths, minimap, and zoom readout."
+        "purpose": "Current source role: metadata."
       },
-      "panel-title": {
-        "displayName": "Panel Title",
-        "purpose": "Face-workspace subsections and local face-index status."
+      "file-name": {
+        "displayName": "File Name",
+        "purpose": "Measured SVG graph card text."
+      },
+      "file-kind": {
+        "displayName": "File Kind",
+        "purpose": "Measured SVG graph card text."
       }
     },
     "shadows": [
       {
-        "name": "minimap-lift",
+        "name": "drawer",
+        "value": "-12px 0 30px #00000035",
+        "purpose": "On-demand settings/index drawer only."
+      },
+      {
+        "name": "minimap",
         "value": "0 7px 20px #00000040",
-        "purpose": "Floating camera surface above the graph."
+        "purpose": "Graph camera surface."
       },
       {
-        "name": "selected-video-glow",
-        "value": "SVG SourceAlpha Gaussian blur stdDeviation=5; flood opacity=.38; amber #ee9a3f or blue #70b8de; merged behind SourceGraphic",
-        "purpose": "Reinforce selected and video cards without removing the stroke."
-      },
-      {
-        "name": "context-menu-lift",
+        "name": "context-menu",
         "value": "0 9px 28px #00000055",
-        "purpose": "Separate temporary graph actions from the canvas."
+        "purpose": "Temporary graph actions."
       }
     ],
     "motion": [
       {
-        "name": "reduced-motion",
-        "value": "@media (prefers-reduced-motion: reduce) { .graph-view * { scroll-behavior: auto; } }",
-        "purpose": "Honor reduced motion in the graph; no decorative motion token is established."
+        "name": "drawer-enter",
+        "value": "160ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "Clip reveal and translateX(12px) to zero only when prefers-reduced-motion: no-preference."
       }
     ],
     "breakpoints": [
       {
-        "name": "compact-width",
-        "value": "(max-width: 1050px)"
+        "name": "people-reflow",
+        "value": "1100px"
       },
       {
-        "name": "compact-height",
-        "value": "(max-height: 650px)"
+        "name": "graph-toolbar",
+        "value": "1050px"
       },
       {
-        "name": "narrow-overlay",
-        "value": "(max-width: 700px)"
+        "name": "people-observation-stack",
+        "value": "1020px"
       },
       {
-        "name": "face-review-stack",
-        "value": "(max-width: 940px)"
+        "name": "faces-candidate-stack",
+        "value": "940px"
       },
       {
-        "name": "people-review-stack",
-        "value": "(max-width: 1020px)"
+        "name": "compact-desktop",
+        "value": "800px"
+      },
+      {
+        "name": "graph-inspector-cap",
+        "value": "700px"
+      },
+      {
+        "name": "graph-short-height",
+        "value": "650px"
       }
     ]
   },
   "components": [
     {
-      "name": "Quiet Button",
+      "name": "Shared search and wordmark",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Native wordmark and broad search; white Dig, amber Up, neutral icon, amber focus border.",
+      "html": "<div class=\"ds-search-header\"><strong class=\"ds-wordmark\">Dig<span class=\"ds-up\">Up</span></strong><label class=\"ds-search\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"6.5\"/><path d=\"m15 15 6 6\"/></svg><input aria-label=\"Search\" placeholder=\"Search by meaning, filename or content\"></label></div>",
+      "css": ".ds-search-header{display:flex;align-items:center;gap:24px;padding:12px 20px;background:var(--surface,#202429);color:var(--text,#eef2f6);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-wordmark{flex:none;width:140px;font-size:25px;font-weight:600;letter-spacing:-.025em}.ds-up{color:var(--amber,#f0a048)}.ds-search{display:flex;align-items:center;gap:12px;flex:1;min-width:0;height:40px;padding:0 12px;border:1px solid #46515c;border-radius:8px;background:#252b32}.ds-search:focus-within{border-color:var(--amber,#f0a048)}.ds-search svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--secondary,#b4bec8);stroke-width:1.6;stroke-linecap:round}.ds-search input{width:100%;min-width:0;padding:0;border:0;outline:0;background:transparent;color:var(--text,#eef2f6);font:15px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;caret-color:var(--amber,#f0a048)}.ds-search input::placeholder{color:var(--secondary,#b4bec8)}@media(max-width:1100px){.ds-wordmark{width:auto;font-size:22px}.ds-search-header{gap:16px}}@media(max-width:800px){.ds-wordmark{font-size:20px}.ds-search-header{padding:10px 12px;gap:12px}}"
+    },
+    {
+      "name": "Workspace navigation",
+      "kind": "nav",
+      "refersTo": "workspace-navigation",
+      "description": "Separate Search, Graph, and People destinations, active icon and underline; neutral hover fill.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Workspace\"><button type=\"button\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"6.5\"/><path d=\"m15 15 6 6\"/></svg>Search</button><button type=\"button\" disabled>Graph</button><button type=\"button\" aria-current=\"page\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg>People</button></nav>",
+      "css": ".ds-nav{display:flex;align-items:stretch;gap:8px;height:48px;padding:0 20px;border-bottom:1px solid var(--line,#3b434c);background:var(--surface,#202429)}.ds-nav button{position:relative;display:inline-flex;align-items:center;gap:10px;padding:0 16px;border:0;background:transparent;color:var(--secondary,#b4bec8);font:13px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer;white-space:nowrap}.ds-nav button[aria-current=\"page\"]{color:var(--text,#eef2f6);font-weight:600}.ds-nav button[aria-current=\"page\"]::after{content:\"\";position:absolute;bottom:0;left:12px;right:12px;height:3px;background:var(--amber,#f0a048);border-radius:3px 3px 0 0}.ds-nav svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.ds-nav button[aria-current=\"page\"] svg{color:var(--amber,#f0a048)}.ds-nav button:hover{color:var(--text,#eef2f6);background:#2b323a}.ds-nav button:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:2px}.ds-nav button:disabled{opacity:.45;cursor:default}@media(max-width:800px){.ds-nav{padding:0 8px;gap:0}.ds-nav button{padding:0 10px;gap:6px}}"
+    },
+    {
+      "name": "People and Faces quiet action",
       "kind": "button",
       "refersTo": "button-quiet",
-      "description": "Compact graph actions and camera controls.",
-      "html": "<button class=\"ds-quiet\" type=\"button\">Expand links</button>",
-      "css": ".ds-quiet{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;}.ds-quiet:hover{background:#424c57}.ds-quiet:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}.ds-quiet:disabled{opacity:.45;cursor:default}"
+      "description": "Compact native action used by Refresh, Rename, and Faces review controls.",
+      "html": "<button class=\"ds-quiet\" type=\"button\">Refresh</button>",
+      "css": ".ds-quiet{font:13px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;cursor:pointer}.ds-quiet:hover:not(:disabled){background:#424c57}.ds-quiet:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:3px;}.ds-quiet:disabled{opacity:.48;cursor:default}"
     },
     {
-      "name": "Find Similar Button",
+      "name": "Active review tab",
       "kind": "button",
-      "refersTo": "button-similar",
-      "description": "The muted warm action in the file inspector.",
-      "html": "<button class=\"ds-similar\" type=\"button\">Find similar</button>",
-      "css": ".ds-similar{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;border-color:#a37a49;background:#52402d;color:#f5d8af}.ds-similar:hover{background:#424c57}.ds-similar:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}.ds-similar:disabled{opacity:.45;cursor:default}"
+      "refersTo": "review-tab-active",
+      "description": "Amber selection with dark ink; hover brightens the fill while preserving the active state.",
+      "html": "<div class=\"ds-tabs\" role=\"group\" aria-label=\"Person observations\"><button type=\"button\" aria-pressed=\"true\">Gallery</button><button type=\"button\" aria-pressed=\"false\">Face annotations</button></div>",
+      "css": ".ds-tabs{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 12px;background:var(--surface,#202429);border-bottom:1px solid var(--line,#3b434c)}.ds-tabs button{font:13px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:8px 12px;border:1px solid transparent;border-radius:8px;color:var(--secondary,#b4bec8);background:transparent;cursor:pointer}.ds-tabs button:hover:not(:disabled){background:#424c57}.ds-tabs button[aria-pressed=\"true\"]{color:#211b12;background:var(--amber,#f0a048);border-color:var(--amber,#f0a048);font-weight:600}.ds-tabs button[aria-pressed=\"true\"]:hover:not(:disabled){background:#f6b466;border-color:#f6b466;color:#211b12}.ds-tabs button:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:3px;}.ds-tabs button:disabled{opacity:.48;cursor:default}"
     },
     {
-      "name": "Active Preview Toggle",
-      "kind": "button",
-      "refersTo": "button-active",
-      "description": "A camera-control toggle with an explicit active surface.",
-      "html": "<button class=\"ds-preview\" type=\"button\" aria-expanded=\"true\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><rect x=\"3\" y=\"4\" width=\"14\" height=\"12\" rx=\"2\"/><path d=\"M11 4V16\"/></svg>Preview</button>",
-      "css": ".ds-preview{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;border-color:#899eb1;background:#3a4652}.ds-preview svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}.ds-preview:hover{background:#424c57}.ds-preview:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
-    },
-    {
-      "name": "Minimum Similarity",
-      "kind": "input",
-      "description": "Threshold label and native select as one compact control.",
-      "html": "<label class=\"ds-threshold\"><span>Minimum similarity</span><select aria-label=\"Minimum similarity\"><option>0.35 · Broader</option><option>0.55 · Balanced</option><option selected>0.75 · Closer</option></select></label>",
-      "css": ".ds-threshold{display:inline-flex;align-items:center;gap:10px;padding:4px 6px 4px 10px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;color:#eef2f6;background:#30363dde;border:1px solid #505962;border-radius:8px}.ds-threshold select{font:inherit;background:#252a30;color:#f1f4f7;border:0;border-radius:4px;padding:4px}.ds-threshold select:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
-    },
-    {
-      "name": "Zoom Range",
-      "kind": "input",
-      "description": "Warm range input with a compact tabular camera readout.",
-      "html": "<div class=\"ds-zoom\"><label for=\"ds-zoom-range\">Zoom</label><input id=\"ds-zoom-range\" aria-label=\"Zoom\" type=\"range\" min=\"20\" max=\"200\" step=\"5\" value=\"75\"><output for=\"ds-zoom-range\">75%</output></div>",
-      "css": ".ds-zoom{display:flex;align-items:center;gap:8px;padding:8px 10px;border-top:1px solid #414b56;background:#282e35ed}.ds-zoom label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ds-zoom input{width:100%;min-width:0;height:16px;margin:0;accent-color:#e8a75d;cursor:pointer}.ds-zoom output{flex:none;width:36px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;text-align:right;color:#dbe3ec;font-variant-numeric:tabular-nums}.ds-zoom input:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
-    },
-    {
-      "name": "Camera Navigation",
-      "kind": "nav",
-      "description": "Outline SVG camera controls in a wrapping row.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"Graph camera\"><button class=\"ds-icon\" type=\"button\" aria-label=\"Zoom out\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M5 10H15\"/></svg></button><button class=\"ds-icon\" type=\"button\" aria-label=\"Zoom in\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M5 10H15 M10 5V15\"/></svg></button><button type=\"button\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"5\"/><path d=\"M10 2V6 M10 14V18 M2 10H6 M14 10H18\"/></svg>Center selected</button></nav>",
-      "css": ".ds-nav{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.ds-nav button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;backdrop-filter:blur(12px);cursor:pointer;}.ds-nav .ds-icon{width:34px;padding:6px}.ds-nav svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none}.ds-nav button:hover{background:#424c57}.ds-nav button:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}"
-    },
-    {
-      "name": "Glass File Card",
-      "kind": "custom",
-      "refersTo": "file-card",
-      "description": "The compact horizontal file primitive; content here is schematic.",
-      "html": "<svg class=\"ds-file-default\" viewBox=\"-132 -46 264 92\" width=\"264\" height=\"92\" tabindex=\"0\" role=\"button\" aria-label=\"Document file\"><defs><linearGradient id=\"ds-plate-default\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#454b52\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#2b3036\" stop-opacity=\".95\"/></linearGradient></defs><rect class=\"ds-card\" x=\"-122\" y=\"-36\" width=\"244\" height=\"72\" rx=\"10\" fill=\"url(#ds-plate-default)\" stroke=\"#969da5\" stroke-width=\"1\" stroke-opacity=\"0.55\"/><path d=\"M-103-17H-87L-79-9V17H-103Z M-87-17V-9H-79 M-97-3H-85 M-97 3H-85 M-97 9H-89\" fill=\"none\" stroke=\"#c0c8d1\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"-60\" y=\"-5\" fill=\"#f0f2f5\" font-family=\"Segoe UI,sans-serif\" font-size=\"14\" font-weight=\"500\">File name.pdf</text><text x=\"-60\" y=\"17\" fill=\"#afb8c1\" font-family=\"Segoe UI,sans-serif\" font-size=\"12.5\">PDF</text></svg>",
-      "css": ".ds-file-default{cursor:pointer;outline:none;background:#202429}.ds-file-default:hover .ds-card{stroke-opacity:1}.ds-file-default:focus-visible .ds-card{stroke:#ffc079;stroke-width:3}@media(forced-colors:active){.ds-file-default .ds-card{fill:Canvas;stroke:CanvasText;filter:none}.ds-file-default text{fill:CanvasText}}"
-    },
-    {
-      "name": "Selected File Card",
-      "kind": "custom",
-      "refersTo": "file-card-selected",
-      "description": "Amber selection takes precedence over file-kind color.",
-      "html": "<svg class=\"ds-file-selected\" viewBox=\"-132 -46 264 92\" width=\"264\" height=\"92\" tabindex=\"0\" role=\"button\" aria-label=\"Document file\"><defs><linearGradient id=\"ds-plate-selected\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#454b52\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#2b3036\" stop-opacity=\".95\"/></linearGradient><filter id=\"ds-glow-selected\" x=\"-30%\" y=\"-70%\" width=\"160%\" height=\"240%\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"5\" result=\"blur\"/><feFlood flood-color=\"#ee9a3f\" flood-opacity=\".38\" result=\"color\"/><feComposite in=\"color\" in2=\"blur\" operator=\"in\" result=\"glow\"/><feMerge><feMergeNode in=\"glow\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></defs><rect class=\"ds-card\" x=\"-122\" y=\"-36\" width=\"244\" height=\"72\" rx=\"10\" fill=\"#483827\" stroke=\"#f0a048\" stroke-width=\"1.8\" stroke-opacity=\"1\" filter=\"url(#ds-glow-selected)\"/><path d=\"M-103-17H-87L-79-9V17H-103Z M-87-17V-9H-79 M-97-3H-85 M-97 3H-85 M-97 9H-89\" fill=\"none\" stroke=\"#efa246\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"-60\" y=\"-5\" fill=\"#f0f2f5\" font-family=\"Segoe UI,sans-serif\" font-size=\"14\" font-weight=\"500\">File name.pdf</text><text x=\"-60\" y=\"17\" fill=\"#d6bd9b\" font-family=\"Segoe UI,sans-serif\" font-size=\"12.5\">PDF</text></svg>",
-      "css": ".ds-file-selected{cursor:pointer;outline:none;background:#202429}.ds-file-selected:hover .ds-card{stroke-opacity:1}.ds-file-selected:focus-visible .ds-card{stroke:#ffc079;stroke-width:3}@media(forced-colors:active){.ds-file-selected .ds-card{fill:Canvas;stroke:CanvasText;filter:none}.ds-file-selected text{fill:CanvasText}}"
-    },
-    {
-      "name": "Video File Card",
-      "kind": "custom",
-      "refersTo": "file-card-video",
-      "description": "Cyan identifies an unselected video.",
-      "html": "<svg class=\"ds-file-video\" viewBox=\"-132 -46 264 92\" width=\"264\" height=\"92\" tabindex=\"0\" role=\"button\" aria-label=\"Video file\"><defs><linearGradient id=\"ds-plate-video\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#454b52\" stop-opacity=\".86\"/><stop offset=\"1\" stop-color=\"#2b3036\" stop-opacity=\".95\"/></linearGradient><filter id=\"ds-glow-video\" x=\"-30%\" y=\"-70%\" width=\"160%\" height=\"240%\"><feGaussianBlur in=\"SourceAlpha\" stdDeviation=\"5\" result=\"blur\"/><feFlood flood-color=\"#70b8de\" flood-opacity=\".38\" result=\"color\"/><feComposite in=\"color\" in2=\"blur\" operator=\"in\" result=\"glow\"/><feMerge><feMergeNode in=\"glow\"/><feMergeNode in=\"SourceGraphic\"/></feMerge></filter></defs><rect class=\"ds-card\" x=\"-122\" y=\"-36\" width=\"244\" height=\"72\" rx=\"10\" fill=\"#293b47\" stroke=\"#77acc5\" stroke-width=\"1\" stroke-opacity=\"0.85\" filter=\"url(#ds-glow-video)\"/><path d=\"M-108-14H-76V14H-108Z M-100-14V14 M-84-14V14 M-108-6H-100 M-108 6H-100 M-84-6H-76 M-84 6H-76 M-96-6L-88 0L-96 6Z\" fill=\"none\" stroke=\"#82bbd6\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><text x=\"-60\" y=\"-5\" fill=\"#f0f2f5\" font-family=\"Segoe UI,sans-serif\" font-size=\"14\" font-weight=\"500\">File name.mp4</text><text x=\"-60\" y=\"17\" fill=\"#a9cadc\" font-family=\"Segoe UI,sans-serif\" font-size=\"12.5\">Video</text></svg>",
-      "css": ".ds-file-video{cursor:pointer;outline:none;background:#202429}.ds-file-video:hover .ds-card{stroke-opacity:1}.ds-file-video:focus-visible .ds-card{stroke:#ffc079;stroke-width:3}@media(forced-colors:active){.ds-file-video .ds-card{fill:Canvas;stroke:CanvasText;filter:none}.ds-file-video text{fill:CanvasText}}"
-    },
-    {
-      "name": "Minimap Container",
-      "kind": "card",
-      "description": "A collapsible glass camera surface with a restrained shadow; schematic nodes carry no file data.",
-      "html": "<details class=\"ds-minimap\" open><summary><span>Minimap</span><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M5 9L8 6L11 9\"/></svg></summary><svg class=\"ds-map\" viewBox=\"0 0 180 105\" role=\"img\" aria-label=\"Schematic minimap\"><path d=\"M35 30L90 55L145 30 M90 55L35 85 M90 55L145 85\" stroke=\"#77828c\" stroke-opacity=\".6\" fill=\"none\"/><g fill=\"#a5b0bc\"><rect x=\"23\" y=\"26\" width=\"24\" height=\"8\" rx=\"2\"/><rect x=\"23\" y=\"81\" width=\"24\" height=\"8\" rx=\"2\"/><rect x=\"133\" y=\"81\" width=\"24\" height=\"8\" rx=\"2\"/></g><rect x=\"133\" y=\"26\" width=\"24\" height=\"8\" rx=\"2\" fill=\"#82bbd6\"/><rect x=\"78\" y=\"51\" width=\"24\" height=\"8\" rx=\"2\" fill=\"#f0a048\"/><rect x=\"18\" y=\"18\" width=\"144\" height=\"75\" fill=\"#c5d8ed\" fill-opacity=\".07\" stroke=\"#b7cce3\"/></svg></details>",
-      "css": ".ds-minimap{width:160px;background:#282e35ed;border:1px solid #56616d;border-radius:9px;box-shadow:0 7px 20px #00000040;backdrop-filter:blur(12px)}.ds-minimap summary{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;color:#d7e0e9;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer;list-style:none}.ds-minimap summary::-webkit-details-marker{display:none}.ds-minimap summary svg{height:14px;width:14px;stroke:#b2bfcc;fill:none;stroke-width:1.5}.ds-minimap:not([open]) summary svg{transform:rotate(180deg)}.ds-minimap summary:focus-visible{outline:2px solid #f0a048;outline-offset:2px;}.ds-map{display:block;width:calc(100% - 16px);height:105px;margin:0 8px;border-radius:3px;background:#1c2025}"
-    },
-    {
-      "name": "Graph Omnibar",
-      "kind": "input",
-      "refersTo": "graph-omnibar",
-      "description": "Filename filtering and Enter-triggered semantic highlighting within the loaded canvas.",
-      "html": "<form class=\"ds-search\" role=\"search\"><label class=\"ds-search-label\" for=\"ds-omnibar\">Search this graph</label><input id=\"ds-omnibar\" type=\"search\" autocomplete=\"off\" placeholder=\"Filename filter · Enter for semantic search\"><button type=\"submit\" aria-label=\"Semantic search\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"5\"/><path d=\"M12 12L17 17\"/></svg></button></form>",
-      "css": ".ds-search{display:flex;align-items:center;width:360px;max-width:100%;min-width:180px;gap:5px;border:1px solid #505962;border-radius:8px;background:#252b32;padding-left:10px}.ds-search-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.ds-search input{width:100%;min-width:0;color:#eef2f6;background:transparent;border:0;padding:7px 0;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;caret-color:#f0a048}.ds-search input::placeholder{color:#aebbc8}.ds-search:focus-within{outline:2px solid #f0a048;outline-offset:2px}.ds-search input:focus-visible{outline:none}.ds-search button{display:inline-flex;align-items:center;justify-content:center;width:34px;min-height:34px;padding:6px;color:#e1e7ee;background:transparent;border:0;border-radius:8px;cursor:pointer}.ds-search button:hover{background:#424c57}.ds-search button:focus-visible{outline:2px solid #f0a048;outline-offset:2px}.ds-search svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}"
-    },
-    {
-      "name": "Modality Chips",
+      "name": "Media filter chip",
       "kind": "chip",
-      "refersTo": "modality-chip",
-      "description": "Quiet modality filters with amber pressed state; Faces opens observation selection when the local worker and models are ready.",
-      "html": "<div class=\"ds-modalities\" role=\"group\" aria-label=\"Link filters\"><button type=\"button\" aria-pressed=\"true\">All</button><button type=\"button\" aria-pressed=\"false\" title=\"Choose a face in the selected file\">Faces</button><button type=\"button\" aria-pressed=\"false\">Scene</button><button type=\"button\" aria-pressed=\"false\">Audio</button><button type=\"button\" aria-pressed=\"false\">Text / OCR</button><button type=\"button\" aria-pressed=\"false\">EXIF</button></div>",
-      "css": ".ds-modalities{display:flex;gap:5px;align-items:center;flex-wrap:wrap}.ds-modalities button{border:1px solid #505962;border-radius:16px;color:#bfcbd6;background:#293039;padding:5px 10px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer}.ds-modalities button[aria-pressed=\"true\"]{color:#f3d6b3;background:#483827;border-color:#d29b5d}.ds-modalities button:hover:not(:disabled){background:#424c57;color:#f1f4f7}.ds-modalities button:focus-visible{outline:2px solid #f0a048;outline-offset:2px}.ds-modalities button:disabled{opacity:.45;cursor:default}"
+      "refersTo": "media-filter-active",
+      "description": "Media filters are compact rectangular buttons in the gallery count/sort row.",
+      "html": "<div class=\"ds-media\" role=\"group\" aria-label=\"Media type\"><button type=\"button\" aria-pressed=\"true\">All media</button><button type=\"button\" aria-pressed=\"false\">Photos</button><button type=\"button\" aria-pressed=\"false\">Videos</button></div>",
+      "css": ".ds-media{display:flex;gap:8px;flex-wrap:wrap;background:var(--surface,#202429)}.ds-media button{font:13px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:6px 10px;border:1px solid #505962;border-radius:8px;background:#323940;color:#e1e7ee;cursor:pointer}.ds-media button:hover:not(:disabled){background:#424c57}.ds-media button[aria-pressed=\"true\"]{color:#211b12;background:var(--amber,#f0a048);border-color:var(--amber,#f0a048);font-weight:600}.ds-media button[aria-pressed=\"true\"]:hover:not(:disabled){background:#f6b466;border-color:#f6b466;color:#211b12}.ds-media button:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:3px;}.ds-media button:disabled{opacity:.48;cursor:default}"
     },
     {
-      "name": "Evidence Inspector",
-      "kind": "card",
-      "refersTo": "inspector-overlay",
-      "description": "Scrollable blurred overlay; schematic empty evidence illustrates the heading/hash hierarchy and initially collapsed related files.",
-      "html": "<aside class=\"ds-inspector\" aria-label=\"File inspector\"><div class=\"ds-inspector-heading\"><h3>File inspector</h3><button class=\"ds-close\" type=\"button\" aria-label=\"Close inspector\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path d=\"M5 5L15 15 M15 5L5 15\"/></svg></button></div><div class=\"ds-evidence-heading\"><h4>Indexed evidence</h4><button type=\"button\">Compute SHA-256</button></div><dl><dt>SHA-256</dt><dd>Compute on demand</dd><dt>Objects</dt><dd>Not extracted by this index</dd><dt>Faces</dt><dd>Not extracted by this index</dd><dt>Text / OCR</dt><dd>No indexed OCR text</dd></dl><details><summary>Connected files</summary></details></aside>",
-      "css": ".ds-inspector{width:360px;overflow-y:auto;padding:14px;background:#252b32ed;color:#eef2f6;border-left:1px solid #414952;backdrop-filter:blur(12px);font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-inspector-heading{display:flex;align-items:center;gap:12px;margin-bottom:12px}.ds-inspector-heading h3{flex:1;margin:0;font-size:14px;font-weight:600}.ds-inspector button{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:4px 7px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;backdrop-filter:blur(12px);cursor:pointer}.ds-inspector .ds-close{width:34px;min-height:34px;padding:6px}.ds-close svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}.ds-evidence-heading{display:flex;align-items:center;gap:10px;margin:20px 0 12px}.ds-evidence-heading h4{flex:1;margin:0;font-size:12px;font-weight:600}.ds-inspector dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:9px 12px;margin:0 0 14px;font-size:11px;line-height:1.5}.ds-inspector dt{color:#b4bec8}.ds-inspector dd{margin:0;min-width:0;overflow-wrap:anywhere;user-select:text;white-space:pre-wrap}.ds-inspector details{margin-top:20px;border-top:1px solid #414952;padding-top:12px}.ds-inspector summary{color:#d3dde6;cursor:pointer}.ds-inspector button:hover{background:#424c57}.ds-inspector button:focus-visible,.ds-inspector summary:focus-visible{outline:2px solid #f0a048;outline-offset:2px}@media(max-width:700px){.ds-inspector{width:min(360px,calc(100% - 24px))}}"
-    },
-    {
-      "name": "Confirmed Link and Review Actions",
+      "name": "Selected local label",
       "kind": "custom",
-      "description": "Schematic confirmed curve/pill and local review actions; actual scores and modality icons come from indexed evidence.",
-      "html": "<div class=\"ds-review\"><svg viewBox=\"0 0 280 76\" width=\"280\" height=\"76\" aria-label=\"Schematic confirmed link\"><g class=\"ds-link\" tabindex=\"0\" role=\"button\" aria-label=\"Analyze overlap, confirmed\"><path class=\"ds-hit\" d=\"M10 62Q140 -34 270 62\"/><path class=\"ds-curve\" d=\"M10 62Q140 -34 270 62\"/><g transform=\"translate(140 14)\"><rect class=\"ds-pill\" x=\"-33\" y=\"-12\" width=\"66\" height=\"24\" rx=\"12\"/><path d=\"M1 1H13V13H1Z M1 10L5 6L8 9L11 5L13 8 M4 4h.1\" transform=\"translate(-25 -7)\" fill=\"none\" stroke=\"#a5dfbe\" stroke-width=\"1.2\"/><text x=\"25\" y=\"4\" text-anchor=\"end\">0.84</text></g></g></svg><div class=\"ds-verification\"><button class=\"ds-confirm\" type=\"button\" disabled>Confirm link</button><button class=\"ds-reject\" type=\"button\">False positive</button><button type=\"button\">Mark unverified</button></div><p>Verification is your local assessment, not an automated finding.</p></div>",
-      "css": ".ds-review{color:#b4bec8;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;line-height:1.5}.ds-link{cursor:pointer;outline:none}.ds-hit{fill:none;stroke:transparent;stroke-width:18;pointer-events:stroke}.ds-curve{fill:none;stroke:#83cda2;stroke-width:3;stroke-opacity:.95}.ds-pill{fill:#293039;stroke:#83cda2;stroke-width:.8}.ds-link text{fill:#d2dbe4;font:11px \"Segoe UI\",sans-serif;font-variant-numeric:tabular-nums}.ds-link:focus-visible .ds-pill{stroke:#ffc079;stroke-width:3}.ds-verification{display:flex;gap:7px;flex-wrap:wrap;margin-top:18px}.ds-verification button{min-height:34px;padding:6px 10px;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;color:#e1e7ee;background:#323940cc;border:1px solid #505962;border-radius:8px;backdrop-filter:blur(12px);cursor:pointer}.ds-verification .ds-confirm{border-color:#628c73;color:#b8e5ca;background:#2c4236}.ds-verification .ds-reject{border-color:#a37572;color:#f0cfcd;background:#483334}.ds-verification button:hover{background:#424c57}.ds-verification .ds-confirm:hover{background:#2c4236}.ds-verification .ds-reject:hover{background:#483334}.ds-verification button:focus-visible{outline:2px solid #f0a048;outline-offset:2px}.ds-verification button:disabled{opacity:.45;cursor:default}.ds-review p{margin-top:12px}"
-    },
-    {
-      "name": "Local Face Index Controls",
-      "kind": "custom",
-      "refersTo": "face-control",
-      "description": "Inspector-toned local indexing status, explicit start/pause actions, and native device choice. Counts and active device come from the worker at runtime.",
-      "html": "<section class=\"ds-face-index\" aria-label=\"Face indexing progress\"><strong>Face index is ready to start</strong><p>YuNet + SFace processes photos and sampled video frames locally.</p><div class=\"ds-face-index-controls\"><label>Face processing <select><option>Auto · GPU with CPU fallback</option><option>CPU</option><option>GPU · CPU fallback</option></select></label><button type=\"button\">Index faces</button></div></section>",
-      "css": ".ds-face-index{padding:12px 18px;background:#252b32;color:#eef2f6;border-bottom:1px solid #414952;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-index strong{font-size:13px;font-weight:600}.ds-face-index p{margin:6px 0 0;color:#b4bec8;line-height:1.5}.ds-face-index-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}.ds-face-index-controls label{display:flex;align-items:center;gap:7px;color:#b4bec8}.ds-face-index-controls select,.ds-face-index-controls button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit}.ds-face-index-controls button{cursor:pointer}.ds-face-index-controls button:hover:not(:disabled),.ds-face-index-controls select:hover{background:#424c57}.ds-face-index-controls :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-index-controls :disabled{opacity:.48;cursor:default}"
-    },
-    {
-      "name": "Face Observation Selector",
-      "kind": "custom",
-      "refersTo": "face-choice",
-      "description": "Numbered cyan source boxes and amber source selection pair with real local crops. This schematic snippet omits media; runtime crops use indexed bounding boxes on the actual source frame.",
-      "html": "<section class=\"ds-face-selector\" aria-label=\"Choose a face\"><div class=\"ds-face-stage\"><span class=\"ds-face-stage-note\">Local source image</span><button class=\"ds-face-box ds-face-box-first\" type=\"button\" aria-label=\"Face 1\" aria-pressed=\"false\"><span>1</span></button><button class=\"ds-face-box ds-face-box-selected\" type=\"button\" aria-label=\"Face 2\" aria-pressed=\"true\"><span>2</span></button></div><p>Choose one face in the picture or below.</p><div class=\"ds-face-choices\"><button class=\"ds-face-choice\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-crop\" aria-hidden=\"true\"></span><span>Face 1</span></button><button class=\"ds-face-choice\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-face-crop\" aria-hidden=\"true\"></span><span>Face 2</span></button></div></section>",
-      "css": ".ds-face-selector{color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-stage{position:relative;min-height:150px;border-radius:10px;overflow:hidden;background:#181c21}.ds-face-stage-note{display:block;padding:10px;color:#b4bec8;font-size:11px}.ds-face-box{position:absolute;display:block;min-width:0;min-height:0;margin:0;padding:0;width:42px;height:54px;top:65px;border:2px solid #77acc5;background:#77acc50a;border-radius:3px;cursor:pointer}.ds-face-box-first{left:28%}.ds-face-box-selected{left:58%}.ds-face-box:hover,.ds-face-box[aria-pressed=\"true\"]{border-color:#f0a048;background:#f0a04814}.ds-face-box span{position:absolute;top:-20px;left:-2px;min-width:20px;padding:0 3px;color:#202429;background:#77acc5;border-radius:3px 3px 0 0;font-size:11px;line-height:17px}.ds-face-box[aria-pressed=\"true\"] span{background:#f0a048}.ds-face-selector p{margin:10px 0;color:#b4bec8;line-height:1.5}.ds-face-choices{display:flex;gap:8px;flex-wrap:wrap}.ds-face-choice{display:flex;flex-direction:column;align-items:center;gap:5px;padding:5px;color:#e1e7ee;background:#2b3036;border:1px solid #505962;border-radius:8px;font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;font-variant-numeric:tabular-nums;cursor:pointer}.ds-face-choice[aria-pressed=\"true\"]{border-color:#f0a048;background:#483827;color:#f5d8af}.ds-face-choice:hover:not(:disabled){background:#424c57}.ds-face-crop{display:block;flex:none;width:62px;height:62px;background:#181c21;border-radius:5px}.ds-face-selector :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-selector :disabled{opacity:.48;cursor:default}@media (forced-colors:active){.ds-face-box,.ds-face-choice[aria-pressed=\"true\"]{border-color:Highlight}}"
-    },
-    {
-      "name": "Face Candidate List",
-      "kind": "custom",
-      "refersTo": "face-result-selected",
-      "description": "Cyan candidate selection, local crop, filename, reported cosine/time, explicit pagination, and dark pane scrollbars. Schematic labels carry no fabricated match score or media.",
-      "html": "<section class=\"ds-face-candidates\" aria-label=\"Face matches\"><div class=\"ds-face-candidate-scroll\"><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"true\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button><button class=\"ds-face-candidate\" type=\"button\" aria-pressed=\"false\"><span class=\"ds-face-candidate-crop\" aria-hidden=\"true\"></span><span class=\"ds-face-candidate-text\"><strong>Local filename</strong><span>Cosine · reported timestamp</span></span></button></div><button class=\"ds-face-more\" type=\"button\">Show more</button><p>Face matches are candidates, not proof of identity. Video is sampled; brief appearances can be missed.</p></section>",
-      "css": ".ds-face-candidates{color-scheme:dark;background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-candidate-scroll{max-height:138px;overflow-y:auto;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-face-candidate-scroll:hover{scrollbar-color:#8999a8 #252b32}.ds-face-candidate-scroll::-webkit-scrollbar{width:10px}.ds-face-candidate-scroll::-webkit-scrollbar-track,.ds-face-candidate-scroll::-webkit-scrollbar-corner{background:#252b32}.ds-face-candidate-scroll::-webkit-scrollbar-thumb{background:#687785;border:2px solid #252b32;border-radius:8px}.ds-face-candidate-scroll::-webkit-scrollbar-thumb:hover{background:#8999a8}.ds-face-candidate{display:flex;width:100%;align-items:center;gap:9px;padding:9px 6px;border:1px solid transparent;border-radius:8px;color:#eef2f6;text-align:left;background:transparent;font:inherit;cursor:pointer}.ds-face-candidate[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-face-candidate:hover:not(:disabled){background:#424c57}.ds-face-candidate-crop{display:block;flex:none;width:45px;height:45px;background:#181c21;border-radius:5px}.ds-face-candidate-text{display:flex;flex-direction:column;gap:4px;min-width:0}.ds-face-candidate-text strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}.ds-face-candidate-text>span{color:#b4bec8;font-size:11px;font-variant-numeric:tabular-nums}.ds-face-more{margin:6px 18px 12px;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-face-more:hover:not(:disabled){background:#424c57}.ds-face-candidates p{margin:0;border-top:1px solid #414952;padding:9px 18px;color:#b4bec8;font-size:11px;line-height:1.5}.ds-face-candidates :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-candidates :disabled{opacity:.48;cursor:default}@media (forced-colors:active){.ds-face-candidates{color-scheme:normal}.ds-face-candidate[aria-pressed=\"true\"]{border-color:Highlight}.ds-face-candidate-scroll,.ds-face-candidate-scroll:hover{scrollbar-color:auto;scrollbar-width:auto}.ds-face-candidate-scroll::-webkit-scrollbar-track,.ds-face-candidate-scroll::-webkit-scrollbar-corner{background:Canvas}.ds-face-candidate-scroll::-webkit-scrollbar-thumb{background:ButtonText;border-color:Canvas}.ds-face-candidate-scroll::-webkit-scrollbar-thumb:hover{background:Highlight}}"
-    },
-    {
-      "name": "People Directory",
-      "kind": "nav",
       "refersTo": "person-directory-item-selected",
-      "description": "Local label filter and directory with cyan current-person state, authored outline icon, wrapping name, and assigned count. The schematic item is not an identity claim.",
-      "html": "<aside class=\"ds-people-directory\"><label class=\"ds-people-filter-label\">Filter people<input type=\"search\" placeholder=\"Filter people\" autocomplete=\"off\"></label><div class=\"ds-people-list\" role=\"group\" aria-label=\"People\"><button type=\"button\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg><span><strong>Local person label</strong><small>Assigned observations</small></span></button><button type=\"button\" aria-pressed=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg><span><strong>Another local label</strong><small>Assigned observations</small></span></button></div></aside>",
-      "css": ".ds-people-directory{max-width:250px;padding:14px 12px;border-right:1px solid #414952;background:#202429;color:#eef2f6;color-scheme:dark;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-people-filter-label{display:grid;gap:6px;font-size:12px}.ds-people-filter-label input{width:100%;min-width:0;color:#eef2f6;background:#252b32;font:inherit;border:1px solid #505962;border-radius:8px;padding:8px 10px;caret-color:#f0a048}.ds-people-filter-label input::placeholder{color:#b4bec8}.ds-people-list{max-height:180px;overflow-y:auto;margin:12px 0;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-people-list:hover{scrollbar-color:#8999a8 #252b32}.ds-people-list button{display:flex;width:100%;gap:9px;align-items:center;text-align:left;padding:10px 8px;border:1px solid transparent;border-radius:8px;background:transparent;color:#eef2f6;font:inherit;cursor:pointer}.ds-people-list button[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-people-list button:hover:not(:disabled){background:#424c57}.ds-people-list svg{width:24px;height:24px;flex:none;stroke:#b4bec8;fill:none;stroke-width:1.4}.ds-people-list button>span{display:grid;min-width:0;gap:4px}.ds-people-list strong{font-size:13px;overflow-wrap:anywhere;font-weight:500}.ds-people-list small{color:#b4bec8;font-size:11px}.ds-people-directory :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-people-list button:disabled{opacity:.48;cursor:default}@media(forced-colors:active){.ds-people-directory{color-scheme:normal}.ds-people-list,.ds-people-list:hover{scrollbar-color:auto;scrollbar-width:auto}.ds-people-list button[aria-pressed=\"true\"]{border-color:Highlight}}"
+      "description": "Warm current-person row; the live app replaces the SVG with the current real crop when available.",
+      "html": "<button class=\"ds-person\" type=\"button\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg><span><strong>Local label</strong><small>Assigned file and face counts</small></span></button>",
+      "css": ".ds-person{display:flex;width:100%;gap:9px;align-items:center;text-align:left;padding:10px 8px;border:1px solid #8d673a;border-radius:8px;background:#453725;color:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer}.ds-person svg{width:24px;height:24px;flex:none;fill:none;stroke:#b4bec8;stroke-width:1.4}.ds-person>span{display:grid;min-width:0;gap:4px}.ds-person strong{font-size:13px;font-weight:500;overflow-wrap:anywhere}.ds-person small{font-size:11px;color:#b4bec8}.ds-person:hover:not(:disabled){background:#424c57}.ds-person:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:3px;}.ds-person:disabled{opacity:.48;cursor:default}"
     },
     {
-      "name": "Person Name Form",
+      "name": "Inclusive year endpoints",
       "kind": "input",
-      "refersTo": "people-field",
-      "description": "Inline rename uses the same inspector-filled, amber-caret field as local-label creation and filtering. Save and Cancel remain explicit actions; runtime Rename focuses the field and Cancel restores focus.",
-      "html": "<form class=\"ds-person-form\"><label>Person name<input maxlength=\"120\" autocomplete=\"off\" value=\"Local person label\"></label><button type=\"button\">Save name</button><button type=\"button\">Cancel</button></form>",
-      "css": ".ds-person-form{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:14px 18px 10px;background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-person-form label{display:grid;gap:6px;font-size:12px;flex:1;min-width:130px}.ds-person-form input{width:100%;min-width:0;color:#eef2f6;background:#252b32;font:inherit;border:1px solid #505962;border-radius:8px;padding:8px 10px;caret-color:#f0a048}.ds-person-form input::placeholder{color:#b4bec8}.ds-person-form button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-person-form button:hover:not(:disabled){background:#424c57}.ds-person-form :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-person-form button:disabled{opacity:.48;cursor:default}"
+      "refersTo": "period-field",
+      "description": "Precise inclusive From/Through inputs and two native range handles; the live app derives extent and fill from the actual album.",
+      "html": "<section class=\"ds-period\"><div class=\"ds-period-fields\"><label>From year<input type=\"number\" min=\"1\" max=\"9999\" step=\"1\" placeholder=\"—\" aria-describedby=\"ds-period-help\"></label><label>Through year<input type=\"number\" min=\"1\" max=\"9999\" step=\"1\" placeholder=\"—\" aria-describedby=\"ds-period-help\"></label></div><div class=\"ds-rail\"><span></span><input type=\"range\" min=\"1\" max=\"9999\" value=\"1\" aria-label=\"From year\"><input type=\"range\" min=\"1\" max=\"9999\" value=\"9999\" aria-label=\"Through year\"></div><p id=\"ds-period-help\" class=\"ds-period-help\">Capture date when available; otherwise file modification date.</p></section>",
+      "css": ".ds-period{padding:12px 20px 8px;border-bottom:1px solid var(--line,#3b434c);background:var(--surface,#202429);color:var(--text,#eef2f6);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-period-fields{display:flex;flex-wrap:wrap;gap:12px}.ds-period-fields label{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--secondary,#b4bec8)}.ds-period-fields input{width:78px;padding:6px 8px;font:inherit;color:var(--text,#eef2f6);background:#252b32;border:1px solid #505962;border-radius:6px;font-variant-numeric:tabular-nums;accent-color:var(--amber,#f0a048)}.ds-period-fields input[aria-invalid=\"true\"]{border-color:#e3a5a1}.ds-period-fields input:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:3px;}.ds-rail{position:relative;height:30px;margin-top:8px}.ds-rail>span{position:absolute;top:15px;left:8px;right:8px;height:2px;background:#687785}.ds-rail>span::after{content:\"\";position:absolute;inset:0;height:2px;background:var(--amber,#f0a048)}.ds-rail input{position:absolute;width:100%;margin:0;top:4px;height:24px;background:transparent;appearance:none;pointer-events:none}.ds-rail input::-webkit-slider-thumb{appearance:none;background:var(--amber,#f0a048);width:14px;height:14px;border:2px solid #202429;border-radius:50%;pointer-events:auto;cursor:ew-resize}.ds-rail input::-moz-range-thumb{background:var(--amber,#f0a048);width:12px;height:12px;border:2px solid #202429;border-radius:50%;pointer-events:auto;cursor:ew-resize}.ds-rail input:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:1px;border-radius:4px}.ds-period-help{margin:8px 0 0;font-size:11px;color:var(--secondary,#b4bec8)}@media(forced-colors:active){.ds-rail>span,.ds-rail>span::after{background:CanvasText}}"
     },
     {
-      "name": "Person Observation Modes",
-      "kind": "nav",
-      "refersTo": "person-mode-active",
-      "description": "Explicit Assigned, Suggestions, Excluded, and Needs review groups. The active group uses the existing active-preview material and aria-pressed; its text explains the review state.",
-      "html": "<section class=\"ds-person-modes\"><div class=\"ds-person-tabs\" role=\"group\" aria-label=\"Person observations\"><button type=\"button\" aria-pressed=\"true\">Assigned</button><button type=\"button\" aria-pressed=\"false\">Suggestions</button><button type=\"button\" aria-pressed=\"false\">Excluded</button><button type=\"button\" aria-pressed=\"false\">Needs review</button></div><p>Assigned by you. Select an observation to preview it or remove its label.</p></section>",
-      "css": ".ds-person-modes{background:#202429;color:#eef2f6;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-person-tabs{display:flex;gap:7px;flex-wrap:wrap;padding:0 18px 10px}.ds-person-tabs button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-person-tabs button[aria-pressed=\"true\"]{background:#3a4652;border-color:#899eb1}.ds-person-tabs button:hover:not(:disabled){background:#424c57}.ds-person-tabs button:focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-person-tabs button:disabled{opacity:.48;cursor:default}.ds-person-modes p{margin:0;padding:0 18px 12px;color:#b4bec8;font-size:12px;line-height:1.5}"
+      "name": "Photo-led album cell",
+      "kind": "card",
+      "refersTo": "people-media-stage",
+      "description": "Neutral 4:3 mat for a whole local image, filename, date, and visible fallback-date source. The snippet intentionally has no invented photograph.",
+      "html": "<button class=\"ds-tile\" type=\"button\"><span class=\"ds-tile-media\"></span><span class=\"ds-tile-caption\"><strong>Local filename</strong><small>Indexed media date</small><small>File modification date</small></span></button>",
+      "css": ".ds-tile{display:flex;flex-direction:column;width:100%;min-width:0;padding:0;background:transparent;border:0;border-radius:6px;overflow:hidden;text-align:left;color:#eef2f6;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;cursor:pointer}.ds-tile-media{display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/3;background:#181c21;border-radius:6px;overflow:hidden}.ds-tile-media img{width:100%;height:100%;object-fit:contain}.ds-tile-caption{display:grid;min-width:0;width:100%;gap:3px;padding:8px 0 4px}.ds-tile-caption strong{font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-tile-caption small{font-size:11px;color:#b4bec8;line-height:1.5;font-variant-numeric:tabular-nums}.ds-tile:hover:not(:disabled){background:#424c57}.ds-tile:hover .ds-tile-caption strong{color:var(--amber,#f0a048)}.ds-tile:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:3px;}.ds-tile:disabled{opacity:.48;cursor:default}"
     },
     {
-      "name": "People Observation Selection and Bottom Actions",
+      "name": "Compact background status",
       "kind": "custom",
-      "refersTo": "people-action-bar",
-      "description": "A checked row and a different cyan preview row demonstrate independent bulk and preview state. The bottom action bar remains outside the scrolling list. Schematic crop backplates contain no media or match score.",
-      "html": "<section class=\"ds-person-review\"><div class=\"ds-person-observations\" role=\"group\" aria-label=\"Person observations\"><div class=\"ds-person-row\"><input type=\"checkbox\" checked aria-label=\"Select observation in local filename\"><button type=\"button\" aria-pressed=\"false\"><span class=\"ds-person-crop\" aria-hidden=\"true\"></span><span class=\"ds-person-result-text\"><strong>Local filename</strong><span>Photograph</span></span></button></div><div class=\"ds-person-row\"><input type=\"checkbox\" aria-label=\"Select observation in another local filename\"><button type=\"button\" aria-pressed=\"true\"><span class=\"ds-person-crop\" aria-hidden=\"true\"></span><span class=\"ds-person-result-text\"><strong>Another local filename</strong><span>Photograph</span></span></button></div></div><div class=\"ds-person-actions\"><button type=\"button\">Select loaded</button><span>1 selected</span><button type=\"button\">Exclude for person</button><button type=\"button\">Remove label</button></div></section>",
-      "css": ".ds-person-review{background:#202429;color:#eef2f6;color-scheme:dark;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-person-observations{max-height:180px;overflow-y:auto;padding:0 12px 14px;scrollbar-color:#687785 #252b32;scrollbar-width:thin}.ds-person-observations:hover{scrollbar-color:#8999a8 #252b32}.ds-person-row{display:flex;align-items:center;gap:8px;padding:3px 0}.ds-person-row>input{flex:none;width:15px;height:15px;accent-color:#77acc5}.ds-person-row>button{display:flex;width:100%;align-items:center;gap:9px;padding:9px 6px;border:1px solid transparent;border-radius:8px;color:#eef2f6;text-align:left;background:transparent;font:inherit;cursor:pointer;flex:1;min-width:0}.ds-person-row>button[aria-pressed=\"true\"]{background:#293b47;border-color:#77acc5}.ds-person-row>button:hover:not(:disabled){background:#424c57}.ds-person-crop{display:block;flex:none;width:45px;height:45px;background:#181c21;border-radius:5px}.ds-person-result-text{min-width:0;display:flex;flex-direction:column;gap:4px}.ds-person-result-text strong{font-size:12px;font-weight:500;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.ds-person-result-text>span{color:#b4bec8;font-size:11px;font-variant-numeric:tabular-nums}.ds-person-actions{display:flex;gap:7px;flex-wrap:wrap;padding:10px 18px;border-top:1px solid #414952}.ds-person-actions>span{flex:1;min-width:160px;align-self:center;color:#b4bec8;font-size:12px}.ds-person-actions button{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-person-actions button:hover:not(:disabled){background:#424c57}.ds-person-review :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-person-review button:disabled{opacity:.48;cursor:default}@media(forced-colors:active){.ds-person-review{color-scheme:normal}.ds-person-row>button[aria-pressed=\"true\"]{border-color:Highlight}.ds-person-observations,.ds-person-observations:hover{scrollbar-color:auto;scrollbar-width:auto}}"
+      "refersTo": "workspace-status",
+      "description": "One compact background-task footer; details and full automatic-face status are available on demand.",
+      "html": "<footer class=\"ds-status\"><button type=\"button\"><span class=\"ds-status-dot\" aria-hidden=\"true\"></span>Index status</button><button type=\"button\" class=\"ds-status-details\">Details</button></footer>",
+      "css": ".ds-status{display:flex;align-items:center;gap:14px;height:34px;padding:0 16px;border-top:1px solid var(--line,#3b434c);background:var(--surface,#202429);color:var(--text,#eef2f6);font:11px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;font-variant-numeric:tabular-nums}.ds-status button{display:flex;align-items:center;gap:8px;min-width:0;height:100%;padding:0 5px;border:0;background:transparent;color:var(--secondary,#b4bec8);font:inherit;white-space:nowrap;cursor:pointer}.ds-status .ds-status-details{margin-left:auto;flex:none}.ds-status-dot{width:6px;height:6px;border-radius:50%;background:#a4aeba;flex:none}.ds-status button:hover{background:#2b323a;color:var(--text,#eef2f6)}.ds-status button:focus-visible{outline:2px solid var(--amber,#f0a048);outline-offset:2px}@media(max-width:800px){.ds-status{padding:0 8px;gap:6px}}@media(forced-colors:active){.ds-status-dot{background:CanvasText}}"
     },
     {
-      "name": "Local Label Undo Notice",
-      "kind": "custom",
-      "refersTo": "people-undo",
-      "description": "Separate cool-filled, wrapping operation notice in People and Faces. A returned operation identifier exposes Undo, including after rename; worker counts appear only when supplied.",
-      "html": "<div class=\"ds-people-undo\"><span>Person label renamed</span><button type=\"button\">Undo</button></div>",
-      "css": ".ds-people-undo{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:9px 18px;background:#293b47;color:#e1e7ee;border-bottom:1px solid #505962;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-people-undo>span{flex:1 1 250px;min-width:0;overflow-wrap:anywhere;line-height:1.5}.ds-people-undo button{flex:none;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}.ds-people-undo button:hover:not(:disabled){background:#424c57}.ds-people-undo button:focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-people-undo button:disabled{opacity:.48;cursor:default}"
-    },
-    {
-      "name": "Face Label and Bulk Scope Controls",
-      "kind": "custom",
-      "refersTo": "face-control",
-      "description": "Local-person target and seed assignment extend Faces. Explicit bulk scope includes loaded rows or all matches plus source; runtime checkboxes stay independent of candidate preview. Snapshot changes clear scope with a notice.",
-      "html": "<section class=\"ds-face-labels\"><h3>Label selected face</h3><div class=\"ds-face-label-form\"><select aria-label=\"Person label\"><option>Choose person</option><option>Local person label</option></select><button type=\"button\" disabled>Assign selected face</button></div><p>Select a face and assign your own local person label.</p><div class=\"ds-face-bulk\"><button type=\"button\">Select loaded</button><button type=\"button\">All matches + source</button><button type=\"button\">Clear selection</button><span>0 selected</span><button type=\"button\" disabled>Assign selection</button><button type=\"button\" disabled>Exclude for person</button></div></section>",
-      "css": ".ds-face-labels{padding:10px 0 12px;margin:10px 0 12px;border-top:1px solid #414952;border-bottom:1px solid #414952;background:#202429;color:#eef2f6;color-scheme:dark;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-face-labels h3{margin:0 0 8px;font-size:13px;font-weight:600}.ds-face-label-form{display:flex;flex-wrap:wrap;gap:7px}.ds-face-label-form select{flex:1;min-width:160px;max-width:100%}.ds-face-labels button,.ds-face-labels select{color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px;padding:6px 10px;font:inherit}.ds-face-labels button{cursor:pointer}.ds-face-labels button:hover:not(:disabled),.ds-face-labels select:hover{background:#424c57}.ds-face-labels :focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-face-labels button:disabled,.ds-face-labels select:disabled{opacity:.48;cursor:default}.ds-face-labels p{margin:7px 0 0;color:#b4bec8;font-size:11px;line-height:1.5}.ds-face-bulk{padding:12px 18px 10px;display:flex;align-items:center;flex-wrap:wrap;gap:7px}.ds-face-bulk>span{color:#b4bec8;font-size:11px;flex:1;min-width:130px}@media(forced-colors:active){.ds-face-labels{color-scheme:normal}}"
-    },
-    {
-      "name": "Automatic Face Indexing Row",
-      "kind": "custom",
-      "refersTo": "automatic-face-status",
-      "description": "Persistent shell row after ordinary index status. Checked opt-in, file/observation counts, native progress and explicit Pause reuse shell variables; the schematic counts reproduce a captured active state. Runtime preference alone does not download models or apply person labels.",
-      "html": "<section class=\"ds-auto-row\" aria-label=\"Automatic face indexing\"><label><input type=\"checkbox\" checked><span>Auto-index faces</span></label><span class=\"ds-auto-message\" role=\"status\" aria-live=\"polite\" title=\"Faces: 0 / 2 files · 0 observations · 2 media files waiting\">Faces: 0 / 2 files · 0 observations · 2 media files waiting</span><progress max=\"2\" value=\"0\" aria-label=\"Face indexing progress\"></progress><button type=\"button\">Pause indexing</button></section>",
-      "css": ".ds-auto-row{height:44px;flex:none;display:flex;align-items:center;gap:10px;padding:5px 18px;border-top:1px solid var(--line,#414952);background:var(--surface,#202429);color:var(--text,#eef2f6);font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-auto-row label{display:flex;align-items:center;gap:6px;flex:none;cursor:pointer}.ds-auto-row input{accent-color:var(--amber,#f2a22a)}.ds-auto-message{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--secondary,#b4bec8);font-variant-numeric:tabular-nums}.ds-auto-row progress{width:80px;height:5px;accent-color:var(--amber,#f2a22a);flex:none}.ds-auto-row button{flex:none;white-space:nowrap;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:5px 8px;color:var(--text,#eef2f6);background:var(--chip,#30363d);border:1px solid var(--line,#414952);border-radius:6px;cursor:pointer}.ds-auto-row button:hover{background-color:var(--selected,#3e5062)}.ds-auto-row :focus-visible{outline:2px solid var(--amber,#f2a22a);outline-offset:2px}.ds-auto-row button:disabled{opacity:.6;cursor:wait}"
-    },
-    {
-      "name": "Automatic Face Indexing Paused",
-      "kind": "custom",
-      "refersTo": "automatic-face-status",
-      "description": "The same persistent strip shows an unchecked preference and explicit paused text. At rest the quiet action opens Faces; missing models/runtime instead shows Set up Faces. No busy progress is shown in this state.",
-      "html": "<section class=\"ds-auto-row\" aria-label=\"Automatic face indexing\"><label><input type=\"checkbox\"><span>Auto-index faces</span></label><span class=\"ds-auto-message\" role=\"status\" aria-live=\"polite\" title=\"Automatic face indexing is paused\">Automatic face indexing is paused</span><button type=\"button\">Faces</button></section>",
-      "css": ".ds-auto-row{height:44px;flex:none;display:flex;align-items:center;gap:10px;padding:5px 18px;border-top:1px solid var(--line,#414952);background:var(--surface,#202429);color:var(--text,#eef2f6);font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-auto-row label{display:flex;align-items:center;gap:6px;flex:none;cursor:pointer}.ds-auto-row input{accent-color:var(--amber,#f2a22a)}.ds-auto-message{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--secondary,#b4bec8);font-variant-numeric:tabular-nums}.ds-auto-row progress{width:80px;height:5px;accent-color:var(--amber,#f2a22a);flex:none}.ds-auto-row button{flex:none;white-space:nowrap;font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif;padding:5px 8px;color:var(--text,#eef2f6);background:var(--chip,#30363d);border:1px solid var(--line,#414952);border-radius:6px;cursor:pointer}.ds-auto-row button:hover{background-color:var(--selected,#3e5062)}.ds-auto-row :focus-visible{outline:2px solid var(--amber,#f2a22a);outline-offset:2px}.ds-auto-row button:disabled{opacity:.6;cursor:wait}"
-    },
-    {
-      "name": "Pending People Suggestion Counts",
-      "kind": "custom",
-      "refersTo": "people-pending-badge",
-      "description": "Navigation badge, wrapping toolbar total and secondary directory pending count share the asynchronous cached person-observation summary. The schematic ready total comes from the native capture; calculating uses an ellipsis, unavailable uses an exclamation mark, and ready zero hides the badge.",
-      "html": "<section class=\"ds-pending-people\"><button class=\"ds-pending-nav\" type=\"button\" aria-label=\"People: 3 pending person-observation suggestions\"><span>People</span><span class=\"ds-pending-badge\" title=\"3 pending person-observation suggestions\">3</span></button><div class=\"ds-pending-toolbar\"><h2>People</h2><span role=\"status\">Pending person-observation suggestions: 3</span><button type=\"button\">Refresh</button></div><button class=\"ds-pending-person\" type=\"button\" aria-pressed=\"true\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"7\" r=\"4\"/><path d=\"M4 22V19A8 8 0 0 1 20 19V22\"/></svg><span><strong>Local person label</strong><small>45 assigned observations</small><small>3 pending observations</small></span></button></section>",
-      "css": ".ds-pending-people{background:var(--surface,#202429);color:var(--text,#eef2f6);font:12px -apple-system,BlinkMacSystemFont,\"Segoe UI Variable Text\",\"Segoe UI\",system-ui,Ubuntu,Cantarell,\"Noto Sans\",sans-serif}.ds-pending-nav,.ds-pending-toolbar button{font:inherit;color:var(--text,#eef2f6);background:var(--chip,#30363d);border:1px solid var(--line,#414952);border-radius:6px;padding:6px 10px;cursor:pointer}.ds-pending-badge{display:inline-block;margin-left:5px;font-size:10px;font-variant-numeric:tabular-nums;padding:1px 5px;border-radius:8px;background:var(--selected,#3e5062);color:var(--text,#eef2f6)}.ds-pending-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 18px;border-bottom:1px solid #414952}.ds-pending-toolbar h2{margin:0;font-size:16px;font-weight:600}.ds-pending-toolbar>span{flex:1 1 200px;min-width:0;overflow-wrap:anywhere;color:#b4bec8;line-height:1.5}.ds-pending-toolbar button{flex:none;color:#e1e7ee;background:#323940;border:1px solid #505962;border-radius:8px}.ds-pending-person{display:flex;width:250px;gap:9px;align-items:center;text-align:left;padding:10px 8px;border:1px solid #77acc5;border-radius:8px;background:#293b47;color:#eef2f6;font:inherit;cursor:pointer}.ds-pending-person svg{width:24px;height:24px;flex:none;stroke:#b4bec8;fill:none;stroke-width:1.4}.ds-pending-person>span{display:grid;min-width:0;gap:4px}.ds-pending-person strong{font-size:13px;overflow-wrap:anywhere;font-weight:500}.ds-pending-person small{color:#b4bec8;font-size:11px}.ds-pending-nav:hover{background-color:var(--selected,#3e5062)}.ds-pending-toolbar button:hover:not(:disabled),.ds-pending-person:hover:not(:disabled){background:#424c57}.ds-pending-nav:focus-visible{outline:2px solid var(--ember,#d97b1a);outline-offset:2px}.ds-pending-toolbar button:focus-visible,.ds-pending-person:focus-visible{outline:2px solid #f0a048;outline-offset:3px}.ds-pending-toolbar button:disabled{opacity:.48;cursor:default}@media(forced-colors:active){.ds-pending-person{border-color:Highlight}}"
+      "name": "Selected graph file plate",
+      "kind": "card",
+      "refersTo": "file-card-selected",
+      "description": "Graph-specific warm selected plate. Preserve actual media icons/thumbnails and measured text in the live SVG scene.",
+      "html": "<svg class=\"ds-graph-card\" viewBox=\"0 0 254 82\" tabindex=\"0\" role=\"button\" aria-label=\"Selected file\"><rect x=\"5\" y=\"5\" width=\"244\" height=\"72\" rx=\"10\"/><text class=\"ds-graph-name\" x=\"67\" y=\"36\">Local filename</text><text class=\"ds-graph-kind\" x=\"67\" y=\"58\">File kind</text></svg>",
+      "css": ".ds-graph-card{width:254px;height:82px}.ds-graph-card rect{fill:#483827;stroke:#f0a048;stroke-width:2}.ds-graph-name{font:500 14px \"Segoe UI\",sans-serif;fill:#f0f2f5}.ds-graph-kind{font:12.5px \"Segoe UI\",sans-serif;fill:#d6bd9b}.ds-graph-card:hover rect{stroke-opacity:1}.ds-graph-card:focus-visible{outline:none}.ds-graph-card:focus-visible rect{stroke:#ffc079;stroke-width:3}"
     }
   ],
   "narrative": {
-    "northStar": "Graphite, Glass, Amber/Cyan",
-    "overview": "**Creative North Star: \"Graphite, Glass, Amber/Cyan\"**\n\nThis system applies to DigUp's Tauri graph workspace, its face-investigation and People extensions, and their active shell colors. It records the implemented interpretation of the user's pinned dark canvas reference. The desktop launcher, normal search layout, setup flow, and other native surfaces retain their incumbent design; this is a scoped workspace system.\n\nA restrained graphite canvas supports compact translucent horizontal file cards. Amber identifies the selected file and emphasizes its unverified incident links; cyan distinguishes video cards. Green and muted red record the operator's confirmed and rejected link states. Authored outline icons and actual local thumbnails carry file identity. The canvas remains dense enough for exploration while the overlay inspector supplies readable file and match evidence.\n\nFace investigation reuses that graphite material, native type, quiet controls, and warm selection. A large source photograph or sampled video frame carries numbered cyan face boxes; the selected observation and crop adopt amber. Actual face crops, file names, cosine values, and reported video times make candidate review concrete. The indexing strip and persistent candidate-language footer remain part of the working surface.\n\nPeople extends that working material into a compact label directory, observation list, and media preview. Cyan identifies the current person and inspected observation; separate native checkboxes identify the observations targeted by the bottom action bar. Assigned, Suggestions, Excluded, and Needs review remain explicit text groups. Local label changes expose a wrapping Undo strip, and persistent copy distinguishes the operator's labels from verified identities.\n\nA persistent automatic-face status row extends the existing search shell below its ordinary index strip. It inherits that shell's light/dark colors and the active graphite workspace colors, keeping the checked preference, file/observation progress, and explicit pause readable without replacing the search design. Pending People suggestions use a quiet badge, a toolbar total, and per-label directory counts; they remain suggestions requiring the operator's confirmation.",
+    "northStar": "Graphite Media Workspace",
+    "overview": "DigUp's Windows/Linux Tauri HTML shell uses a shared dark graphite world for Search, Graph, People, and contextual face investigation. Restrained warm amber identifies current actions and selections; quiet native sans text, fine separators, and spacious working areas keep local files and photographs primary. This records the user-approved expansion of the earlier graph system. The separate native macOS application has its own implementation.\n\nPeople is a photo-led library: choose a local label, choose an inclusive year interval, then browse whole media. A slim two-handle rail and precise fields give the period a useful visual signature. One compact background-task footer keeps work visible; index details, language, and automatic-face settings open in a drawer. Actual local crops, filenames, dates, and counts supply the content.\n\nGraph retains its established glass file plates, world grid, modality cues, and evidence review colors. Faces retains source-led media, numbered detections, real crops, and separate candidate review. These established evidence materials coexist with the flatter shared chrome.",
     "keyCharacteristics": [
-      "A world-anchored grid and stable file neighborhoods.",
-      "Glass plates with small rounded corners and restrained state glows.",
-      "Native sans typography, measured filename truncation, and modality/cosine pills.",
-      "Visible search/index context, graph search and filters, a collapsible evidence inspector, and an operable minimap.",
-      "A source-led face workspace with local indexing controls, observation crops, paged candidates, and media evidence.",
-      "A People directory with explicit review groups, independent preview and bulk selection, local label forms, and visible undo.",
-      "Persistent automatic-face preference/progress and synchronized pending-suggestion counts in the existing shell."
+      "Shared graphite search header, three main destinations, and contextual face action.",
+      "Warm current-person selection, neutral counts, and uncropped album photographs.",
+      "Two inclusive year endpoints, native range handles, and explicit date provenance.",
+      "One compact background-task footer with on-demand detail and settings.",
+      "Graph evidence colors and independent preview/bulk-selection states.",
+      "Native sans, authored SVG icons, RU/EN copy, keyboard focus, and desktop reflow."
     ],
     "rules": [
       {
         "name": "The State Color Rule",
-        "body": "In the graph, amber follows the selected card, active unverified links, and a requested shortest path; cyan identifies unselected video cards. In Faces, amber follows the selected source observation, while cyan identifies available face boxes and the active candidate row. Confirmed links retain green during ordinary selection; rejected links use muted red only when explicitly shown. Pair review colors with line patterns and inspector text.",
+        "body": "Amber follows current shell and People actions and the selected graph/source observation. Cyan keeps its scoped video, face-box, and inspected-candidate meanings. Graph review colors retain their explicit text and line-pattern evidence.",
         "section": "colors"
       },
       {
         "name": "The Separate Selection Rule",
-        "body": "In People and face-result lists, the cyan row highlight chooses a preview. A separate checkbox chooses an observation for label actions. A preview highlight never implies that its checkbox is checked; Assigned and Suggestions remain separate labelled groups.",
+        "body": "A candidate or observation highlight chooses a preview. A native checkbox chooses observations for label actions. Preview selection never implies a checked observation or confirmed identity.",
         "section": "colors"
       },
       {
-        "name": "The Filename Rule",
-        "body": "Preserve the filename's beginning and ending when truncating. Keep full paths available through the card title and inspector instead of shrinking the type.",
+        "name": "The Content Type Rule",
+        "body": "Keep names, paths, counts, dates, and scores readable through wrapping, appropriate truncation, and accessible context; preserve the native type hierarchy rather than shrinking content to fit.",
         "section": "typography"
       },
       {
         "name": "The Topology Rule",
-        "body": "Force positions communicate connections, not measured similarity distance. Timeline positions encode modification dates except for explicit pins. Show only expanded neighborhoods, retain the (120-file) cap, and do not promise planar routing for cyclic graphs.",
+        "body": "Graph force positions communicate connections, not measured similarity distance. Graph timeline positions encode modification dates except for explicit pins. Keep the (120-file) cap and actual expansion scope visible.",
         "section": "layout"
       },
       {
         "name": "The Quiet Depth Rule",
-        "body": "Keep default cards restrained. Selection and video state may glow; the ordinary canvas remains low contrast.",
+        "body": "Shared chrome and album cells remain flat. Graph's existing plate depth and selection/video glow serve its evidence scene; they are scoped materials rather than a reason to decorate every control.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "**Do** keep this visual system scoped to the graph, face-investigation, and People workspaces.",
-      "**Do** preserve amber source selection and the scoped cyan video, face-box, and candidate meanings.",
-      "**Do** pair confirmed/rejected colors with line patterns and readable local-review status.",
-      "**Do** retain world-anchored grid, stable existing-node positions, and measured filename truncation.",
-      "**Do** use actual local thumbnails and authored SVG icons.",
-      "**Do** keep search/index context visible, inspector details scrollable, and camera controls keyboard accessible.",
-      "**Do** preserve RU/EN labels, reduced-motion behavior, and forced-colors fallbacks.",
-      "**Do** use real face crops, numbered source boxes, reported video times, and explicit paged candidate counts.",
-      "**Do** retain local indexing/device status, visible dark scrollbars, and candidate-not-identity language in Faces.",
-      "**Do** keep preview highlights independent of checked observations, with the selected count and label actions in the People bottom bar.",
-      "**Do** retain explicit Assigned, Suggestions, Excluded, and Needs review groups, wrapping local-label forms, and the separate Undo strip.",
-      "**Do** keep bulk scope visible, including unloaded matches and the source when All matches + source is active.",
-      "**Do** retain the persistent automatic-face row, explicit preference/pause states, and file/observation progress within the existing shell.",
-      "**Do** synchronize pending badge, toolbar, and directory counts; expose calculating/unavailable states and preserve an active review until refresh."
+      "**Do** use the shared graphite shell for Search, Graph, People, and contextual Faces on Windows/Linux.",
+      "**Do** retain the white Dig / amber Up wordmark and restrained amber active states.",
+      "**Do** keep photographs whole, dates explicit, counts neutral, and year endpoints inclusive.",
+      "**Do** keep media filters, gallery count, and sort together in one wrapping control row.",
+      "**Do** keep background detail in the drawer and local-label explanations in the information affordance.",
+      "**Do** preserve graph evidence colors, world grid, glass plates, actual scores, and line-pattern review cues.",
+      "**Do** keep preview highlights separate from checked bulk selections and unconfirmed suggestions.",
+      "**Do** preserve RU/EN text, native keyboard operation, focus recovery, reduced motion, and implemented forced-colors behavior."
     ],
     "donts": [
-      "**Don't** extend the graph palette into the desktop launcher or normal search as an implicit rebrand.",
-      "**Don't** encode cosine as physical distance or imply that only expanded links form a complete global graph.",
-      "**Don't** replace real scores or thumbnails with decorative fabricated data.",
-      "**Don't** present cosine as probability, an exact EXIF-date match as provenance proof, or unavailable analysis as detected evidence.",
-      "**Don't** use selection glow as the sole focus or state indicator.",
-      "**Don't** present local person labels or unconfirmed suggestions as verified identities.",
-      "**Don't** imply automatic model download, automatic person labeling, or that a pending person-observation total counts unique people or files."
+      "**Don't** substitute mock portraits, names, counts, years, or metadata for actual local content.",
+      "**Don't** crop album photographs into face thumbnails or hide file-date fallback provenance behind hover alone.",
+      "**Don't** add persistent success/explanation bands above the album or restore a second background-status strip.",
+      "**Don't** extend a graph-specific evidence color into a new global meaning without an explicit product decision.",
+      "**Don't** present local labels, cosine, or matching capture dates as proof of identity or provenance.",
+      "**Don't** turn desktop reflow targets into mobile support or claim a fidelity/release check that has not passed."
     ]
   }
 }

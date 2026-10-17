@@ -27,3 +27,9 @@ face-worker/target/
 
 # Local validation scratch files and tool caches (never release artifacts).
 /work/
+
+# Local design measurement and native capture scratch. Canonical approved mockups live in a subfolder.
+.impeccable/build/
+.impeccable/review/
+.impeccable/mocks/*.png
+.impeccable/mocks/*.json
