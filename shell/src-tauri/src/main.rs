@@ -1257,15 +1257,14 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
     if shell.options.debug_isolated {
         builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
     }
+    // WebView2 creation pumps native events. Release settings before build so
+    // model/setup callbacks can read them while the window is being created.
+    let title = {
+        let settings = shell.settings.lock().unwrap();
+        settings.language.text("Set Up DigUp", "Настройка DigUp")
+    };
     let window = builder
-        .title(
-            shell
-                .settings
-                .lock()
-                .unwrap()
-                .language
-                .text("Set Up DigUp", "Настройка DigUp"),
-        )
+        .title(title)
         .inner_size(720.0, 600.0)
         .resizable(false)
         .maximizable(false)
