@@ -1344,6 +1344,10 @@ async function exercisePeopleUi() {
   check(filtered.photos > 40 && filtered.photoOnly && filtered.newestSorted && filtered.photos === allGalleryFiles.filter((hit) => hit.kind !== "video").length, "Photo filter or newest ordering across pages failed");
   await chooseGallery("date_asc", "photo"); await allPages();
   filtered.oldestSorted = sortedDates(people.page.hits, false); filtered.datesVisible = !!$("person-faces").querySelector(".people-tile-date")?.textContent;
+  const accessibleTile = $("person-faces").querySelector(".people-tile"), accessibleHit = people.page.hits[0], accessibleLabel = accessibleTile.getAttribute("aria-label");
+  filtered.accessibleMetadata = accessibleLabel.includes(t("View {name}", { name: nameOf(accessibleHit.path) })) && accessibleLabel.includes(t("Photograph")) &&
+    accessibleLabel.includes(t("File modification date") + ": " + accessibleTile.querySelector(".people-tile-date").textContent);
+  check(filtered.accessibleMetadata, "The real photo tile's accessible name must expose its full filename, media type and localized modification date");
   check(filtered.oldestSorted && filtered.datesVisible && people.page.total === filtered.photos, "Oldest photo order or visible file dates failed");
   await wait(() => visibleGalleryMedia().length > 0 && visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
   await invoke("debug_capture", { label: "people-gallery-filtered" });
@@ -1352,6 +1356,9 @@ async function exercisePeopleUi() {
   check(filtered.videoOnly && filtered.videos === allGalleryFiles.filter((hit) => hit.kind === "video").length, "Video filter leaked photos or repeated video frames");
   await wait(() => visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
   const videoTile = $("person-faces").querySelector(".people-tile"); videoTile.click();
+  const videoAccessibleLabel = videoTile.getAttribute("aria-label");
+  filtered.accessibleMetadata = filtered.accessibleMetadata && videoAccessibleLabel.includes(t("Video")) && videoAccessibleLabel.includes(t("File modification date") + ": " + videoTile.querySelector(".people-tile-date").textContent);
+  check(filtered.accessibleMetadata, "The real video tile's accessible name must expose media and date metadata too");
   filtered.filteredViewer = people.page.total === 1 && $("person-viewer-previous").disabled && $("person-viewer-next").disabled;
   check(filtered.filteredViewer, "Filtered viewer escaped its one-video album"); people.closeViewer();
   await invoke("debug_capture", { label: "people-gallery-videos" });

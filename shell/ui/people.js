@@ -243,9 +243,11 @@ class PeopleView {
         } catch { if (tile.isConnected) { stage.replaceChildren(this.text("span", "people-tile-error", t("Preview unavailable. Open the file in its default app."))); stage.dataset.failed = "true"; } }
       };
       this.thumbnailLoads.set(stage, load); this.thumbnailObserver.observe(stage);
-      const caption = this.text("span", "people-tile-caption"); caption.append(this.text("strong", "", this.nameOf(hit.path)),
-        this.text("small", "", hit.kind === "video" ? t("Video") + (Number.isFinite(hit.loc) ? " · " + this.clock(hit.loc) : "") : t("Photograph")));
-      if (Number.isFinite(hit.modified)) caption.append(this.text("small", "people-tile-date", new Date(hit.modified * 1000).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" })));
+      const mediaLabel = hit.kind === "video" ? t("Video") + (Number.isFinite(hit.loc) ? " · " + this.clock(hit.loc) : "") : t("Photograph");
+      const dateLabel = Number.isFinite(hit.modified) ? new Date(hit.modified * 1000).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" }) : "";
+      const caption = this.text("span", "people-tile-caption"); caption.append(this.text("strong", "", this.nameOf(hit.path)), this.text("small", "", mediaLabel));
+      if (dateLabel) caption.append(this.text("small", "people-tile-date", dateLabel));
+      tile.setAttribute("aria-label", [t("View {name}", { name: this.nameOf(hit.path) }), mediaLabel, dateLabel ? t("File modification date") + ": " + dateLabel : ""].filter(Boolean).join(". "));
       tile.append(stage, caption); tile.onclick = () => this.openViewer(key, tile); list.append(tile); this.rows.set(key, { row: tile });
     }
     for (const [key, entry] of this.rows) if (!retained.has(key)) { entry.row.remove(); this.rows.delete(key); }

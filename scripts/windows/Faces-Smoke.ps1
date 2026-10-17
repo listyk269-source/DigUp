@@ -107,7 +107,7 @@ foreach ($pass in $passes) {
         $gallery=$peopleReport.gallery
         $filters=$peopleReport.galleryFilters
         if (!$filters -or !$filters.newestSorted -or !$filters.oldestSorted -or !$filters.photoOnly -or !$filters.videoOnly -or
-            !$filters.filteredViewer -or !$filters.rapidSwitch -or !$filters.preferencesPersisted -or !$filters.datesVisible -or
+            !$filters.filteredViewer -or !$filters.rapidSwitch -or !$filters.preferencesPersisted -or !$filters.datesVisible -or !$filters.accessibleMetadata -or
             $filters.photos -le 40 -or $filters.distinctDates -le 1) { throw 'Actual date/media gallery filtering, paging or preference persistence failed.' }
         if (!$gallery -or $gallery.mode -ne 'gallery' -or !$gallery.wholeImage -or !$gallery.arrowLoadedNextPage -or !$gallery.offscreenDeferred -or $gallery.visibleDecoded -le 0 -or
             !$gallery.repeatedVideoFramesGrouped -or !$gallery.escapeRestoresFocus -or $gallery.uniqueFiles -ne $gallery.total -or $gallery.loaded -ne $gallery.total) {
