@@ -7,6 +7,13 @@ class FaceSearchView {
     this.visible = false; this.selection = new FaceState.Selection(); this.fileGeneration = 0; this.statusGeneration = 0; this.openGeneration = 0;
     this.statusHistory = [];
     this.fileFaces = []; this.fileOffset = 0; this.imageTasks = new Map(); this.minimum = .5;
+    this.cropLoads = new Map();
+    this.cropObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        const load = this.cropLoads.get(entry.target); this.cropLoads.delete(entry.target); this.cropObserver.unobserve(entry.target);
+        if (load) { entry.target.dataset.requested = "true"; load(); }
+      }
+    }, { rootMargin: "120px" });
     this.deviceReady = this.invoke("face_device").then((device) => { this.el("face-device").value = ["auto", "cpu", "gpu"].includes(device) ? device : "auto"; })
       .catch(() => { this.deviceSaveError = true; }).finally(() => { this.deviceLoaded = true; if (this.visible) this.renderStatus(); });
     this.el("face-device").onchange = () => this.saveDevice();
@@ -72,6 +79,7 @@ class FaceSearchView {
     if (this.visible && generation === this.openGeneration && file) await this.loadFile();
   }
   close(restore = true) {
+    this.cropObserver.disconnect(); this.cropLoads.clear();
     this.visible = false; this.fileGeneration++; this.selection.generation++; this.statusGeneration++; this.openGeneration++;
     this.searchBusy = false;
     clearInterval(this.pollTimer); this.stopMedia(); this.onVisibility(false, restore);
@@ -191,11 +199,11 @@ class FaceSearchView {
     const kind = hit.kind === "video" ? "video" : "image", loc = kind === "video" ? hit.loc ?? 0 : null;
     const key = JSON.stringify([hit.path, hit.modified, hit.size, kind, loc, pixels]);
     if (!this.imageTasks.has(key)) {
-      const task = this.rendered(hit.path, kind, loc, pixels).then((path) => {
+      const task = this.rendered(hit.path, kind, loc, pixels, { modified: hit.modified, size: hit.size }).then((path) => {
         if (!path) throw new Error("Preview unavailable"); return this.fileURL(path);
-      }).catch((error) => { this.imageTasks.delete(key); throw error; });
+      }).finally(() => { this.imageTasks.delete(key); });
       this.imageTasks.set(key, task);
-      // Only in-flight tasks are essential. The existing render cache holds decoded-path reuse.
+      // Only in-flight tasks are shared. The native versioned cache owns completed-path reuse and eviction.
       if (this.imageTasks.size > 350) this.imageTasks.delete(this.imageTasks.keys().next().value);
     }
     return this.imageTasks.get(key);
@@ -226,15 +234,27 @@ class FaceSearchView {
       button.append(this.text("span", "", String(index + 1))); button.onclick = () => this.choose(face); content.append(button);
     });
   }
-  crop(hit) {
+  crop(hit, { defer } = {}) {
     const crop = this.text("span", "face-crop"); crop.setAttribute("aria-hidden", "true");
     const box = FaceState.boxOf(hit); if (!box) return crop;
-    this.imageFor(hit, 360).then((url) => {
+    const load = () => this.imageFor(hit, 360).then((url) => {
       crop.style.backgroundImage = `url(${JSON.stringify(url)})`;
       crop.style.backgroundSize = `${100 / box[2]}% ${100 / box[3]}%`;
       crop.style.backgroundPosition = `${box[2] < 1 ? box[0] / (1 - box[2]) * 100 : 0}% ${box[3] < 1 ? box[1] / (1 - box[3]) * 100 : 0}%`;
       crop.dataset.loaded = "true";
+      crop.dataset.imageUrl = url;
     }).catch(() => { crop.classList.add("unavailable"); });
+    if (defer) defer(load, crop);
+    else {
+      this.cropLoads.set(crop, load); this.cropObserver.observe(crop);
+      if (!this.cropCleanup) {
+        this.cropCleanup = true;
+        queueMicrotask(() => {
+          this.cropCleanup = false;
+          for (const node of this.cropLoads.keys()) if (!node.isConnected) { this.cropObserver.unobserve(node); this.cropLoads.delete(node); }
+        });
+      }
+    }
     return crop;
   }
   choose(face) {

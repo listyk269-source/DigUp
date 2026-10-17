@@ -736,9 +736,15 @@ async function graphThumbnail(hit) {
   return { path, url: fileURL(path) };
 }
 
-function rendered(path, kind, loc, pixels) {
-  const key = `${path}|${kind}|${loc}|${pixels}`;
-  if (!renders.has(key)) renders.set(key, ask({ op: "render", path, kind, loc, pixels }).then((reply) => reply.image));
+function rendered(path, kind, loc, pixels, version = null) {
+  const key = JSON.stringify([path, kind, loc, pixels, version?.modified, version?.size]);
+  if (!renders.has(key)) {
+    renders.set(key, ask({ op: "render", path, kind, loc, pixels,
+      ...(Number.isFinite(version?.modified) && Number.isFinite(version?.size) ? { expected_modified: version.modified, expected_size: version.size } : {}) }).then((reply) => {
+      if (!reply.image) throw new Error(reply.error || "Preview unavailable"); return reply.image;
+    }).finally(() => { renders.delete(key); }));
+    if (renders.size > 600) renders.delete(renders.keys().next().value);
+  }
   return renders.get(key);
 }
 
@@ -1018,6 +1024,19 @@ async function exerciseFaceSearchUi() {
   if (!report.graph.edges.some((edge) => edge.matchTypes.includes("face"))) throw new Error("Face results did not create real face graph evidence");
 }
 
+// Native screenshots require decoded pixels in the actual viewport. Offscreen album rows intentionally do
+// not decode images: the scroll/pagination smoke below exercises those by bringing them into view.
+async function waitForVisiblePeopleCrops(wait) {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const root = $("person-faces").getBoundingClientRect();
+  const visible = [...$("person-faces").querySelectorAll(".face-crop")].filter((crop) => {
+    const box = crop.getBoundingClientRect(); return box.bottom > root.top && box.top < root.bottom && box.height > 0;
+  });
+  await wait(() => visible.every((crop) => crop.dataset.loaded === "true"));
+  await Promise.all(visible.map(async (crop) => { const image = new Image(); image.src = crop.dataset.imageUrl; await image.decode(); }));
+  return visible.length;
+}
+
 // Drives real filesystem/watch/face publication. The external smoke copies public
 // fixtures only after the native capture markers; this path never calls face_start.
 async function exerciseAutomaticFacesUi() {
@@ -1050,8 +1069,7 @@ async function exerciseAutomaticFacesUi() {
   };
   const capture = async (label) => {
     if (people.visible) {
-      await wait(async () => [...$("person-faces").querySelectorAll(".face-crop")].every((crop) => crop.dataset.loaded === "true"));
-      await Promise.all(people.page.hits.map(async (hit) => { const image = new Image(); image.src = await faceSearch.imageFor(hit, 360); await image.decode(); }));
+      await waitForVisiblePeopleCrops(wait);
     }
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     await invoke("debug_capture", { label });
@@ -1162,8 +1180,7 @@ async function exercisePeopleUi() {
   const capture = async (name) => {
     const hits = people.page.hits;
     if (hits.length && people.page.mode !== "stale") {
-      await wait(() => [...$("person-faces").querySelectorAll(".face-crop")].every((crop) => crop.dataset.loaded === "true"));
-      await Promise.all(hits.map(async (hit) => { const image = new Image(); image.src = await faceSearch.imageFor(hit, 360); await image.decode(); }));
+      await waitForVisiblePeopleCrops(wait);
     }
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     await invoke("debug_capture", { label: name });
@@ -1229,7 +1246,37 @@ async function exercisePeopleUi() {
     }
   }
   report.personId = person.id;
-  await people.selectPerson(person.id, "assigned"); await allPages(); report.assignedTotal = people.page.total; await capture("people-assigned");
+  const albumStarted = performance.now();
+  await people.selectPerson(person.id, "assigned");
+  const album = report.albumAccess = { firstPageMs: performance.now() - albumStarted, firstPage: people.page.hits.length, total: people.page.total };
+  album.visibleDecoded = await waitForVisiblePeopleCrops(wait);
+  const list = $("person-faces"), firstRow = list.firstElementChild, firstCrop = firstRow?.querySelector(".face-crop"), preview = $("person-preview").firstElementChild;
+  album.initialThumbnailRequests = list.querySelectorAll('.face-crop[data-requested="true"]').length;
+  album.offscreenDeferred = album.initialThumbnailRequests < people.page.hits.length;
+  check(album.offscreenDeferred && album.visibleDecoded > 0, "Album thumbnails must decode visible media while deferring offscreen files");
+  firstRow.querySelector("input").click(); firstRow.querySelector("input").click();
+  album.rowRetainedOnCheck = list.firstElementChild === firstRow && firstRow.querySelector(".face-crop") === firstCrop && $("person-preview").firstElementChild === preview;
+  check(album.rowRetainedOnCheck, "Selection recreated album rows, thumbnails or the current preview");
+  if (people.page.hasMore) {
+    list.scrollTop = list.scrollHeight; list.dispatchEvent(new Event("scroll"));
+    await wait(() => !people.pageBusy && (people.page.hits.length > album.firstPage || !people.page.hasMore));
+    check(!people.pageError, people.pageError || "Automatic album pagination failed");
+    album.automaticPageBeyond40 = people.page.hits.length > 40;
+    check(album.automaticPageBeyond40, "Scrolling did not load photographs beyond the first 40");
+    const last = list.lastElementChild; last.scrollIntoView({ block: "end" });
+    await waitForVisiblePeopleCrops(wait);
+    album.laterThumbnailDecoded = last.querySelector(".face-crop")?.dataset.loaded === "true";
+    check(album.laterThumbnailDecoded, "Newly visible later-page photograph was not decoded");
+  }
+  await allPages(); album.loaded = people.page.hits.length;
+  check(album.loaded === people.page.total, "The complete labelled album was truncated");
+  const probe = people.page.hits.find((hit) => hit.kind !== "video");
+  const cached = await ask({ op: "render", path: probe.path, kind: "image", pixels: 361, expected_modified: probe.modified, expected_size: probe.size });
+  check(!!cached.image && cached.cached === (report.phase !== "first"), "Versioned thumbnail cache did not persist across actual GUI restarts");
+  const cacheImage = new Image(); cacheImage.src = fileURL(cached.image); await cacheImage.decode();
+  album.cacheProbePath = cached.image; album.cacheProbeReused = cached.cached; album.cacheProbeDecoded = cacheImage.naturalWidth > 0;
+  list.scrollTop = 0;
+  report.assignedTotal = people.page.total; await capture("people-assigned");
   await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total;
   if (!report.suggestionsCapturedBeforeDecision) { report.suggestionCapturedTotal = people.page.total; await capture("people-suggestions"); }
   $("person-rename-toggle").click(); $("person-name").value = renamed; $("person-rename").requestSubmit(); await people.mutationTask;

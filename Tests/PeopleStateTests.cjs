@@ -3,6 +3,37 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const state = require("../shell/ui/people-state.js");
 const query = { seed_face_id: 7, minimum_cosine: .5, index_revision: 12 };
+
+test("album thumbnails bound work and discard waiting loads when switching people", async () => {
+  const queue = new state.ThumbnailQueue(2), finish = []; let active = 0, peak = 0, calls = 0;
+  const load = () => { calls++; active++; peak = Math.max(peak, active); return new Promise((resolve) => finish.push(() => { active--; resolve("image"); })); };
+  const tasks = Array.from({ length: 40 }, () => queue.add(load));
+  await new Promise(setImmediate); assert.equal(calls, 2); assert.equal(peak, 2);
+  queue.reset(); finish.splice(0).forEach((done) => done());
+  const replies = await Promise.all(tasks); assert.equal(replies.filter((value) => value === null).length, 38);
+  assert.equal(calls, 2);
+  assert.equal(await queue.add(() => "next person"), "next person");
+});
+
+test("failed thumbnail decoding releases a queue slot for the next photograph", async () => {
+  const queue = new state.ThumbnailQueue(1);
+  const first = queue.add(() => { throw new Error("bad image"); }), next = queue.add(() => "next image");
+  await assert.rejects(first, /bad image/); assert.equal(await next, "next image");
+});
+
+test("scroll near the album end loads later pages and stops on expiration or errors", async () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} }, PeopleState: state };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/people.js"), "utf8"), context);
+  const view = Object.create(context.module.exports.prototype);
+  view.visible = true; view.page = { hasMore: true }; view.el = () => ({ scrollHeight: 2000, clientHeight: 500, scrollTop: 1450 });
+  let requests = 0; view.loadPage = async (more) => { assert.equal(more, true); requests++; };
+  view.maybeLoadMore(); await view.pageTask; assert.equal(requests, 1);
+  for (const protection of ["pageBusy", "mutationBusy", "expired", "pageError"]) {
+    view[protection] = true; view.maybeLoadMore(); assert.equal(requests, 1); view[protection] = false;
+  }
+  view.page.hasMore = false; view.maybeLoadMore(); assert.equal(requests, 1);
+});
 test("background refresh preserves explicit checks, active previews, rename edits and extra pages", () => {
   const idle = { visible: true, mode: "suggestions", offset: 40 };
   assert.equal(state.backgroundRefreshPolicy(idle), "refresh");

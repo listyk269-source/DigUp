@@ -99,6 +99,11 @@ foreach ($pass in $passes) {
         $peopleReport = $ui.features.people
         if (!$peopleReport -or !$peopleReport.passed) { throw "Actual People workflow failed ($pass)." }
         if ($peopleReport.phase -ne $pass) { throw "People persistence phase mismatch ($pass)." }
+        $album=$peopleReport.albumAccess
+        if (!$album -or !$album.offscreenDeferred -or !$album.rowRetainedOnCheck -or !$album.automaticPageBeyond40 -or
+            !$album.laterThumbnailDecoded -or !$album.cacheProbeDecoded -or $album.cacheProbeReused -ne ($pass -ne 'first') -or $album.loaded -ne $album.total) {
+            throw 'Actual labelled album must retain rows, defer offscreen previews, and scroll past 40 to every observation.'
+        }
         if ($pass -eq 'first' -and ($peopleReport.bulkLoadedBefore -ne 40 -or $peopleReport.bulkTotalMatches -le 40 -or
             !$peopleReport.bulkAssignedBeyondLoaded -or $peopleReport.excludedCount -ne 1 -or !$peopleReport.exclusionUndo -or
             !$peopleReport.selectiveUndo -or !$peopleReport.renameUndo)) { throw 'Actual bulk/exclusion/rename/undo checks failed.' }

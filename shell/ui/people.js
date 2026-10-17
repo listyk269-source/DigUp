@@ -5,6 +5,14 @@ class PeopleView {
     Object.assign(this, { ask, faceSearch, invoke, picture, nameOf, clock, onVisibility, onFace });
     this.el = (id) => document.getElementById(id); this.people = []; this.page = new PeopleState.PersonPage(); this.faceBulk = new PeopleState.BulkSelection();
     this.selectedFaces = new Set(); this.visible = false; this.directoryGeneration = 0; this.faceLabelGeneration = 0;
+    this.rows = new Map(); this.thumbnails = new PeopleState.ThumbnailQueue(2); this.thumbnailLoads = new Map();
+    this.thumbnailObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        const load = this.thumbnailLoads.get(entry.target); this.thumbnailLoads.delete(entry.target); this.thumbnailObserver.unobserve(entry.target);
+        if (load) { entry.target.dataset.requested = "true"; this.thumbnails.add(load).catch(() => {}); }
+      }
+    }, { root: this.el("person-faces"), rootMargin: "120px" });
+    this.el("person-faces").addEventListener("scroll", () => this.maybeLoadMore(), { passive: true });
     faceSearch.people = this;
     this.el("people-back").onclick = () => this.close();
     this.el("people-refresh").onclick = () => { this.refreshTask = this.refresh(); };
@@ -42,7 +50,13 @@ class PeopleView {
     const selected = this.people.find((person) => PeopleState.samePerson(person.id, personId)) || this.people[0];
     if (selected) await this.selectPerson(selected.id, "assigned");
   }
-  close() { this.visible = false; this.page.generation++; this.directoryGeneration++; this.stopPreview(); this.onVisibility(false); }
+  close() { this.visible = false; this.page.generation++; this.directoryGeneration++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
+  resetRows() { this.thumbnailObserver?.disconnect(); this.thumbnailLoads?.clear(); this.thumbnails?.reset(); this.rows?.clear(); this.el("person-faces").replaceChildren(); }
+  maybeLoadMore() {
+    const list = this.el("person-faces");
+    if (this.visible && this.page.hasMore && !this.pageBusy && !this.mutationBusy && !this.pageError && !this.expired &&
+      list.scrollHeight - list.scrollTop - list.clientHeight < 160) this.pageTask = this.loadPage(true);
+  }
   stopPreview() { this.el("person-preview").querySelectorAll("audio,video").forEach((player) => player.pause()); }
   async refreshDirectory() {
     const generation = ++this.directoryGeneration;
@@ -60,6 +74,7 @@ class PeopleView {
     await this.auto?.refreshSummary(true);
   }
   async selectPerson(id, mode = "assigned") {
+    this.resetRows(); this.el("person-faces").scrollTop = 0;
     this.page.open(id, mode); this.pageBusy = false; this.selectedFaces.clear(); this.selectedPreview = null; this.previewKey = null; this.pageError = null; this.expired = false;
     this.previewTouched = false; this.backgroundNotice = false; this.backgroundProtected = false;
     this.el("person-rename").hidden = true; this.render(); return this.loadPage();
@@ -99,7 +114,7 @@ class PeopleView {
     for (const person of people) {
       const button = this.text("button", ""); button.type = "button"; button.dataset.personId = String(person.id); button.setAttribute("aria-pressed", String(PeopleState.samePerson(person.id, this.page.personId)));
       button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22V19A8 8 0 0 1 20 19V22"/></svg>';
-      const label = this.text("span", ""); label.append(this.text("strong", "", person.name), this.text("small", "", t("{count} assigned observations", { count: person.assigned_count || 0 })));
+      const label = this.text("span", ""); label.append(this.text("strong", "", person.name), this.text("small", "", t("{files} files · {count} assigned faces", { files: person.assigned_file_count || 0, count: person.assigned_count || 0 })));
       const summary = this.auto?.summary, pending = summary?.state === "ready" ? summary.people?.find((item) => PeopleState.samePerson(item.person_id, person.id))?.pending_count : null;
       if (Number.isFinite(pending) && pending > 0) label.append(this.text("small", "people-person-pending", t("{count} pending observations", { count: pending })));
       button.append(label); button.onclick = () => { this.pageTask = this.selectPerson(person.id); }; list.append(button);
@@ -108,6 +123,7 @@ class PeopleView {
   }
   renderPage() {
     const person = this.person(), mode = this.page.mode;
+    if (this.rowsLanguage !== I18n.language) { this.resetRows(); this.rowsLanguage = I18n.language; }
     this.el("person-title").textContent = person?.name || t("Choose a person");
     this.el("person-rename-toggle").disabled = !person || !!this.mutationBusy;
     for (const button of document.querySelectorAll("[data-person-mode]")) { button.setAttribute("aria-pressed", String(button.dataset.personMode === mode)); button.disabled = !person || !!this.pageBusy; }
@@ -115,11 +131,23 @@ class PeopleView {
       rejected: "Excluded observations are not suggested again for this person. Remove the exclusion to reconsider them.", stale: "The original file or face observation changed. These labels need review; they are not used to suggest new faces." };
     const message = this.el("person-message"); message.classList.toggle("face-error", !!this.pageError);
     message.textContent = this.pageError ? t(this.pageError) : this.pageBusy ? t("Loading person observations…") : !person ? t("Choose a person") :
-      t(messages[mode]) + " " + t("{loaded} of {total} observations loaded", { loaded: this.page.hits.length, total: this.page.total });
+      t(messages[mode]) + " " + (mode === "assigned" ? t("{count} files", { count: this.counts?.assigned_files ?? person?.assigned_file_count ?? 0 }) + " · " : "") +
+      t("{loaded} of {total} observations loaded", { loaded: this.page.hits.length, total: this.page.total });
     if (this.backgroundNotice && !this.pageBusy) message.textContent += " " + t("New face-index changes are available. Refresh to update this review; your current selection is unchanged.");
-    const list = this.el("person-faces"), scroll = list.scrollTop; list.replaceChildren();
+    const list = this.el("person-faces"), scroll = list.scrollTop, retained = new Set();
     for (const hit of this.page.hits) {
-      const key = this.faceRowKey(hit), row = this.text("div", "people-face-row"), check = document.createElement("input");
+      const key = this.faceRowKey(hit); retained.add(key);
+      let entry = this.rows.get(key);
+      const signature = JSON.stringify([PeopleState.idOf(hit), hit.cosine, hit.person, mode]);
+      if (entry && entry.signature !== signature) {
+        for (const crop of entry.row.querySelectorAll(".face-crop")) { this.thumbnailObserver.unobserve(crop); this.thumbnailLoads.delete(crop); }
+        entry.row.remove(); this.rows.delete(key); entry = null;
+      }
+      if (entry) {
+        entry.check.checked = this.selectedFaces.has(key); entry.check.disabled = !!this.mutationBusy;
+        entry.button.setAttribute("aria-pressed", String(this.selectedPreview === key)); continue;
+      }
+      const row = this.text("div", "people-face-row"), check = document.createElement("input");
       check.type = "checkbox"; check.dataset.faceKey = key; check.checked = this.selectedFaces.has(key); check.disabled = !!this.mutationBusy;
       check.setAttribute("aria-label", t("Select observation in {name}", { name: this.nameOf(hit.path) }));
       check.onchange = () => {
@@ -131,7 +159,20 @@ class PeopleView {
         this.text("span", "", hit.kind === "video" && Number.isFinite(hit.loc) ? this.clock(hit.loc) : t("Photograph")));
       if (Number.isFinite(hit.cosine)) label.append(this.text("span", "", t("Cosine {value}", { value: hit.cosine.toFixed(3) })));
       if (hit.person && !PeopleState.samePerson(hit.person.id, person?.id)) label.append(this.text("span", "", t("Already labelled: {name}", { name: hit.person.name })));
-      button.append(mode === "stale" ? this.text("span", "face-crop") : this.faceSearch.crop(hit), label); button.onclick = () => { this.stopPreview(); this.previewTouched = true; this.selectedPreview = key; this.renderPage(); }; row.append(check, button); list.append(row);
+      button.append(mode === "stale" ? this.text("span", "face-crop") : this.faceSearch.crop(hit, { defer: (load, crop) => {
+        this.thumbnailLoads.set(crop, load); this.thumbnailObserver.observe(crop);
+      } }), label); button.onclick = () => { this.stopPreview(); this.previewTouched = true; this.selectedPreview = key; this.renderPage(); };
+      row.append(check, button); list.append(row); this.rows.set(key, { row, check, button, signature });
+    }
+    for (const [key, entry] of this.rows) if (!retained.has(key)) {
+      for (const crop of entry.row.querySelectorAll(".face-crop")) { this.thumbnailObserver.unobserve(crop); this.thumbnailLoads.delete(crop); }
+      entry.row.remove(); this.rows.delete(key);
+    }
+    let cursor = list.firstElementChild;
+    for (const hit of this.page.hits) {
+      const row = this.rows.get(this.faceRowKey(hit)).row;
+      if (row !== cursor) list.insertBefore(row, cursor);
+      cursor = row.nextElementSibling;
     }
     list.scrollTop = scroll;
     const selected = this.selectedFaces.size; this.el("person-selection-count").textContent = t("{count} selected", { count: selected });
@@ -142,6 +183,7 @@ class PeopleView {
     this.el("person-remove").textContent = t(mode === "rejected" ? "Remove exclusion" : "Remove label");
     this.el("person-more").hidden = !this.page.hasMore; this.el("person-more").disabled = !!this.pageBusy || !!this.mutationBusy || this.expired;
     this.renderPreview();
+    requestAnimationFrame(() => this.maybeLoadMore());
   }
   renderPreview() {
     const hit = this.page.hits.find((face) => this.faceRowKey(face) === this.selectedPreview), key = hit ? `${this.faceRowKey(hit)}:${I18n.language}:${this.page.mode}` : null;

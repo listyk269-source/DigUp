@@ -27,6 +27,19 @@ Open **People** from the search header. Filter labels by name and open a person 
 confirmed observations. Real crops, original previews, file opening and video timestamps remain
 available. Rename the person without running inference again.
 
+Assigned albums open directly from saved labels, without scanning every face descriptor or starting
+YuNet/SFace again. The directory shows both unique file counts and labelled observations: several
+faces or video frames in one file are not several photographs. The first page contains 40 observations;
+scrolling near its end automatically loads the next page. **Show more** remains available for keyboard
+navigation. There is no 40-file limit. Checked rows and the current preview remain in place while paging.
+
+Only visible and nearby album thumbnails are requested, with two concurrent requests. Generated
+previews are reused across restarts in `<index>/preview-cache-v1`, with version/frame/size-specific
+keys and eviction at approximately 512 MiB or 20,000 JPEGs (checked after each 64 new entries).
+These disposable local JPEGs are not encrypted; deleting this cache while DigUp is closed is safe
+and does not remove labels or the index. Missing, changed or out-of-scope sources cannot be opened
+through a cached preview. Original images remain unchanged.
+
 Remove a label to leave the observation unassigned. **This is another person** records an explicit
 rejection for that person and observation, so the same suggestion is suppressed. Rejected
 observations can be reviewed separately. These decisions do not remove files or face descriptors.
@@ -98,6 +111,8 @@ Use a fresh evidence directory and real pinned models. The smoke uses public NAS
 Unicode directory, the packaged GUI/helper and a system-only PATH. It labels actual face observations,
 then adds new photographs through the real ordinary index and face backfill before checking proposals
 and restart persistence. It does not replace face inference or the native media player with mocks.
+The People phases also verify actual automatic scrolling past 40, decoded later-page photographs,
+deferred offscreen thumbnails and preserved DOM/media elements when checking observations.
 The automatic smoke additionally copies a real photograph and H.264 video while the GUI is running.
 The native filesystem watcher, ordinary indexer and background face scheduler must publish their
 actual observations without a `face_start` request. It verifies progress, proposal counts after

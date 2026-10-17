@@ -7,6 +7,24 @@ const PeopleState = (() => {
   const samePerson = (left, right) => left != null && right != null && String(left) === String(right);
   const queryKey = (query) => JSON.stringify([query.seed_face_id, query.minimum_cosine, query.index_revision]);
   const revisionKey = (snapshot) => snapshot ? JSON.stringify([snapshot.scope_revision ?? null, snapshot.index_revision ?? null, snapshot.people_revision ?? null, snapshot.minimum_cosine ?? .5]) : null;
+  // Only visible/nearby thumbnails enter this queue. Cancelling an old album discards its waiting work while
+  // already running requests finish normally and remain reusable in the native preview cache.
+  class ThumbnailQueue {
+    constructor(limit = 2) { this.limit = limit; this.running = 0; this.waiting = []; this.generation = 0; }
+    reset() { this.generation++; for (const task of this.waiting.splice(0)) task.resolve(null); }
+    add(load) {
+      const generation = this.generation;
+      return new Promise((resolve, reject) => { this.waiting.push({ load, resolve, reject, generation }); this.pump(); });
+    }
+    pump() {
+      while (this.running < this.limit && this.waiting.length) {
+        const task = this.waiting.shift();
+        if (task.generation !== this.generation) { task.resolve(null); continue; }
+        this.running++;
+        Promise.resolve().then(task.load).then(task.resolve, task.reject).finally(() => { this.running--; this.pump(); });
+      }
+    }
+  }
   function backgroundRefreshPolicy({ visible, mode, checked = 0, editing = false, busy = false, previewTouched = false, playing = false, offset = 0 }) {
     if (!visible || mode !== "suggestions") return "none";
     return checked || editing || busy || previewTouched || playing || offset > 40 ? "hold" : "refresh";
@@ -51,6 +69,6 @@ const PeopleState = (() => {
     request(minimum = .5) { return { op: "person_faces", person_id: this.personId, mode: this.mode, offset: this.offset, limit: 40, minimum_cosine: minimum,
       ...(this.offset ? { index_revision: this.indexRevision, people_revision: this.peopleRevision } : {}) }; }
   }
-  return { BulkSelection, PersonPage, idOf, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
+  return { BulkSelection, PersonPage, ThumbnailQueue, idOf, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
 })();
 if (typeof module !== "undefined") module.exports = PeopleState;

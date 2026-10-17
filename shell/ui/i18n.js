@@ -54,6 +54,8 @@ const I18n = (() => {
   "Remove exclusion": "Убрать исключение",
   "Names are your local labels, not verified identities. New matches remain suggestions until you confirm them. Excluded observations are not suggested again for this person.": "Имена — ваши локальные метки, а не подтверждённые личности. Новые совпадения остаются предложениями до вашего подтверждения. Исключённые наблюдения не предлагаются снова для этого человека.",
   "{count} assigned observations": "Наблюдений с меткой: {count}",
+  "{files} files · {count} assigned faces": "Файлов: {files} · Лиц с меткой: {count}",
+  "{count} files": "Файлов: {count}",
   "No matching person labels": "Подходящих меток нет",
   "Create a person label, then assign confirmed face observations.": "Создайте метку человека и добавьте к ней проверенные наблюдения лиц.",
   "Assigned by you. Select an observation to preview it or remove its label.": "Подтверждено вами. Выберите наблюдение, чтобы посмотреть его или убрать метку.",

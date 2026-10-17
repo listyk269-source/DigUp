@@ -1441,9 +1441,11 @@ fn search_event(app: &AppHandle, event: Value) {
     }
     if event["event"] == "ready" {
         if let Some(index) = event["index"].as_str() {
-            let _ = app
-                .asset_protocol_scope()
-                .allow_directory(Path::new(index).join("previews"), false);
+            for folder in ["previews", "preview-cache-v1"] {
+                let _ = app
+                    .asset_protocol_scope()
+                    .allow_directory(Path::new(index).join(folder), false);
+            }
         }
     }
     let _ = app.emit("helper", json!({"from": "search", "event": event}));
