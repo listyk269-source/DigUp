@@ -245,7 +245,7 @@ Face weights download separately on first use; see [Face search](docs/face-searc
 privacy, accuracy limits and validation. Object detection and Windows OCR extraction are not included.
 
 **People** opens labelled files as a deduplicated whole-photo tile gallery, with click-to-preview,
-Left/Right navigation, progressive loading, capture-date sorting (file-date fallback), an inclusive year-range rail and Photo/Video filters. Search, Graph and People have separate navigation; the gear or compact bottom status opens index details and settings. People also adds local face labels, assignment to selected or all matches, rejected mistakes,
+Left/Right navigation, progressive loading, capture-date sorting (file-date fallback), an inclusive year-range rail and Photo/Video filters. The photo viewer offers **Find similar** with a return to the saved person album. Ordinary **Search** has the same inclusive year rail and media filters; clear the query to browse photos by period without a model. Search, Graph and People have separate navigation; the gear or compact bottom status opens index details and settings. People also adds local face labels, assignment to selected or all matches, rejected mistakes,
 renaming, undo and unconfirmed label suggestions after new media are indexed. Once face search is enabled,
 new photos and videos are processed automatically, with background progress, persistent pause/resume and
 pending proposal counts. See [People](docs/people.md).

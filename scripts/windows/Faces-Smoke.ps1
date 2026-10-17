@@ -122,7 +122,7 @@ foreach ($pass in $passes) {
         $album=$peopleReport.albumAccess
         $gallery=$peopleReport.gallery
         $filters=$peopleReport.galleryFilters
-        if (!$peopleReport.period.passed -or !$peopleReport.workspace.passed) { throw 'Actual year-range/EXIF or workspace navigation checks failed.' }
+        if (!$peopleReport.period.passed -or !$peopleReport.workspace.passed -or !$peopleReport.viewerSimilar.passed) { throw 'Actual year-range/EXIF, workspace navigation or gallery Find similar checks failed.' }
         if (!$filters -or !$filters.newestSorted -or !$filters.oldestSorted -or !$filters.photoOnly -or !$filters.videoOnly -or
             !$filters.filteredViewer -or !$filters.rapidSwitch -or !$filters.preferencesPersisted -or !$filters.datesVisible -or !$filters.accessibleMetadata -or
             $filters.photos -le 40 -or $filters.distinctDates -le 1) { throw 'Actual date/media gallery filtering, paging or preference persistence failed.' }
@@ -144,7 +144,7 @@ foreach ($pass in $passes) {
             throw 'The native suggestion capture must show both genuine new proposals before decisions.'
         }
         if ($pass -eq 'verify' -and !$peopleReport.persistenceVerified) { throw 'Accepted/rejected labels did not survive restart.' }
-        $peopleCaptures=@('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-gallery-filtered','people-gallery-videos','people-period','people-period-compact','workspace-settings','workspace-search','workspace-graph')
+        $peopleCaptures=@('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-gallery-filtered','people-gallery-videos','people-period','people-period-compact','people-gallery-similar','workspace-settings','workspace-search','workspace-graph')
         if($pass -eq 'first') { $peopleCaptures += 'people-period-hero' }
         foreach ($phase in $peopleCaptures) {
             $capture = Join-Path $index "capture-$phase.png"

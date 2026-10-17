@@ -333,6 +333,8 @@ Graph file plates use the file-card corner; score pills use rounded ends and aut
 
 ### Search and navigation
 
+Ordinary Search reuses the People year rail below navigation and adds the same quiet **All / Photos / Videos** choices. The shared `YearPeriodControl` owns endpoint validation, native number/range keyboard behavior and rail drawing; each view retains its own saved preferences. With no query, an explicit date/media filter browses indexed files by date and labels the preview as an indexed file. Code and related-file views hide the rail. The People full-media viewer adds **Find similar** beside its existing Open and Find faces actions; its return action restores the person and album preferences. These additions preserve the incumbent shell tokens and responsive breakpoints.
+
 The text wordmark, broad bordered search, clear action, and settings gear share the first row. Search focus changes the field border to amber. The three main destinations retain visible text and authored outline SVG icons. Current navigation has semibold text, amber icon, and a (3px) underline; hover adds the shell-hover fill and primary text. Disabled navigation uses opacity (.45). The contextual face action remains available independently of the three destinations.
 
 ### Buttons, fields, and review controls

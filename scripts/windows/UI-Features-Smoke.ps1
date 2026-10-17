@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory)][string]$Archive,
     [Parameter(Mandatory)][string]$Models,
-    [Parameter(Mandatory)][string]$OutputDirectory
+    [Parameter(Mandatory)][string]$OutputDirectory,
+    [string]$DevelopmentGui,
+    [string]$DevelopmentHelper
 )
 . "$PSScriptRoot/Common.ps1"
 $testRoot = [IO.Path]::GetFullPath($OutputDirectory)
@@ -15,6 +17,8 @@ foreach ($item in @(@('embeddinggemma-2-Q8_0.gguf','2188ac1deca4b77dffefd603c277
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 $package = Join-Path $testRoot 'Приложение café'
 [IO.Compression.ZipFile]::ExtractToDirectory([IO.Path]::GetFullPath($Archive), $package)
+$cli = Join-Path $package 'helper/digup.exe'
+if ($DevelopmentHelper) { Copy-Item -LiteralPath ([IO.Path]::GetFullPath($DevelopmentHelper)) -Destination $cli -Force }
 
 $fixture = Join-Path $testRoot 'Документы для UI Ё'
 $index = Join-Path $testRoot 'Private index'
@@ -43,7 +47,7 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label) {
     try {
         $process.StandardInput.Close()
         $stdout=$process.StandardOutput.ReadToEndAsync(); $stderr=$process.StandardError.ReadToEndAsync()
-        if (!$process.WaitForExit(300000)) { throw "$Label exceeded 300 seconds." }
+        if (!$process.WaitForExit(900000)) { throw "$Label exceeded 900 seconds." }
         if (!$stdout.Wait(5000) -or !$stderr.Wait(5000)) { throw "$Label left output handles open." }
         $stdout.Result | Set-Content -LiteralPath "$testRoot/$Label.stdout.txt" -Encoding utf8NoBOM
         $stderr.Result | Set-Content -LiteralPath "$testRoot/$Label.stderr.txt" -Encoding utf8NoBOM
@@ -54,13 +58,18 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label) {
 for ($number=1; $number -le 5; $number++) {
     Copy-Item -LiteralPath "$script:Repo/Tests/LlamaRuntimeTests/Reference/photo.jpg" -Destination (Join-Path $fixture "UIFEATURE742-IMG_2018_000$number.jpg")
 }
+$periodPhoto=Get-VerifiedDownload ([pscustomobject]@{file='face-nasa-S69-31739.jpg';url='https://images-assets.nasa.gov/image/S69-31739/S69-31739~orig.jpg';sha256='ba9ccc7c8accc044ebe71fbe402255d45f4cb0fec67f2c9afbfb4ed71d671784'})
+for ($number=1; $number -le 43; $number++) {
+    Copy-Item -LiteralPath $periodPhoto -Destination (Join-Path $fixture ('UIFEATURE742-period-{0:D3}.jpg' -f $number))
+}
 # Genuine JPEG EXIF DateTimeOriginal, written only to disposable fixtures. No extractor is mocked.
 foreach ($photo in Get-ChildItem -LiteralPath $fixture -Filter '*.jpg') {
     $tiff=[IO.MemoryStream]::new(); $writer=[IO.BinaryWriter]::new($tiff)
     $writer.Write([byte[]](0x49,0x49)); $writer.Write([uint16]42); $writer.Write([uint32]8)
     $writer.Write([uint16]1); $writer.Write([uint16]0x8769); $writer.Write([uint16]4); $writer.Write([uint32]1); $writer.Write([uint32]26); $writer.Write([uint32]0)
     $writer.Write([uint16]1); $writer.Write([uint16]0x9003); $writer.Write([uint16]2); $writer.Write([uint32]20); $writer.Write([uint32]44); $writer.Write([uint32]0)
-    $writer.Write([Text.Encoding]::ASCII.GetBytes("2026:10:15 12:34:56`0")); $writer.Flush()
+    $year=if($photo.Name -match 'period-(\d+)'){2000+(([int]$Matches[1]-1)%4)}else{2026}
+    $writer.Write([Text.Encoding]::ASCII.GetBytes("${year}:10:15 12:34:56`0")); $writer.Flush()
     $payload=[byte[]]([Text.Encoding]::ASCII.GetBytes("Exif`0`0") + $tiff.ToArray()); $writer.Dispose(); $tiff.Dispose()
     $original=[IO.File]::ReadAllBytes($photo.FullName); $length=$payload.Length+2
     [IO.File]::WriteAllBytes($photo.FullName,[byte[]](@(0xff,0xd8,0xff,0xe1,($length -shr 8),($length -band 255)) + $payload + $original[2..($original.Length-1)]))
@@ -75,10 +84,11 @@ foreach ($media in Get-ChildItem -LiteralPath $fixture -File | Where-Object Exte
     [IO.File]::SetLastWriteTimeUtc($media.FullName,$date.AddDays($ordinal)); $ordinal++
 }
 $gui=Join-Path $package 'DigUp.exe'
+if ($DevelopmentGui) { $gui=[IO.Path]::GetFullPath($DevelopmentGui) }
 foreach ($pass in 'first','restart') {
     $report=Join-Path $testRoot "gui-$pass.json"
     $arguments=@('--index',$index,'--models',$modelsPath,'--settings',$settings,'--debug-isolated',
-        '--debug-ui-features','--debug-query','UIFEATURE742','--debug-report',$report,'--debug-quit')
+        '--debug-ui-features','--debug-query','UIFEATURE742','--debug-report',$report,'--debug-quit','--helper',$cli)
     if ($pass -eq 'first' ) { $arguments+=@('--debug-setup','--offer',$fixture) }
     Run-Private $gui $arguments "gui-$pass"
     $ui=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
@@ -100,7 +110,8 @@ foreach ($pass in 'first','restart') {
         throw "Real investigation controls/evidence/local persistence failed ($pass)."
     }
     if ($pass -eq 'restart' -and ($o.initialStatus -ne 'confirmed' -or !$o.initialPin)) { throw 'Review status/pin did not survive restart.' }
-    foreach ($phase in 'comparison','timeline','context') {
+    if(!$f.searchPeriod.passed) { throw "Actual ordinary search year rail failed ($pass)." }
+    foreach ($phase in 'comparison','timeline','context','search-period','search-period-compact') {
         Copy-Item -LiteralPath (Join-Path $index "capture-$phase.png") -Destination "$testRoot/capture-$pass-$phase.png"
     }
     foreach ($graph in @($f.graph, $f.image)) {
@@ -158,11 +169,12 @@ $saved=Get-Content -LiteralPath $settings -Raw | ConvertFrom-Json
 if ($saved.language -ne 'ru' -or $saved.folders.Count -ne 1 -or $saved.folders[0] -ne $fixture -or !$saved.setUp) {
     throw 'Language persistence damaged setup or folders.'
 }
-@{result='passed';realModel=$true;userInstallationModified=$false;
+@{result='passed';realModel=$true;userInstallationModified=$false;developmentGui=[bool]$DevelopmentGui;developmentHelper=[bool]$DevelopmentHelper;
     archiveSha256=(Get-FileHash -LiteralPath $Archive).Hash.ToLowerInvariant();
     checks=@('setup Russian selector','RU/EN/RU live DOM','restart language persistence','queries and selected paths unchanged',
         'real graph text preview','real graph image preview','Find similar from graph and result',
         '40 then all similar files via Show more','no duplicate files or seed in neighbors','Back to original query',
+        'ordinary search inclusive EXIF year rail before pagination','43 real photographs across pages','empty-query date browsing without encoder','photo/video filters','invalid/empty/reset/slider ranges','search period persistence across restart','stale filtered replies ignored','compact and wide search period controls',
         '360px overlay inspector','real visual/EXIF channel evidence','side-by-side real previews','confirm/reject/unverify','rejected-link visibility',
         'persist reviews and pins across restart','real unexpanded counts','node context menu expand-all/hide/restore','real audio modality pivot and time buttons','shortest expanded path','filename dimming','positive real semantic graph search','stale semantic replies ignored','face control follows real analyzer availability','timeline keeps pinned coordinates','actual SHA-256',
         'bounded inspector layout','75% initial camera','perimeter and minimap card clearance','native WebView PNG captures','actual minimap click and recenter','zoom slider','collapsible inspector','real image and video card thumbnails','cosine labels','rounded native/web corner policy','Unicode/spaces','System32/Windows PATH only')} |

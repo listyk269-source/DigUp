@@ -1,8 +1,8 @@
 "use strict";
 
 class PeopleView {
-  constructor({ ask, faceSearch, invoke, picture, nameOf, clock, onVisibility, onFace }) {
-    Object.assign(this, { ask, faceSearch, invoke, picture, nameOf, clock, onVisibility, onFace });
+  constructor({ ask, faceSearch, invoke, picture, nameOf, clock, onVisibility, onFace, onSimilar }) {
+    Object.assign(this, { ask, faceSearch, invoke, picture, nameOf, clock, onVisibility, onFace, onSimilar });
     this.el = (id) => document.getElementById(id); this.people = []; this.page = new PeopleState.PersonPage(); this.faceBulk = new PeopleState.BulkSelection();
     this.selectedFaces = new Set(); this.visible = false; this.directoryGeneration = 0; this.faceLabelGeneration = 0;
     try { this.galleryOptions = PeopleState.galleryOptions(JSON.parse(localStorage.getItem("digup.people.gallery"))); }
@@ -31,18 +31,7 @@ class PeopleView {
     for (const button of document.querySelectorAll("[data-person-mode]")) button.onclick = () => { this.pageTask = this.selectPerson(this.page.personId, button.dataset.personMode); };
     this.el("person-gallery-sort").onchange = () => this.changeGallery({ sort: this.el("person-gallery-sort").value });
     for (const button of document.querySelectorAll("[data-gallery-media]")) button.onclick = () => this.changeGallery({ media: button.dataset.galleryMedia });
-    for (const end of ["from", "through"]) {
-      this.el("person-year-" + end).onchange = () => this.commitPeriod();
-      const slider = this.el("person-year-" + end + "-range");
-      slider.oninput = () => {
-        const other = this.el("person-year-" + (end === "from" ? "through" : "from") + "-range");
-        if (end === "from" && +slider.value > +other.value || end === "through" && +slider.value < +other.value) other.value = slider.value;
-        for (const key of ["from", "through"]) this.el("person-year-" + key).value = this.el("person-year-" + key + "-range").value;
-        this.drawRail();
-      };
-      slider.onchange = () => this.commitPeriod();
-    }
-    this.el("person-period-reset").onclick = () => { this.periodError = null; this.changeGallery({ fromYear: null, throughYear: null }); };
+    this.period = new YearPeriodControl("person", (change) => this.changeGallery(change));
     this.el("person-more").onclick = () => { this.pageTask = this.loadPage(true); };
     this.el("person-select-loaded").onclick = () => {
       const keys = this.page.hits.map((face) => face.anchor_key || PeopleState.idOf(face));
@@ -117,41 +106,12 @@ class PeopleView {
     try { localStorage.setItem("digup.people.gallery", JSON.stringify(this.galleryOptions)); } catch { /* The current selection still works without storage. */ }
     this.pageTask = this.selectPerson(this.page.personId, "gallery");
   }
-  commitPeriod() {
-    const first = this.el("person-year-from"), last = this.el("person-year-through");
-    const fromYear = first.value === "" ? null : Number(first.value), throughYear = last.value === "" ? null : Number(last.value);
-    const valid = first.checkValidity() && last.checkValidity() && (fromYear == null || throughYear == null || fromYear <= throughYear);
-    this.periodError = valid ? null : t("The first year must not exceed the last. Use years from 1 to 9999.");
-    this.el("person-period-error").textContent = this.periodError || "";
-    first.setAttribute("aria-invalid", String(!valid)); last.setAttribute("aria-invalid", String(!valid));
-    if (valid) this.changeGallery({ fromYear, throughYear });
-  }
-  drawRail() {
-    const first = this.el("person-year-from-range"), last = this.el("person-year-through-range");
-    const span = +first.max - +first.min || 1;
-    const rail = this.el("person-year-rail");
-    rail.style.setProperty("--range-start", ((+first.value - +first.min) / span * 100) + "%");
-    rail.style.setProperty("--range-end", ((+last.value - +first.min) / span * 100) + "%");
-    first.setAttribute("aria-valuetext", first.value); last.setAttribute("aria-valuetext", last.value);
-  }
+  get periodError() { return this.period.error; }
+  set periodError(value) { this.period.error = value; }
+  commitPeriod() { this.period.commit(); }
+  drawRail() { this.period.draw(); }
   renderPeriod(person) {
-    const options = this.galleryOptions, now = new Date().getFullYear();
-    const min = Math.min(this.page.yearMin ?? 1900, options.fromYear ?? 9999, options.throughYear ?? 9999);
-    const max = Math.max(this.page.yearMax ?? now, options.fromYear ?? 1, options.throughYear ?? 1, min + 1);
-    for (const key of ["from", "through"]) {
-      const input = this.el("person-year-" + key), slider = this.el("person-year-" + key + "-range");
-      input.value = options[key + "Year"] ?? ""; input.disabled = !person || !!this.mutationBusy;
-      input.setAttribute("aria-invalid", String(!!this.periodError));
-      slider.min = min; slider.max = max; slider.value = options[key + "Year"] ?? (key === "from" ? min : max); slider.disabled = input.disabled;
-    }
-    this.el("person-period-error").textContent = this.periodError || "";
-    this.el("person-period-label").textContent = options.fromYear == null && options.throughYear == null ? t("All dates") :
-      (options.fromYear ?? min) + " — " + (options.throughYear ?? max);
-    this.el("person-period-reset").disabled = options.fromYear == null && options.throughYear == null && !this.periodError;
-    const ticks = this.el("person-year-ticks"); ticks.replaceChildren();
-    const intervals = Math.min(6, max - min);
-    for (let index = 0; index <= intervals; index++) ticks.append(this.text("span", "", Math.round(min + (max - min) * index / intervals)));
-    this.drawRail();
+    this.period.render(this.galleryOptions, { minYear: this.page.yearMin, maxYear: this.page.yearMax, disabled: !person || !!this.mutationBusy });
   }
   async loadPage(more = false) {
     if (!this.page.personId || this.pageBusy) return;
@@ -354,6 +314,10 @@ class PeopleView {
     this.el("person-viewer-next").disabled = this.viewerBusy || this.viewerIndex >= this.page.hits.length - 1 && (!this.page.hasMore || this.expired || !!this.pageError);
     this.el("person-viewer-open").onclick = () => this.invoke("open_path", { path: hit.path }).catch(() => { this.el("person-viewer-message").textContent = t("Could not open file. Check that it is available."); });
     this.el("person-viewer-faces").onclick = () => { this.closeViewer(); this.onFace(hit); };
+    this.el("person-viewer-similar").onclick = () => {
+      const origin = { personId: this.page.personId, fileKey: PeopleState.fileKey(hit) };
+      this.closeViewer(); this.onSimilar(hit, origin);
+    };
   }
   renderPreview() {
     const hit = this.page.hits.find((face) => this.faceRowKey(face) === this.selectedPreview), key = hit ? `${this.faceRowKey(hit)}:${I18n.language}:${this.page.mode}` : null;

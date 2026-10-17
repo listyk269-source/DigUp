@@ -30,7 +30,12 @@ the individual timestamps remain available in **Face annotations**.
 
 Click a tile for a larger in-app preview. Use the previous/next buttons or **Left/Right** keys to
 browse, including files beyond the first page, and **Esc** to return to the gallery. The preview also
-offers opening in the default application and face investigation. Files load progressively, without
+offers opening in the default application, face investigation, and **Find similar**. The latter
+compares the whole photo or video's stored semantic vectors, independently of face labels and the
+ordinary-search date filter; it does not run face inference or identify a person. **Back to People**
+returns to the same person and saved gallery filters (the source viewer reopens when that file is
+on the current first page). Similar results use the existing **Show more** pagination.
+Files load progressively, without
 repeating face inference. **Face annotations**, **Suggestions**, **Excluded** and **Needs review**
 retain their separate observation-level checkboxes and label corrections; gallery navigation itself
 does not change labels. Rename the person without running inference again.

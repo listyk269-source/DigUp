@@ -106,6 +106,13 @@ input, select { accent-color: var(--amber); }
 #gallery-count-slot { flex: 1; min-width: 130px; }
 #gallery-count-slot .people-note { padding: 0; line-height: 1.5; }
 .people-tile-date-source { color: var(--secondary); }
+#search-filters { flex: none; }
+.search-media { display: flex; gap: 8px; padding: 8px 20px; border-bottom: 1px solid var(--line); }
+.search-media button[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #211b12; font-weight: 600; }
+.search-media button[aria-pressed="true"]:hover { background: #f6b466; border-color: #f6b466; color: #211b12; }
+#search-period-hint { margin: 8px 0 0; font-size: 11px; color: var(--secondary); }
+#search-period-error { font-size: 12px; color: #f0cfcd; margin: 8px 0 0; }
+#search-period-error:empty { display: none; }
 .gallery-filter-row [role="group"] { display: flex; gap: 8px; }
 .people-gallery-tools button[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #211b12; font-weight: 600; }
 .people-tabs button[aria-pressed="true"]:hover, .people-gallery-tools button[aria-pressed="true"]:hover { background: #f6b466; border-color: #f6b466; color: #211b12; }

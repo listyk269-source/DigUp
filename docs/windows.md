@@ -51,6 +51,35 @@ database storage includes retained rows outside the selected folders and WAL.
 Refresh updates on demand and every 10 seconds while the overview is visible.
 No database migration or index reset is needed for this update.
 
+The ordinary **Search** view also has the same **Period** year rail as People.
+Choose **Photos** and enter or drag an inclusive range such as 2000–2003. A blank
+endpoint leaves that side open. Valid indexed EXIF capture dates take precedence;
+missing or malformed EXIF uses the file modification date in the OS local timezone.
+The preview identifies capture dates. **Reset period** clears the range; choose
+**All media** to clear the media filter. Invalid ranges keep the previous results.
+These preferences persist independently of People albums.
+
+Enter a query to combine years/media with semantic and full-text search, or clear
+the query to browse eligible indexed files newest first without starting a model.
+Filtering happens before candidate budgets and every page, preserving the original
+semantic relevance scale. The year rail reads indexed metadata, never rescans media.
+Existing rows without capture metadata need ordinary reindexing to gain it. Code
+search and **Find similar** keep their own scope and hide these search controls.
+The native macOS UI does not yet expose this Tauri filter.
+
+The local `search_calendar` operation returns `year_min` / `year_max` for selected
+folders and optional `kinds`. `search` and `search_page` accept integer
+`from_year` / `through_year` (1–9999 or null). Paged replies echo bounds and
+`browsing`; hits include `media_date` / `media_date_source` (`taken` or `modified`).
+A changed interval on a continuation request expires its cursor. Empty-query
+browsing is explicit: `search_page` with date bounds or kinds, `meaning:false`.
+
+`UI-Features-Smoke.ps1` covers 43 real EXIF-dated public photographs across pages,
+capture versus copy dates, both endpoints, media chips, empty browsing, invalid and
+empty ranges, slider/reset controls, restart persistence and 780/1280px layouts.
+Its optional `DevelopmentGui` / `DevelopmentHelper` flags are development checks;
+release evidence must omit both flags.
+
 `scripts/windows/Search-Pagination-Smoke.ps1` checks the actual packaged GUI
 with 145 real-model indexed Unicode documents, DOM clicks through
 40/80/120/145 matches, accurate failure statistics, and a second launch against

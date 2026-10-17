@@ -25,6 +25,7 @@ test("changing a gallery filter preserves its sort preference and restarts the g
   const context = { module: { exports: {} }, PeopleState: state, localStorage: { setItem() { throw new Error("storage unavailable"); } } };
   vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/people.js"), "utf8"), context);
   const view = Object.create(context.module.exports.prototype); view.page = { personId: "person" }; view.galleryOptions = { sort: "date_asc", media: "all" };
+  view.period = { error: null };
   let opened; view.selectPerson = async (...args) => { opened = args; };
   view.changeGallery({ media: "video" }); await view.pageTask;
   assert.deepEqual(view.galleryOptions, { sort: "date_asc", media: "video", fromYear: null, throughYear: null }); assert.deepEqual(opened, ["person", "gallery"]);

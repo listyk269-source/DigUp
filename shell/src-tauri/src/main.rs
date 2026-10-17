@@ -212,6 +212,7 @@ async fn ask(shell: State<'_, Arc<Shell>>, request: Value) -> Result<Value, Stri
     if ![
         "search",
         "search_page",
+        "search_calendar",
         "related_files",
         "related_counts",
         "graph_search",
@@ -635,6 +636,8 @@ async fn debug_capture(
         || ![
             "documents",
             "media",
+            "search-period",
+            "search-period-compact",
             "comparison",
             "timeline",
             "context",
@@ -644,6 +647,7 @@ async fn debug_capture(
             "people-assigned",
             "people-gallery",
             "people-gallery-viewer",
+            "people-gallery-similar",
             "people-gallery-filtered",
             "people-gallery-videos",
             "people-period",

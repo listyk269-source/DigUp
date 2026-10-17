@@ -87,10 +87,39 @@ window.faceSearch = faceSearch;
 const people = new PeopleView({ ask, faceSearch, invoke, picture, nameOf, clock, onVisibility: (visible) => {
   if (visible) { if (faceSearch.visible) faceSearch.close(false); if (graph.visible) graph.close(); state.statsOpen = false; }
   render();
-}, onFace: (hit) => openFaces(hit) });
+}, onFace: (hit) => openFaces(hit), onSimilar: (hit, origin) => { people.close(); return findSimilar(hit, false, origin); } });
 window.people = people;
 function openFaces(hit = selectedHit()) { return faceSearch.openTask = faceSearch.open(hit); }
 const debugPages = [];
+let searchFilters;
+try { searchFilters = JSON.parse(localStorage.getItem("digup.search.filters")); } catch { /* Defaults remain usable. */ }
+searchFilters = { ...YearPeriodControl.options(searchFilters), media: ["all", "photo", "video"].includes(searchFilters?.media) ? searchFilters.media : "all" };
+const searchYears = new YearPeriodControl("search", changeSearchFilters);
+let calendarGeneration = 0, calendarBounds = {}, calendarTimer;
+const searchKinds = () => searchFilters.media === "photo" ? ["image", "screenshot"] : searchFilters.media === "video" ? ["video"] : undefined;
+const searchFilterRequest = () => state.isCode ? {} : { from_year: searchFilters.fromYear, through_year: searchFilters.throughYear, kinds: searchKinds() };
+const searchFiltered = () => !state.isCode && (searchFilters.fromYear != null || searchFilters.throughYear != null || searchFilters.media !== "all");
+function changeSearchFilters(change) {
+  searchYears.error = null;
+  searchFilters = { ...searchFilters, ...change, ...YearPeriodControl.options({ ...searchFilters, ...change }) };
+  try { localStorage.setItem("digup.search.filters", JSON.stringify(searchFilters)); } catch { /* Storage is optional. */ }
+  queryChanged(); refreshSearchCalendar();
+}
+for (const button of document.querySelectorAll("[data-search-media]")) button.onclick = () => changeSearchFilters({ media: button.dataset.searchMedia });
+async function refreshSearchCalendar() {
+  const generation = ++calendarGeneration;
+  try {
+    const reply = await ask({ op: "search_calendar", kinds: searchKinds() });
+    if (generation !== calendarGeneration || reply.ok === false) return;
+    calendarBounds = { minYear: reply.year_min, maxYear: reply.year_max }; renderSearchFilters();
+  } catch { /* Exact year fields remain usable while the helper is starting. */ }
+}
+function renderSearchFilters() {
+  $("search-filters").hidden = graph.visible || faceSearch.visible || people.visible || state.isCode || !!state.related;
+  searchYears.render(searchFilters, calendarBounds);
+  for (const button of document.querySelectorAll("[data-search-media]")) button.setAttribute("aria-pressed", String(button.dataset.searchMedia === searchFilters.media));
+}
+
 
 // MARK: Searching
 
@@ -112,25 +141,25 @@ function queryChanged() {
   state.isCode = code;
   if (text) state.statsOpen = false;
   renderPaging();
-  if (!typed || (code && !text)) {
+  if ((!typed && !searchFiltered()) || (code && !text)) {
     show({ hits: [], strong: 0 }, text, typed ? "codeHint" : "empty");
     return;
   }
   // Keep the bounded keyword preview cheap on every keystroke. Complete, paged
   // retrieval starts after typing pauses, even if the model is unavailable.
-  ask({ op: "search", q: text, code, meaning: false, prefix_last: true, limit: PAGE_SIZE })
+  if (text) ask({ op: "search", q: text, code, ...searchFilterRequest(), meaning: false, prefix_last: true, limit: PAGE_SIZE })
     .then((reply) => {
       if (generation === state.generation && state.finalGeneration !== generation) show(reply, text, "words");
     })
     .catch((error) => { if (generation === state.generation) failed(error); });
   // The meaning is embedded now, so its vector is ready when typing pauses: the pause is the whole wait.
-  ask({ op: "embed_ahead", q: text, code }).catch(() => {});
+  if (text) ask({ op: "embed_ahead", q: text, code }).catch(() => {});
   state.timer = setTimeout(() => {
-    ask({ op: "search_page", q: text, code, meaning: true, limit: PAGE_SIZE })
+    ask({ op: "search_page", q: text, code, ...searchFilterRequest(), meaning: !!text, limit: PAGE_SIZE })
       .then((reply) => {
         if (generation !== state.generation) return;
         state.finalGeneration = generation;
-        show(reply, text, reply.meaning ? "meaning" : "wordsOnly");
+        show(reply, text, reply.browsing ? "browse" : reply.meaning ? "meaning" : "wordsOnly");
         if (debugPending) completeDebugSearch().catch(failed);
       })
       .catch((error) => { if (generation === state.generation) failed(error); });
@@ -171,7 +200,7 @@ async function loadMore() {
   try {
     const reply = await ask(state.related
       ? { op: "related_files", ...state.related.request, offset: page.offset, limit: PAGE_SIZE }
-      : { op: "search_page", cursor: page.cursor, offset: page.offset, limit: PAGE_SIZE });
+      : { op: "search_page", cursor: page.cursor, ...searchFilterRequest(), offset: page.offset, limit: PAGE_SIZE });
     if (state.related && reply.ok !== false) {
       reply.cursor = page.cursor; reply.strong = (reply.hits || []).length;
       if (reply.vector_source !== state.related.source) throw new Error(t("The index model changed. Start a new graph."));
@@ -195,14 +224,14 @@ async function loadMore() {
   }
 }
 
-async function findSimilar(seed, code = state.isCode) {
+async function findSimilar(seed, code = state.isCode, peopleOrigin = null) {
   if (!seed) return;
   if (graph.visible) graph.close();
   const previous = state.related?.previous ?? { value: $query.value, selection: state.selection };
   const generation = ++state.generation;
   clearTimeout(state.timer);
   state.finalGeneration = generation;
-  state.related = { seed, previous, request: { path: seed.path, segment: seed.segment_id, code, minimum_cosine: 0.55 } };
+  state.related = { seed, previous: { ...previous, peopleOrigin: peopleOrigin ?? previous.peopleOrigin }, request: { path: seed.path, segment: seed.segment_id, code, minimum_cosine: 0.55 } };
   state.isCode = code; state.statsOpen = false; state.error = null; state.loadingMore = false; state.pageError = null;
   state.strong = []; state.weaker = []; state.groups = []; state.page = null; state.selection = null;
   state.phase = "similar"; state.text = ""; render();
@@ -218,9 +247,17 @@ async function findSimilar(seed, code = state.isCode) {
     show({ ...reply, cursor: `related-${generation}`, strong: reply.hits.length }, "", "similar");
   } catch (error) { if (generation === state.generation) failed(error); }
 }
-function backFromSimilar() {
+async function backFromSimilar() {
   const previous = state.related?.previous;
   if (!previous) return;
+  if (previous.peopleOrigin) {
+    const { personId, fileKey } = previous.peopleOrigin;
+    $query.value = previous.value; queryChanged();
+    await people.open(personId);
+    // Re-open the same file if it is still in the saved album's current first page.
+    const tile = people.rows.get(fileKey)?.row; if (tile) people.openViewer(fileKey, tile);
+    return;
+  }
   $query.value = previous.value; queryChanged(); $query.focus();
 }
 
@@ -370,6 +407,8 @@ function render() {
   $("people-toggle").setAttribute("aria-expanded", String(peopleVisible));
   $("similar-context").hidden = !state.related || graph.visible || state.statsOpen || facesVisible || peopleVisible;
   $("similar-title").textContent = state.related ? t("Similar to {name}", { name: nameOf(state.related.seed.path) }) : "";
+  $("similar-back").textContent = t(state.related?.previous.peopleOrigin ? "Back to People" : "Back to results");
+  renderSearchFilters();
   $("graph-toggle").disabled = !selectedHit();
   $("graph-toggle").setAttribute("aria-expanded", String(graph.visible));
   $("index-overview").hidden = !state.statsOpen;
@@ -625,6 +664,7 @@ function span(hit) {
 
 /// Why it's here, in a few words: t("Matches the picture"), "Matches the frame at 0:06".
 function reasonOf(hit) {
+  if (state.phase === "browse") return t("Indexed file");
   if (state.related && Number.isFinite(hit.cosine)) return t("Similarity {value} · indexed content", { value: hit.cosine.toFixed(3) });
   const meaning = (hit.z ?? 0) >= 2, words = hit.keyword_rank != null;
   if (!meaning) return words ? t("Has your words") : t("Matches its name");
@@ -647,7 +687,9 @@ function reasonOf(hit) {
 /// "Screenshot · Oct 7, 2026 · 1440 × 900 · 62 KB", "PDF · … · 463 pages, 120 read so far · 23 MB"
 function details(hit) {
   const info = hit.info || {};
-  const parts = [t(KIND_TITLE[hit.kind] || "File"), dateOf(hit.modified)];
+  const captured = hit.media_date_source === "taken" && /^\d{4}-\d{2}-\d{2}$/.test(hit.media_date || "");
+  const date = captured ? `${t("Capture date")}: ${new Date(`${hit.media_date}T12:00:00`).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" })}` : dateOf(hit.modified);
+  const parts = [t(KIND_TITLE[hit.kind] || "File"), date];
   if (info.width && info.height) parts.push(`${info.width} × ${info.height}`);
   const readTo = info.read_to != null ? Number(info.read_to) : null;
   if (info.pages) {
@@ -792,7 +834,7 @@ $("faces-toggle").addEventListener("click", () => faceSearch.visible ? faceSearc
 $("people-toggle").addEventListener("click", () => { if (people.visible) people.close(); else people.openTask = people.open(); });
 $("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
 $("similar-back").onclick = backFromSimilar;
-tauri.event.listen("search-scope-changed", () => { if (people.visible) people.close(); people.people = []; people.page.open(null, "assigned"); if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); people.faceSelected(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
+tauri.event.listen("search-scope-changed", () => { refreshSearchCalendar(); if (people.visible) people.close(); people.people = []; people.page.open(null, "assigned"); if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); people.faceSelected(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
 $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
@@ -849,7 +891,7 @@ tauri.event.listen("helper", ({ payload }) => {
 
 // Listen before asking for the snapshot. Revisions prevent a slower initial IPC reply
 // from replacing a newer event, including when the panel is reopened after completion.
-tauri.event.listen("index-status", ({ payload }) => showIndexStatus(payload))
+tauri.event.listen("index-status", ({ payload }) => { showIndexStatus(payload); if (payload.stage === "idle") { clearTimeout(calendarTimer); calendarTimer = setTimeout(refreshSearchCalendar, 250); } })
   .then(refreshIndexStatus).catch(indexStatusFailed);
 
 function refreshIndexStatus() {
@@ -1493,6 +1535,28 @@ async function exercisePeopleUi() {
   report.renameUndo = people.person()?.name === label; check(report.renameUndo, "Person rename undo failed");
   const final = people.people.find((item) => PeopleState.samePerson(item.id, person.id));
   report.rejectedTotal = final.rejected_count; report.excludedCount = final.rejected_count; report.assignedTotal = final.assigned_count;
+  await tab("gallery");
+  const similar = report.viewerSimilar = { personId: person.id, filters: { ...people.galleryOptions } };
+  const sourceTile = $("person-faces").querySelector(".people-tile"); check(!!sourceTile, "Missing labelled photograph for Find similar");
+  sourceTile.click();
+  await wait(() => $("person-viewer").open && !!$("person-viewer-media").querySelector("img")?.naturalWidth);
+  similar.seed = people.page.hits[people.viewerIndex].path;
+  $("person-viewer-similar").click();
+  await wait(() => !!state.error || !!state.page && state.related?.seed.path === similar.seed);
+  check(!state.error && state.page.total > 40 && !people.visible && !$("person-viewer").open && !state.related.request.segment,
+    "Gallery Find similar must use the whole file's stored vectors, not a face or fragment");
+  similar.firstPage = state.strong.length; similar.basis = "file_mean";
+  await invoke("debug_capture", { label: "people-gallery-similar" });
+  while (state.page.hasMore && !state.pageError) { $("load-more").click(); await wait(() => !state.loadingMore); }
+  similar.total = state.page.total; similar.loaded = state.strong.length;
+  similar.unique = new Set(state.strong.map((hit) => hit.path)).size === similar.loaded;
+  similar.seedExcluded = !state.strong.some((hit) => hit.path === similar.seed);
+  check(!state.pageError && similar.loaded === similar.total && similar.unique && similar.seedExcluded, "Gallery similar files must page without duplicates or the source file");
+  $("similar-back").click();
+  await wait(() => people.visible && !people.pageBusy && people.page.mode === "gallery");
+  similar.returned = PeopleState.samePerson(people.page.personId, person.id) && JSON.stringify(people.galleryOptions) === JSON.stringify(similar.filters);
+  check(similar.returned, "Back to People lost the person or album filters");
+  people.closeViewer(); similar.passed = true;
   report.passed = true;
 }
 
@@ -1608,6 +1672,11 @@ async function exerciseUiFeatures() {
   // Existing indexed results can arrive before startup model verification finishes.
   // Capture the settled real indexing state rather than its transient startup banner.
   await wait(() => state.indexStatus?.stage === "idle");
+  featureReport.restoredSearchFilters = { ...searchFilters };
+  if (searchFiltered()) {
+    $("search-period-reset").click(); document.querySelector('[data-search-media="all"]').click();
+    await wait(() => state.finalGeneration === state.generation);
+  }
   selectKind("doc");
   const snapshot = () => ({ groups: [...$list.querySelectorAll(".group-title")].map((node) => node.textContent), lang: document.documentElement.lang, query: $query.value,
     indexLabel: $("stats-toggle").textContent, graphLabel: $("graph-toggle").textContent,
@@ -1672,6 +1741,62 @@ async function exerciseUiFeatures() {
   await language("en"); featureReport.englishAgain = snapshot();
   await language("ru");
   featureReport.final = snapshot();
+  await exerciseSearchPeriodUi(wait);
+}
+
+// Exercises the actual calendar inputs, query service and indexed public photographs.
+async function exerciseSearchPeriodUi(wait) {
+  const report = featureReport.searchPeriod = {}, check = (value, message) => { if (!value) throw new Error(message); };
+  const settled = async () => { await wait(() => state.finalGeneration === state.generation || !!state.error); check(!state.error && !state.pageError, state.error || state.pageError); };
+  const allPages = async () => { while (state.page?.hasMore && !state.pageError) { $("load-more").click(); await wait(() => !state.loadingMore); } check(!state.pageError, state.pageError); };
+  const period = async (from, through) => {
+    $("search-year-from").value = from; $("search-year-through").value = through;
+    $("search-year-through").dispatchEvent(new Event("change", { bubbles: true })); await settled();
+  };
+  $query.value = "UIFEATURE742"; queryChanged();
+  document.querySelector('[data-search-media="photo"]').click(); await settled();
+  await wait(() => calendarBounds.minYear === 2000 && calendarBounds.maxYear === 2026);
+  report.calendarBounds = { ...calendarBounds };
+  await period(2000, 2003);
+  report.firstPage = state.strong.length + state.weaker.length; report.total = state.page?.total;
+  await allPages();
+  const hits = [...state.strong, ...state.weaker];
+  report.captureBeforeCopy = hits.every((hit) => hit.media_date_source === "taken" && /^200[0-3]-/.test(hit.media_date) && new Date(hit.modified * 1000).getFullYear() === 2026);
+  report.unique = new Set(hits.map((hit) => hit.path)).size === 43;
+  report.endpoints = [2000, 2003].every((year) => hits.some((hit) => hit.media_date.startsWith(year + "-")));
+  check(report.firstPage === 40 && report.total === 43 && hits.length === 43 && report.captureBeforeCopy && report.unique && report.endpoints, "Ordinary search did not filter by inclusive capture years before every page");
+  const generation = state.generation;
+  $("search-year-from").value = 2004; $("search-year-through").value = 2000;
+  $("search-year-through").dispatchEvent(new Event("change", { bubbles: true }));
+  report.invalidRetainsResults = !!searchYears.error && state.generation === generation && state.page.total === 43;
+  check(report.invalidRetainsResults, "An invalid search period must retain the previous results");
+  await period(1900,1901); report.empty = state.page.total === 0;
+  $("search-period-reset").click(); await settled(); await allPages();
+  report.reset = state.page.total === 49;
+  $query.value = ""; queryChanged(); await period(2000, 2003); await allPages();
+  report.browse = state.phase === "browse" && state.page.total === 43 && state.strong.length === 43 && state.strong.every((hit) => hit.z == null && hit.cosine == null && hit.keywordRank == null);
+  const slider = $("search-year-from-range"); slider.value = 2001;
+  slider.dispatchEvent(new Event("input", { bubbles: true })); slider.dispatchEvent(new Event("change", { bubbles: true })); await settled(); await allPages();
+  report.slider = searchFilters.fromYear === 2001 && state.page.total === 32 && state.strong.every((hit) => hit.media_date >= "2001-01-01");
+  document.querySelector('[data-search-media="video"]').click(); await settled(); report.videoInPeriodEmpty = state.page.total === 0;
+  $("search-period-reset").click(); await settled(); await allPages();
+  report.videoOnly = state.page.total === 4 && state.strong.every((hit) => hit.kind === "video" && hit.media_date_source === "modified");
+  document.querySelector('[data-search-media="photo"]').click(); await period(2000,2003);
+  const old = state.generation; $query.value = "no-such-period-file-742"; queryChanged(); $query.value = ""; queryChanged(); await settled();
+  report.rapidSwitch = state.generation > old && state.phase === "browse" && state.page.total === 43;
+  const saved = JSON.parse(localStorage.getItem("digup.search.filters"));
+  report.persisted = saved.fromYear === 2000 && saved.throughYear === 2003 && saved.media === "photo";
+  if (featureReport.restoredSearchFilters.media !== "all") check(JSON.stringify(featureReport.restoredSearchFilters) === JSON.stringify(saved), "Ordinary search period did not survive a real application restart");
+  $list.scrollTop = 0;
+  await wait(() => !!$preview.querySelector("img")?.naturalWidth);
+  await invoke("panel_height", { height: 900, graph: true }); await new Promise((resolve) => setTimeout(resolve, 150));
+  await invoke("debug_capture", { label: "search-period" });
+  await invoke("panel_height", { height: 900, graph: false }); await new Promise((resolve) => setTimeout(resolve, 150));
+  report.noOverflow = [$("search-period-controls"), document.querySelector(".search-media")].every((node) => node.scrollWidth <= node.clientWidth + 1);
+  await invoke("debug_capture", { label: "search-period-compact" });
+  await invoke("panel_height", { height: 900, graph: true });
+  report.passed = [report.empty, report.reset, report.browse, report.slider, report.videoInPeriodEmpty, report.videoOnly, report.rapidSwitch, report.persisted, report.noOverflow].every(Boolean);
+  check(report.passed, "Ordinary search calendar/media/empty/slider/reset/persistence layout scenario failed");
 }
 
 // This drives real DOM controls with the actual indexed fixtures; backend responses are never stubbed.
@@ -1750,3 +1875,5 @@ async function exerciseInvestigationUi(wait) {
   await graph.saveQueue; report.saved = await invoke("graph_annotations"); report.final = graph.investigationDebug();
   return report;
 }
+
+refreshSearchCalendar();
