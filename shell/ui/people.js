@@ -39,6 +39,20 @@ class PeopleView {
     this.el("person-rename-cancel").onclick = () => { this.el("person-rename").hidden = true; this.el("person-rename-toggle").focus(); };
     this.el("person-rename").onsubmit = (event) => { event.preventDefault(); this.mutationTask = this.rename(); };
     for (const id of ["people-undo", "face-label-undo"]) this.el(id).querySelector("button").onclick = () => { this.mutationTask = this.undo(); };
+    const viewer = this.el("person-viewer");
+    this.el("person-viewer-close").onclick = () => this.closeViewer();
+    this.el("person-viewer-previous").onclick = () => { this.viewerTask = this.moveViewer(-1); };
+    this.el("person-viewer-next").onclick = () => { this.viewerTask = this.moveViewer(1); };
+    viewer.addEventListener("close", () => { if (!viewer.open) this.clearViewer(); });
+    viewer.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Escape") { event.preventDefault(); this.closeViewer(); }
+      else if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.target.matches("input,textarea,select,[contenteditable]")) {
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+          event.preventDefault(); this.viewerTask = this.moveViewer(event.key === "ArrowLeft" ? -1 : 1);
+        }
+      }
+    });
     document.addEventListener("ui-language-changed", () => { this.renderFaceControls(); if (this.visible) this.render(); });
     this.auto = new FaceAutoStatus({ faces: faceSearch, people: this, ask }); faceSearch.auto = this.auto; faceSearch.background = this.auto; window.faceAuto = this.auto;
   }
@@ -48,9 +62,9 @@ class PeopleView {
     this.visible = true; this.onVisibility(true); this.render();
     await this.refreshDirectory(); if (!this.visible) return;
     const selected = this.people.find((person) => PeopleState.samePerson(person.id, personId)) || this.people[0];
-    if (selected) await this.selectPerson(selected.id, "assigned");
+    if (selected) await this.selectPerson(selected.id, "gallery");
   }
-  close() { this.visible = false; this.page.generation++; this.directoryGeneration++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
+  close() { this.closeViewer(); this.visible = false; this.page.generation++; this.directoryGeneration++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
   resetRows() { this.thumbnailObserver?.disconnect(); this.thumbnailLoads?.clear(); this.thumbnails?.reset(); this.rows?.clear(); this.el("person-faces").replaceChildren(); }
   maybeLoadMore() {
     const list = this.el("person-faces");
@@ -73,7 +87,9 @@ class PeopleView {
     if (this.visible && this.page.personId) await this.selectPerson(this.page.personId, this.page.mode);
     await this.auto?.refreshSummary(true);
   }
-  async selectPerson(id, mode = "assigned") {
+  async selectPerson(id, mode = "gallery") {
+    this.closeViewer();
+    this.stopPreview(); this.el("person-preview").replaceChildren();
     this.resetRows(); this.el("person-faces").scrollTop = 0;
     this.page.open(id, mode); this.pageBusy = false; this.selectedFaces.clear(); this.selectedPreview = null; this.previewKey = null; this.pageError = null; this.expired = false;
     this.previewTouched = false; this.backgroundNotice = false; this.backgroundProtected = false;
@@ -127,6 +143,12 @@ class PeopleView {
     this.el("person-title").textContent = person?.name || t("Choose a person");
     this.el("person-rename-toggle").disabled = !person || !!this.mutationBusy;
     for (const button of document.querySelectorAll("[data-person-mode]")) { button.setAttribute("aria-pressed", String(button.dataset.personMode === mode)); button.disabled = !person || !!this.pageBusy; }
+    const gallery = mode === "gallery";
+    this.el("person-faces").classList.toggle("people-gallery", gallery);
+    this.el("person-faces").parentElement.classList.toggle("people-results-gallery", gallery);
+    this.el("person-preview").hidden = gallery;
+    for (const id of ["person-select-loaded", "person-selection-count", "person-assign", "person-reject", "person-remove"]) this.el(id).hidden = gallery;
+    if (gallery) { this.renderGallery(person); return; }
     const messages = { assigned: "Assigned by you. Select an observation to preview it or remove its label.", suggestions: "Suggestions require your confirmation. Similarity is not proof of identity.",
       rejected: "Excluded observations are not suggested again for this person. Remove the exclusion to reconsider them.", stale: "The original file or face observation changed. These labels need review; they are not used to suggest new faces." };
     const message = this.el("person-message"); message.classList.toggle("face-error", !!this.pageError);
@@ -184,6 +206,78 @@ class PeopleView {
     this.el("person-more").hidden = !this.page.hasMore; this.el("person-more").disabled = !!this.pageBusy || !!this.mutationBusy || this.expired;
     this.renderPreview();
     requestAnimationFrame(() => this.maybeLoadMore());
+  }
+  renderGallery(person) {
+    const list = this.el("person-faces"), retained = new Set(), message = this.el("person-message");
+    message.classList.toggle("face-error", !!this.pageError);
+    message.textContent = this.pageError ? t(this.pageError) : this.pageBusy ? t("Loading labelled files…") : !person ? t("Choose a person") :
+      this.page.total ? t("{loaded} of {total} files loaded", { loaded: this.page.hits.length, total: this.page.total }) :
+        t("No labelled files yet. Confirm suggestions or assign a face to this person.");
+    const empty = list.querySelector(".people-gallery-empty"); if (empty) empty.remove();
+    for (const hit of this.page.hits) {
+      const key = PeopleState.fileKey(hit); retained.add(key);
+      if (this.rows.has(key)) continue;
+      const tile = this.text("button", "people-tile"); tile.type = "button"; tile.dataset.fileKey = key;
+      tile.title = hit.path; tile.setAttribute("aria-label", t("View {name}", { name: this.nameOf(hit.path) }));
+      const stage = this.text("span", "people-tile-media"), image = document.createElement("img");
+      image.alt = ""; image.decoding = "async"; stage.append(image);
+      const load = async () => {
+        try {
+          const url = await this.faceSearch.imageFor(hit, 480); if (!tile.isConnected) return;
+          image.src = url; await image.decode(); stage.dataset.loaded = "true";
+        } catch { if (tile.isConnected) { stage.replaceChildren(this.text("span", "people-tile-error", t("Preview unavailable. Open the file in its default app."))); stage.dataset.failed = "true"; } }
+      };
+      this.thumbnailLoads.set(stage, load); this.thumbnailObserver.observe(stage);
+      const caption = this.text("span", "people-tile-caption"); caption.append(this.text("strong", "", this.nameOf(hit.path)),
+        this.text("small", "", hit.kind === "video" ? t("Video") + (Number.isFinite(hit.loc) ? " · " + this.clock(hit.loc) : "") : t("Photograph")));
+      tile.append(stage, caption); tile.onclick = () => this.openViewer(key, tile); list.append(tile); this.rows.set(key, { row: tile });
+    }
+    for (const [key, entry] of this.rows) if (!retained.has(key)) { entry.row.remove(); this.rows.delete(key); }
+    if (!this.page.hits.length) list.append(this.text("p", "people-gallery-empty", this.pageBusy ? t("Loading labelled files…") : message.textContent));
+    this.el("person-more").hidden = !this.page.hasMore; this.el("person-more").disabled = !!this.pageBusy || this.expired;
+    this.renderViewer(); requestAnimationFrame(() => this.maybeLoadMore());
+  }
+  openViewer(key, tile) {
+    this.viewerIndex = this.page.hits.findIndex((hit) => PeopleState.fileKey(hit) === key);
+    if (this.viewerIndex < 0) return;
+    this.viewerOrigin = tile; this.viewerKey = null; this.viewerGeneration = this.page.generation;
+    this.el("person-viewer").showModal(); this.renderViewer(); this.el("person-viewer-close").focus();
+  }
+  closeViewer() { if (this.el("person-viewer").open) { this.el("person-viewer").close(); this.clearViewer(); } }
+  clearViewer() {
+    const host = this.el("person-viewer-media"); host.querySelectorAll("audio,video").forEach((player) => player.pause()); host.replaceChildren();
+    this.viewerKey = null; this.viewerIndex = -1; this.viewerGeneration = null;
+    if (this.viewerOrigin?.isConnected) this.viewerOrigin.focus({ preventScroll: true }); this.viewerOrigin = null;
+  }
+  async moveViewer(delta) {
+    if (!this.el("person-viewer").open || this.viewerBusy) return;
+    const generation = this.page.generation; let target = PeopleState.viewerTarget(this.page, this.viewerIndex, delta);
+    if (target.loadMore && (this.expired || this.pageError)) return;
+    this.viewerBusy = true; this.renderViewer();
+    try {
+      if (target.loadMore) {
+        if (this.pageBusy) await this.pageTask; else await this.loadPage(true);
+        if (generation !== this.page.generation || !this.el("person-viewer").open) return;
+        target = PeopleState.viewerTarget(this.page, this.viewerIndex, delta);
+      }
+      if (generation === this.page.generation && this.el("person-viewer").open) this.viewerIndex = target.index;
+    } finally { this.viewerBusy = false; this.renderViewer(); }
+  }
+  renderViewer() {
+    if (!this.el("person-viewer").open || this.viewerGeneration !== this.page.generation) return;
+    const hit = this.page.hits[this.viewerIndex]; if (!hit) return;
+    const key = PeopleState.fileKey(hit), host = this.el("person-viewer-media");
+    if (this.viewerKey !== key) {
+      host.querySelectorAll("audio,video").forEach((player) => player.pause()); host.replaceChildren(this.picture(hit, { code: false, query: "" }));
+      this.viewerKey = key;
+    }
+    this.el("person-viewer-title").textContent = this.nameOf(hit.path);
+    this.el("person-viewer-count").textContent = t("{current} of {total} files", { current: this.viewerIndex + 1, total: this.page.total });
+    this.el("person-viewer-message").textContent = this.pageError ? t(this.pageError) : this.viewerBusy ? t("Loading labelled files…") : t("Use left and right arrows · Esc to close");
+    this.el("person-viewer-previous").disabled = this.viewerBusy || this.viewerIndex <= 0;
+    this.el("person-viewer-next").disabled = this.viewerBusy || this.viewerIndex >= this.page.hits.length - 1 && (!this.page.hasMore || this.expired || !!this.pageError);
+    this.el("person-viewer-open").onclick = () => this.invoke("open_path", { path: hit.path }).catch(() => { this.el("person-viewer-message").textContent = t("Could not open file. Check that it is available."); });
+    this.el("person-viewer-faces").onclick = () => { this.closeViewer(); this.onFace(hit); };
   }
   renderPreview() {
     const hit = this.page.hits.find((face) => this.faceRowKey(face) === this.selectedPreview), key = hit ? `${this.faceRowKey(hit)}:${I18n.language}:${this.page.mode}` : null;

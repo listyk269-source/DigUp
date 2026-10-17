@@ -2,6 +2,18 @@
 // Explicit UI message catalog. Paths, names, queries and document content never pass through DOM translation.
 const I18n = (() => {
   const ru = {
+  "Gallery": "Галерея",
+  "Close": "Закрыть",
+  "Face annotations": "Разметка",
+  "Loading labelled files…": "Загрузка размеченных файлов…",
+  "{loaded} of {total} files loaded": "Файлов загружено: {loaded} из {total}",
+  "No labelled files yet. Confirm suggestions or assign a face to this person.": "Размеченных файлов пока нет. Подтвердите предложения или назначьте лицо этому человеку.",
+  "View {name}": "Просмотреть {name}",
+  "{current} of {total} files": "Файл {current} из {total}",
+  "Use left and right arrows · Esc to close": "Переключение стрелками влево и вправо · Esc — закрыть",
+  "Previous file": "Предыдущий файл",
+  "Next file": "Следующий файл",
+  "Could not open file. Check that it is available.": "Не удалось открыть файл. Проверьте его доступность.",
   "Checking the model before indexing can start…": "Проверка модели перед началом индексации…",
   "Face indexing updated. Refresh to update observations; your current query is unchanged.": "Индекс лиц обновился. Нажмите «Обновить», чтобы обновить наблюдения; текущий запрос сохранён.",
   "Automatic face indexing": "Автоматическая индексация лиц",

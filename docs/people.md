@@ -23,13 +23,22 @@ Several observations of the same video can retain their separate matched timesta
 
 ## Browse and correct People
 
-Open **People** from the search header. Filter labels by name and open a person to browse their
-confirmed observations. Real crops, original previews, file opening and video timestamps remain
-available. Rename the person without running inference again.
+Open **People** from the search header. Filter labels by name and open a person: **Gallery** shows
+the whole photograph in each tile, with one tile per labelled file. Several labelled faces or video
+frames in the same file do not create duplicates. Video tiles show a representative matched frame;
+the individual timestamps remain available in **Face annotations**.
+
+Click a tile for a larger in-app preview. Use the previous/next buttons or **Left/Right** keys to
+browse, including files beyond the first page, and **Esc** to return to the gallery. The preview also
+offers opening in the default application and face investigation. Files load progressively, without
+repeating face inference. **Face annotations**, **Suggestions**, **Excluded** and **Needs review**
+retain their separate observation-level checkboxes and label corrections; gallery navigation itself
+does not change labels. Rename the person without running inference again.
 
 Assigned albums open directly from saved labels, without scanning every face descriptor or starting
 YuNet/SFace again. The directory shows both unique file counts and labelled observations: several
-faces or video frames in one file are not several photographs. The first page contains 40 observations;
+faces or video frames in one file are not several photographs. Gallery grouping happens before
+pagination: its first page contains up to 40 unique files. Review tabs page 40 observations;
 scrolling near its end automatically loads the next page. **Show more** remains available for keyboard
 navigation. There is no 40-file limit. Checked rows and the current preview remain in place while paging.
 
@@ -39,6 +48,11 @@ keys and eviction at approximately 512 MiB or 20,000 JPEGs (checked after each 6
 These disposable local JPEGs are not encrypted; deleting this cache while DigUp is closed is safe
 and does not remove labels or the index. Missing, changed or out-of-scope sources cannot be opened
 through a cached preview. Original images remain unchanged.
+
+Grouping uses exact indexed file paths, not content hashes. Two separate copies of a photo at different
+paths remain separate files. Ordering follows saved observation IDs and stays stable within a revision;
+this is not a date-sorted album. Changing the selected folders or index revision requires refreshing
+before further pagination; already shown tiles are retained with the error message.
 
 Remove a label to leave the observation unassigned. **This is another person** records an explicit
 rejection for that person and observation, so the same suggestion is suppressed. Rejected

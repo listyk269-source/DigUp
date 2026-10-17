@@ -4,6 +4,12 @@
 // so its meaning never shrinks to the rows that happen to be loaded in the UI.
 const PeopleState = (() => {
   const idOf = (face) => String(face.face_id ?? face.id);
+  const fileKey = (file) => JSON.stringify([file.path, file.size, file.modified]);
+  const viewerTarget = (page, index, delta) => {
+    const target = index + delta;
+    return { index: target >= 0 && target < page.hits.length ? target : index,
+      loadMore: delta > 0 && target >= page.hits.length && page.hasMore };
+  };
   const samePerson = (left, right) => left != null && right != null && String(left) === String(right);
   const queryKey = (query) => JSON.stringify([query.seed_face_id, query.minimum_cosine, query.index_revision]);
   const revisionKey = (snapshot) => snapshot ? JSON.stringify([snapshot.scope_revision ?? null, snapshot.index_revision ?? null, snapshot.people_revision ?? null, snapshot.minimum_cosine ?? .5]) : null;
@@ -60,7 +66,7 @@ const PeopleState = (() => {
     merge(reply, generation) {
       if (generation !== this.generation || !samePerson(reply.person?.id, this.personId)) return false;
       if (this.offset && (reply.index_revision !== this.indexRevision || reply.people_revision !== this.peopleRevision)) throw new Error("People or face index changed. Refresh this list.");
-      const key = (face) => face.anchor_key || idOf(face), known = new Set(this.hits.map(key));
+      const key = this.mode === "gallery" ? fileKey : (face) => face.anchor_key || idOf(face), known = new Set(this.hits.map(key));
       this.hits.push(...(reply.hits || []).filter((face) => !known.has(key(face)) && known.add(key(face))));
       this.indexRevision = reply.index_revision; this.peopleRevision = reply.people_revision;
       const next = Number(reply.next_offset); this.hasMore = !!reply.has_more && Number.isSafeInteger(next) && next > this.offset;
@@ -69,6 +75,6 @@ const PeopleState = (() => {
     request(minimum = .5) { return { op: "person_faces", person_id: this.personId, mode: this.mode, offset: this.offset, limit: 40, minimum_cosine: minimum,
       ...(this.offset ? { index_revision: this.indexRevision, people_revision: this.peopleRevision } : {}) }; }
   }
-  return { BulkSelection, PersonPage, ThumbnailQueue, idOf, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
+  return { BulkSelection, PersonPage, ThumbnailQueue, idOf, fileKey, viewerTarget, queryKey, samePerson, revisionKey, backgroundRefreshPolicy };
 })();
 if (typeof module !== "undefined") module.exports = PeopleState;

@@ -617,6 +617,8 @@ async fn debug_capture(
             "faces-matches",
             "faces-video",
             "people-assigned",
+            "people-gallery",
+            "people-gallery-viewer",
             "people-suggestions",
             "people-rename",
             "auto-waiting",

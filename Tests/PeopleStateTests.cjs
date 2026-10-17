@@ -4,6 +4,42 @@ const assert = require("node:assert/strict");
 const state = require("../shell/ui/people-state.js");
 const query = { seed_face_id: 7, minimum_cosine: .5, index_revision: 12 };
 
+test("file gallery deduplicates repeated face/frame observations across pages without normalizing paths", () => {
+  const page = new state.PersonPage(), generation = page.open("person", "gallery");
+  const first = { face_id: 1, path: "D:/Фото с пробелом/😀 café.jpg", modified: 1, size: 42 };
+  const reply = { person: { id: "person" }, index_revision: 1, people_revision: 2, total: 3 };
+  page.merge({ ...reply, hits: [first, { ...first, face_id: 2 }], next_offset: 1, has_more: true }, generation);
+  assert.equal(page.hits.length, 1); assert.equal(page.request().mode, "gallery");
+  page.merge({ ...reply, hits: [{ ...first, face_id: 3 }, { ...first, face_id: 4, path: "D:/Фото с пробелом/😀 cafe\u0301.jpg" },
+    { ...first, face_id: 5, path: "D:/Фото с пробелом/video.mp4" }], next_offset: 3 }, generation);
+  assert.equal(page.hits.length, 3); assert.equal(page.hasMore, false);
+  assert.notEqual(state.fileKey(first), state.fileKey({ ...first, modified: 2 }));
+});
+
+test("gallery arrows stop at boundaries and request a page only at the unloaded boundary", () => {
+  const page = { hits: [{}, {}], hasMore: true };
+  assert.deepEqual(state.viewerTarget(page, 0, -1), { index: 0, loadMore: false });
+  assert.deepEqual(state.viewerTarget(page, 0, 1), { index: 1, loadMore: false });
+  assert.deepEqual(state.viewerTarget(page, 1, 1), { index: 1, loadMore: true });
+  assert.deepEqual(state.viewerTarget({ ...page, hasMore: false }, 1, 1), { index: 1, loadMore: false });
+});
+
+test("a delayed gallery page cannot change a viewer closed or switched to another person", async () => {
+  const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+  const context = { module: { exports: {} }, PeopleState: state };
+  vm.runInNewContext(readFileSync(path.join(__dirname, "../shell/ui/people.js"), "utf8"), context);
+  for (const changed of ["closed", "person"]) {
+    const view = Object.create(context.module.exports.prototype), dialog = { open: true };
+    view.el = () => dialog; view.renderViewer = () => {};
+    view.page = { hits: [{}], hasMore: true, generation: 1 }; view.viewerIndex = 0;
+    let finish; view.loadPage = () => new Promise((resolve) => { finish = resolve; });
+    const task = view.moveViewer(1);
+    if (changed === "closed") { dialog.open = false; view.viewerIndex = -1; } else { view.page.generation++; }
+    view.page.hits.push({}); finish(); await task;
+    assert.equal(view.viewerIndex, changed === "closed" ? -1 : 0); assert.equal(view.viewerBusy, false);
+  }
+});
+
 test("album thumbnails bound work and discard waiting loads when switching people", async () => {
   const queue = new state.ThumbnailQueue(2), finish = []; let active = 0, peak = 0, calls = 0;
   const load = () => { calls++; active++; peak = Math.max(peak, active); return new Promise((resolve) => finish.push(() => { active--; resolve("image"); })); };

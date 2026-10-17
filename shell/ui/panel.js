@@ -1281,6 +1281,52 @@ async function exercisePeopleUi() {
   album.cacheProbePath = cached.image; album.cacheProbeReused = cached.cached; album.cacheProbeDecoded = cacheImage.naturalWidth > 0;
   list.scrollTop = 0;
   report.assignedTotal = people.page.total; await capture("people-assigned");
+  // The gallery is a distinct file-level view; keep all observation review checks above intact.
+  await people.selectPerson(person.id);
+  const gallery = report.gallery = { mode: people.page.mode, firstPage: people.page.hits.length, total: people.page.total };
+  check(gallery.mode === "gallery" && gallery.firstPage === 40 && gallery.total > 40, "The default person view must page unique labelled files");
+  const tile = $("person-faces").querySelector(".people-tile"), tileImage = tile.querySelector("img");
+  await wait(() => tileImage.complete && tileImage.naturalWidth > 0);
+  const visibleGalleryMedia = () => {
+    const bounds = $("person-faces").getBoundingClientRect();
+    return [...$("person-faces").querySelectorAll(".people-tile-media")].filter((stage) => {
+      const rect = stage.getBoundingClientRect(); return rect.bottom > bounds.top && rect.top < bounds.bottom;
+    });
+  };
+  await wait(() => visibleGalleryMedia().length > 0 && visibleGalleryMedia().every((stage) => stage.dataset.loaded === "true"));
+  gallery.visibleDecoded = visibleGalleryMedia().length;
+  gallery.offscreenDeferred = $("person-faces").querySelectorAll('[data-requested="true"]').length < gallery.firstPage;
+  check(gallery.offscreenDeferred, "Offscreen whole-photo tiles must remain deferred");
+  gallery.wholeImage = getComputedStyle(tileImage).objectFit === "contain" && !tile.querySelector(".face-crop");
+  check(gallery.wholeImage, "Gallery must show the whole photograph rather than a face crop");
+  await invoke("debug_capture", { label: "people-gallery" });
+  tile.click();
+  await wait(() => { const image = $("person-viewer-media").querySelector("img"); return image?.complete && image.naturalWidth > 0; });
+  check($("person-viewer").open && people.viewerIndex === 0, "Clicking a tile must open its full media preview");
+  const key = async (value) => { $("person-viewer").dispatchEvent(new KeyboardEvent("keydown", { key: value, bubbles: true })); await people.viewerTask; };
+  await key("ArrowLeft"); check(people.viewerIndex === 0, "Previous must stop at the first file");
+  await key("ArrowRight"); check(people.viewerIndex === 1, "Right arrow must show the next unique file");
+  $("person-viewer-previous").click(); await people.viewerTask;
+  check(people.viewerIndex === 0, "Previous button must return to the first file");
+  for (let i = 1; i < gallery.firstPage; i++) await key("ArrowRight");
+  await key("ArrowRight");
+  gallery.arrowLoadedNextPage = people.viewerIndex === 40 && people.page.hits.length > 40;
+  check(gallery.arrowLoadedNextPage && !people.pageError, "Arrow navigation must load the next file page at its boundary");
+  await allPages();
+  gallery.loaded = people.page.hits.length;
+  gallery.uniqueFiles = new Set(people.page.hits.map((hit) => hit.path)).size;
+  gallery.repeatedVideoFramesGrouped = people.page.hits.some((hit) => hit.kind === "video" && hit.observation_count > 1);
+  check(gallery.loaded === gallery.total && gallery.uniqueFiles === gallery.total && gallery.total === people.counts.assigned_files && gallery.repeatedVideoFramesGrouped,
+    "The complete gallery must have one tile per file, including videos with multiple labelled frames");
+  while (people.viewerIndex < gallery.total - 1) await key("ArrowRight");
+  check(people.viewerIndex === gallery.total - 1, "Viewer must reach the final unique file");
+  await key("ArrowRight"); check(people.viewerIndex === gallery.total - 1 && $("person-viewer-next").disabled, "Next must stop at the final file");
+  await key("Escape");
+  gallery.escapeRestoresFocus = !$("person-viewer").open && people.visible && document.activeElement === tile;
+  check(gallery.escapeRestoresFocus, "Esc must close only the viewer and return focus to the originating tile");
+  tile.click(); await wait(() => { const image = $("person-viewer-media").querySelector("img"); return image?.complete && image.naturalWidth > 0; });
+  await invoke("debug_capture", { label: "people-gallery-viewer" });
+  people.closeViewer();
   await tab("suggestions"); await allPages(); report.suggestionTotal = people.page.total;
   if (!report.suggestionsCapturedBeforeDecision) { report.suggestionCapturedTotal = people.page.total; await capture("people-suggestions"); }
   $("person-rename-toggle").click(); $("person-name").value = renamed; $("person-rename").requestSubmit(); await people.mutationTask;

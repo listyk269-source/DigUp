@@ -100,6 +100,11 @@ foreach ($pass in $passes) {
         if (!$peopleReport -or !$peopleReport.passed) { throw "Actual People workflow failed ($pass)." }
         if ($peopleReport.phase -ne $pass) { throw "People persistence phase mismatch ($pass)." }
         $album=$peopleReport.albumAccess
+        $gallery=$peopleReport.gallery
+        if (!$gallery -or $gallery.mode -ne 'gallery' -or !$gallery.wholeImage -or !$gallery.arrowLoadedNextPage -or !$gallery.offscreenDeferred -or $gallery.visibleDecoded -le 0 -or
+            !$gallery.repeatedVideoFramesGrouped -or !$gallery.escapeRestoresFocus -or $gallery.uniqueFiles -ne $gallery.total -or $gallery.loaded -ne $gallery.total) {
+            throw 'Actual labelled gallery must show whole media, group files and navigate all pages with focus restoration.'
+        }
         if (!$album -or !$album.offscreenDeferred -or !$album.rowRetainedOnCheck -or !$album.automaticPageBeyond40 -or
             !$album.laterThumbnailDecoded -or !$album.cacheProbeDecoded -or $album.cacheProbeReused -ne ($pass -ne 'first') -or $album.loaded -ne $album.total) {
             throw 'Actual labelled album must retain rows, defer offscreen previews, and scroll past 40 to every observation.'
@@ -114,7 +119,7 @@ foreach ($pass in $passes) {
             throw 'The native suggestion capture must show both genuine new proposals before decisions.'
         }
         if ($pass -eq 'verify' -and !$peopleReport.persistenceVerified) { throw 'Accepted/rejected labels did not survive restart.' }
-        foreach ($phase in @('people-assigned','people-suggestions','people-rename')) {
+        foreach ($phase in @('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer')) {
             $capture = Join-Path $index "capture-$phase.png"
             $bytes = [IO.File]::ReadAllBytes($capture)
             if ($bytes.Length -lt 24 -or [Convert]::ToHexString($bytes[0..7]) -ne '89504E470D0A1A0A') { throw 'Invalid native People PNG.' }
