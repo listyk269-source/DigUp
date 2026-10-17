@@ -185,11 +185,18 @@ final class FacePeopleService {
         var stale: [FacePersonAnnotation] = []
         var references = FacePeopleReferences()
         var fileObservationCounts: [Int64: Int] = [:]
+        var galleryOrder = FacePeopleAlbum.Order.indexed, galleryMedia = FacePeopleAlbum.Media.all
         let minimum = try threshold(request)
         if mode == "gallery" {
+            guard let order = FacePeopleAlbum.Order(rawValue: request["gallery_sort"] as? String ?? "indexed"),
+                  let media = FacePeopleAlbum.Media(rawValue: request["gallery_media"] as? String ?? "all") else {
+                throw CLIError("Choose a valid gallery sort and media filter.")
+            }
+            galleryOrder = order; galleryMedia = media
             let files = FacePeopleAlbum.files(own.filter { $0.state == "assigned" }.compactMap { annotation in
-                current[annotation.anchor].map { (id: $0, path: annotation.snapshot.file.path) }
-            })
+                current[annotation.anchor].map { (id: $0, path: annotation.snapshot.file.path,
+                    kind: annotation.snapshot.file.kind, modified: annotation.snapshot.file.modified) }
+            }, order: order, media: media)
             ranked = files.map { ($0.representativeID, nil) }
             fileObservationCounts = Dictionary(uniqueKeysWithValues: files.map { ($0.representativeID, $0.observationCount) })
         } else if mode == "suggestions" {
@@ -238,11 +245,13 @@ final class FacePeopleService {
             }
         }
         guard try stable() else { return expired() }; try checkScope()
-        return ["ok": true, "person": ["id": person.id, "name": person.name], "hits": hits, "counts": counts, "total": total,
+        var result: [String: Any] = ["ok": true, "person": ["id": person.id, "name": person.name], "hits": hits, "counts": counts, "total": total,
                 "next_offset": next, "has_more": next < total, "mode": mode, "minimum_cosine": minimum,
                 "index_revision": indexRevision, "people_revision": peopleRevision,
                 "reference_count": references.count, "reference_limit": FacePeopleReferences.limit,
                 "reference_source_count": references.sourceCount, "references_sampled": references.sampled]
+        if mode == "gallery" { result["gallery_sort"] = galleryOrder.rawValue; result["gallery_media"] = galleryMedia.rawValue }
+        return result
     }
 }
 
