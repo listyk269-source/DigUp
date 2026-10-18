@@ -52,6 +52,7 @@ public struct FaceSuggestionSummary: Sendable, Equatable {
             throw FacePeopleStore.Failure("The suggestion model or similarity threshold is invalid.")
         }
         let people = try store.people(), names = Set(people.map(\.id))
+        let rules = Dictionary(grouping: try store.exclusionRules(), by: \.personID)
         var assigned: [String: String] = [:], rejected: [String: Set<String>] = [:]
         var scopePaths: [Data: Bool] = [:]
         var scanned = 0
@@ -97,7 +98,8 @@ public struct FaceSuggestionSummary: Sendable, Equatable {
                 let excluded = rejected[anchor] ?? []
                 for (person, examples) in active {
                     try cancellation.check()
-                    guard !excluded.contains(person), (examples.score(observation.face.embedding) ?? -2) >= key.minimumCosine else { continue }
+                    guard !excluded.contains(person), (examples.score(observation.face.embedding) ?? -2) >= key.minimumCosine,
+                          !(rules[person] ?? []).contains(where: { $0.matches(observation.face.embedding, model: observation.model) }) else { continue }
                     counts[person, default: 0] += 1
                 }
             }

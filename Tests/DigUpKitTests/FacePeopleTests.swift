@@ -42,7 +42,7 @@ import Testing
         #expect(try index.revision() == 7 && people.revision() == 0)
         #expect(try people.people().isEmpty)
         var version: Int64 = 0; try index.db.query("PRAGMA user_version") { version = $0.int(0) }
-        #expect(version == 2)
+        #expect(version == 3)
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent(IndexStore.mainFile).path))
     }
     @Test func bulkBeyondOnePageExclusionsConflictsAndUndoAreAtomic() throws {

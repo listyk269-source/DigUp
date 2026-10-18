@@ -48,7 +48,7 @@ public final class FaceIndexStore {
         db = try Database(path: directory.appendingPathComponent(Self.name).path)
         var version: Int64 = 0
         try db.query("PRAGMA user_version") { version = $0.int(0) }
-        guard version <= 2 else { throw Database.Failure(message: "The face index needs a newer DigUp.") }
+        guard version <= 3 else { throw Database.Failure(message: "The face index needs a newer DigUp.") }
         try db.transaction {
             try db.execute("""
             CREATE TABLE IF NOT EXISTS face_jobs(
@@ -64,7 +64,7 @@ public final class FaceIndexStore {
             INSERT OR IGNORE INTO face_meta(key, value) VALUES('revision', 0);
             """)
             try FacePeopleStore.migrate(db)
-            try db.execute("PRAGMA user_version = 2")
+            try db.execute("PRAGMA user_version = 3")
         }
     }
 

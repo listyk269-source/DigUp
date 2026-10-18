@@ -117,6 +117,22 @@ final class FacePeopleService {
             return try changeFields(store.undo(operation, expectedPeople: number(request, "people_revision"),
                                               accepts: { [self] in acceptsScope($0.file) }, checkScope: checkScope))
         case "face_label": return try label(request)
+        case "person_exclusion_rules":
+            let person = try personID(request)
+            let rules = try store.exclusionRules(person: person).map { rule -> [String: Any] in
+                var source: Any = NSNull()
+                if rule.source.model == FaceModels.modelID, acceptsCurrent(rule.source.file),
+                   let id = try index.observationID(matching: rule.source), let face = try index.observations(model: rule.source.model, id: id).first {
+                    source = FaceService.fields(face)
+                }
+                return ["id": rule.id, "minimum_cosine": rule.minimum, "source": source, "created": rule.created]
+            }
+            try assertStable()
+            return ["ok": true, "rules": rules, "index_revision": indexRevision, "people_revision": peopleRevision]
+        case "person_remove_exclusion_rule":
+            let person = try personID(request)
+            guard let rule = request["rule_id"] as? String, let expected = number(request, "people_revision") else { return expired() }
+            return try changeFields(store.removeExclusionRule(rule, person: person, expectedPeople: expected, checkScope: checkScope))
         case "person_exclusion_preview", "person_exclude_similar": return try exclusion(op, request)
         case "person_exclude_file":
             let person = try personID(request)
@@ -137,10 +153,14 @@ final class FacePeopleService {
             var current: [String: Int64] = [:]
             for annotation in annotations { if let id = try savedID(annotation) { current[annotation.anchor] = id } }
             let grouped = Dictionary(grouping: annotations, by: \.personID)
+            let rules = Dictionary(grouping: try store.exclusionRules(), by: \.personID)
             let query = request["q"] as? String ?? ""
             let people = try store.people().filter { FacePeopleStore.matches(name: $0.name, query: query) }.map { person -> [String: Any] in
                 let own = grouped[person.id] ?? []
+                let coverID = own.lazy.filter { $0.state == "assigned" }.compactMap { current[$0.anchor] }.min()
+                let cover = try coverID.flatMap { try index.observations(model: FaceModels.modelID, id: $0).first }.map(FaceService.fields)
                 return ["id": person.id, "name": person.name,
+                        "cover": cover as Any? ?? NSNull(), "exclusion_rule_count": rules[person.id]?.count ?? 0,
                         "assigned_count": own.filter { $0.state == "assigned" && current[$0.anchor] != nil }.count,
                         "assigned_file_count": Set(own.filter { $0.state == "assigned" && current[$0.anchor] != nil }.map { Data($0.snapshot.file.path.utf8) }).count,
                         "rejected_count": own.filter { $0.state == "rejected" && current[$0.anchor] != nil }.count,
@@ -186,6 +206,7 @@ final class FacePeopleService {
             let after = try referenceExamples(store.annotations(person: person))
             var result = try changeFields(change)
             result["matched_file_count"] = files.count; result["matched_observation_count"] = observations
+            result["exclusion_rule_count"] = try store.exclusionRules(person: person).count
             result["reference_count_before"] = before.count; result["reference_count"] = after.count
             result["reference_source_count_before"] = before.sourceCount; result["reference_source_count"] = after.sourceCount
             return result
@@ -201,6 +222,7 @@ final class FacePeopleService {
         }
         try assertStable()
         return ["ok": true, "hits": hits, "total": ranked.count, "observation_count": observations,
+                "persistent_rule_exists": try store.exclusionRules(person: person).contains { $0.source.anchor == FacePersonSnapshot(seed).anchor && $0.minimum == minimum && $0.source.model == seed.model },
                 "next_offset": next, "has_more": next < ranked.count, "minimum_cosine": minimum,
                 "index_revision": indexRevision, "people_revision": peopleRevision]
     }
@@ -292,12 +314,13 @@ final class FacePeopleService {
             // A bounded deterministic sample spans confirmed descriptors instead of taking the first video frames.
             // Every retained example is explicitly confirmed; candidate suggestions never become references.
             references = try referenceExamples(own)
+            let rules = try store.exclusionRules(person: id)
             let unavailable = Set(all.filter { $0.state == "assigned" || ($0.personID == id && $0.state == "rejected") }.map(\.anchor))
             if references.count > 0 {
                 try index.forEach(model: FaceModels.modelID) { observation in
                     guard valid(observation), !unavailable.contains(FacePersonSnapshot(observation).anchor) else { return }
                     let score = references.score(observation.face.embedding) ?? -2
-                    if score >= minimum { ranked.append((observation.face.id, score)) }
+                    if score >= minimum && !rules.contains(where: { $0.matches(observation.face.embedding, model: observation.model) }) { ranked.append((observation.face.id, score)) }
                 }
             }
             ranked.sort { $0.cosine == $1.cosine ? $0.id < $1.id : ($0.cosine ?? -2) > ($1.cosine ?? -2) }

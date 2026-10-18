@@ -108,6 +108,13 @@ public final class FacePeopleStore {
             CREATE TABLE IF NOT EXISTS people_undo_annotations(
                 operation TEXT NOT NULL, anchor TEXT NOT NULL, person TEXT NOT NULL,
                 previous_state TEXT, previous_snapshot BLOB, previous_created REAL, PRIMARY KEY(operation,anchor,person));
+            CREATE TABLE IF NOT EXISTS face_person_exclusion_rules(
+                id TEXT PRIMARY KEY, person TEXT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+                model TEXT NOT NULL, anchor TEXT NOT NULL, minimum REAL NOT NULL, rule BLOB NOT NULL,
+                UNIQUE(person,model,anchor,minimum));
+            CREATE INDEX IF NOT EXISTS face_exclusion_person ON face_person_exclusion_rules(person);
+            CREATE TABLE IF NOT EXISTS people_undo_rules(
+                operation TEXT NOT NULL, rule_id TEXT NOT NULL, previous BLOB, PRIMARY KEY(operation,rule_id));
             INSERT OR IGNORE INTO face_meta(key,value) VALUES('people_revision',0);
             """)
     }
@@ -166,7 +173,7 @@ public final class FacePeopleStore {
         if let expected, try revision() != expected { throw Failure("People changed. Refresh before applying this action.") }
     }
     private func begin(_ id: String, kind: String, person: String? = nil, previousName: String? = nil, created: String? = nil) throws {
-        try db.execute("DELETE FROM people_undo_annotations; DELETE FROM people_operation")
+        try db.execute("DELETE FROM people_undo_annotations; DELETE FROM people_undo_rules; DELETE FROM people_operation")
         try db.run("INSERT INTO people_operation VALUES(?,?,?,?,?,?)", [.text(id), .int(try revision() + 1), .text(kind),
             person.map(SQLValue.text) ?? .null, previousName.map(SQLValue.text) ?? .null, created.map(SQLValue.text) ?? .null])
     }
@@ -203,11 +210,15 @@ public final class FacePeopleStore {
     public func label(person: String, action: String, expectedIndex: Int64, expectedPeople: Int64? = nil,
                       exclusions: Set<Int64> = [], removeAnchors: [String] = [],
                       respectRejections: Bool = false,
+                      exclusionRule: FacePeopleExclusionRule? = nil,
                       accepts: @escaping (FaceFileVersion) -> Bool, acceptsStaleAnchor: ((FaceFileVersion) -> Bool)? = nil,
                       checkScope: () throws -> Void = {},
                       enumerate: (_ consume: (IndexedFace) throws -> Void) throws -> Void) throws -> FacePeopleChange {
         guard ["assign", "remove", "reject"].contains(action), removeAnchors.isEmpty || action == "remove" else {
             throw Failure("Choose assign, remove or reject.")
+        }
+        if let rule = exclusionRule, action != "reject" || rule.personID != person || !rule.valid {
+            throw Failure("The persistent face exclusion is invalid. Choose the face again.")
         }
         return try db.transaction {
             try check(expectedPeople); try checkScope()
@@ -250,9 +261,16 @@ public final class FacePeopleStore {
                 guard acceptsStaleAnchor?(annotation.snapshot.file) ?? accepts(annotation.snapshot.file) else { stale += 1; continue }
                 try apply(anchor: anchor, snapshot: annotation.snapshot, state: nil)
             }
+            var ruleAdded = false
+            if let rule = exclusionRule,
+               !(try exclusionRules(person: person)).contains(where: { $0.source.anchor == rule.source.anchor && $0.source.model == rule.source.model && $0.minimum == rule.minimum }) {
+                if changed == 0 { try begin(operation, kind: "labels", person: person) }
+                try db.run("INSERT INTO people_undo_rules VALUES(?,?,NULL)", [.text(operation), .text(rule.id)])
+                try insertRule(rule); ruleAdded = true
+            }
             try checkScope()
-            if changed > 0 { try increment() }
-            return FacePeopleChange(operationID: changed > 0 ? operation : nil, revision: try revision(), changed: changed,
+            if changed > 0 || ruleAdded { try increment() }
+            return FacePeopleChange(operationID: changed > 0 || ruleAdded ? operation : nil, revision: try revision(), changed: changed,
                                     conflicts: conflicts, stale: stale, excluded: excluded)
         }
     }
@@ -297,10 +315,40 @@ public final class FacePeopleStore {
                                expectedPeople: Int64, accepts: @escaping (FaceFileVersion) -> Bool,
                                checkScope: () throws -> Void = {}) throws -> FacePeopleChange {
         try label(person: person, action: "reject", expectedIndex: expectedIndex, expectedPeople: expectedPeople,
+                  exclusionRule: FacePeopleExclusionRule(person: person, seed: seed, minimum: minimum),
                   accepts: accepts, checkScope: checkScope) { [self] consume in
             try forEachSimilar(to: seed, minimum: minimum, accepts: accepts, checkScope: checkScope) { face, _ in
                 try consume(face)
             }
+        }
+    }
+
+    public func exclusionRules(person: String? = nil) throws -> [FacePeopleExclusionRule] {
+        var result: [FacePeopleExclusionRule] = []
+        try db.query("SELECT rule FROM face_person_exclusion_rules" + (person == nil ? "" : " WHERE person = ?") + " ORDER BY id",
+                     person.map { [.text($0)] } ?? []) { row in
+            guard let data = row.blob(0) else { throw Failure("A saved face exclusion could not be read.") }
+            let rule = try JSONDecoder().decode(FacePeopleExclusionRule.self, from: data)
+            guard rule.valid else { throw Failure("A saved face exclusion is incompatible. Update DigUp before continuing.") }
+            result.append(rule)
+        }
+        return result
+    }
+    private func insertRule(_ rule: FacePeopleExclusionRule) throws {
+        try db.run("INSERT INTO face_person_exclusion_rules VALUES(?,?,?,?,?,?)", [.text(rule.id), .text(rule.personID),
+            .text(rule.source.model), .text(rule.source.anchor), .double(rule.minimum), .blob(try JSONEncoder().encode(rule))])
+    }
+    public func removeExclusionRule(_ id: String, person: String, expectedPeople: Int64,
+                                    checkScope: () throws -> Void = {}) throws -> FacePeopleChange {
+        try db.transaction {
+            try check(expectedPeople); try checkScope(); _ = try self.person(person)
+            guard let rule = try exclusionRules(person: person).first(where: { $0.id == id }) else { throw Failure("This exclusion rule no longer exists. Refresh People.") }
+            let operation = UUID().uuidString
+            try begin(operation, kind: "rules", person: person)
+            try db.run("INSERT INTO people_undo_rules VALUES(?,?,?)", [.text(operation), .text(id), .blob(try JSONEncoder().encode(rule))])
+            try db.run("DELETE FROM face_person_exclusion_rules WHERE id = ? AND person = ?", [.text(id), .text(person)])
+            try checkScope(); try increment()
+            return FacePeopleChange(operationID: operation, revision: try revision(), changed: 0, conflicts: 0, stale: 0, excluded: 0)
         }
     }
 
@@ -333,8 +381,13 @@ public final class FacePeopleStore {
                     changed += 1
                 }
             }
+            try db.query("SELECT rule_id,previous FROM people_undo_rules WHERE operation = ?", [.text(operation)]) { row in
+                guard let id = row.text(0) else { return }
+                try db.run("DELETE FROM face_person_exclusion_rules WHERE id = ?", [.text(id)])
+                if let previous = row.blob(1) { try insertRule(JSONDecoder().decode(FacePeopleExclusionRule.self, from: previous)) }
+            }
             try checkScope()
-            try db.execute("DELETE FROM people_undo_annotations; DELETE FROM people_operation")
+            try db.execute("DELETE FROM people_undo_annotations; DELETE FROM people_undo_rules; DELETE FROM people_operation")
             try increment()
             return FacePeopleChange(operationID: nil, revision: try revision(), changed: changed, conflicts: 0, stale: 0, excluded: 0)
         }
