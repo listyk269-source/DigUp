@@ -1644,9 +1644,12 @@ async function exerciseFileExclusionUi(personId, wait, check, allPages) {
   group.observations = people.exclusion.reply.observation_count;
   check(group.firstPage === 40 && group.files > 40 && group.observations > group.files, "Review must group real video observations by file and cover unloaded pages");
   const visibleCrops = () => [...$("people-exclusion").querySelectorAll(".face-crop")].filter((node) => {
-    const r = node.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;
+    // Ancestor overflow clips rows even while their rectangles lie inside the WebView viewport.
+    const r = node.getBoundingClientRect(), body = document.querySelector(".people-exclusion-body").getBoundingClientRect();
+    return r.height > 0 && r.bottom > Math.max(0, body.top) && r.top < Math.min(innerHeight, body.bottom);
   });
   await wait(() => visibleCrops().length > 0 && visibleCrops().every((node) => node.dataset.loaded === "true"));
+  group.visiblePortraitsDecoded = visibleCrops().length;
   await invoke("debug_capture", { label: "people-exclude-similar" });
   await invoke("panel_height", { height: 900, graph: false }); await new Promise((resolve) => setTimeout(resolve, 150));
   group.compactNoOverflow = $("people-exclusion").scrollWidth <= $("people-exclusion").clientWidth + 1;
