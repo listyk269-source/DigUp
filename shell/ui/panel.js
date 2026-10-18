@@ -834,7 +834,7 @@ $("faces-toggle").addEventListener("click", () => faceSearch.visible ? faceSearc
 $("people-toggle").addEventListener("click", () => { if (people.visible) people.close(); else people.openTask = people.open(); });
 $("graph-reveal").textContent = t("Show in {manager}", { manager: fileManager() });
 $("similar-back").onclick = backFromSimilar;
-tauri.event.listen("search-scope-changed", () => { refreshSearchCalendar(); if (people.visible) people.close(); people.people = []; people.page.open(null, "assigned"); if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); people.faceSelected(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
+tauri.event.listen("search-scope-changed", () => { refreshSearchCalendar(); if (people.visible) people.close(); people.invalidateDirectory(); people.page.open(null, "assigned"); if (faceSearch.visible) faceSearch.close(false); faceSearch.file = null; faceSearch.selection.clear(); people.faceSelected(); if (graph.visible) graph.close(); if (state.related) queryChanged(); });
 $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
@@ -991,6 +991,8 @@ document.addEventListener("ui-language-changed", () => {
 });
 render();
 faceSearch.status();
+// Warm saved names/counts on the face-query queue; no detector, encoder or thumbnails are started here.
+const peopleStartup = I18n.ready.then(() => people.preload());
 
 tauri.path.homeDir().then((home) => { state.home = home.replace(/[\\/]$/, ""); }).catch(() => {});
 
@@ -1557,11 +1559,75 @@ async function exercisePeopleUi() {
   similar.returned = PeopleState.samePerson(people.page.personId, person.id) && JSON.stringify(people.galleryOptions) === JSON.stringify(similar.filters);
   check(similar.returned, "Back to People lost the person or album filters");
   people.closeViewer(); similar.passed = true;
+  report.excludedFile = await exerciseFileExclusionUi(person.id, wait, check, allPages);
   report.passed = true;
+}
+
+async function exerciseFileExclusionUi(personId, wait, check, allPages) {
+  const report = featureReport.people.excludedFile = {}, target = people.page.hits[0];
+  const file = await ask({ op: "face_file", path: target.path });
+  const others = file.faces.filter((face) => PeopleState.idOf(face) !== PeopleState.idOf(target));
+  check(others.length >= 2, "The real public photograph must contain three distinct face observations");
+  const wrong = others[0], other = others[1], label = "Другой человек FACE742";
+  const proposals = () => ask({ op: "person_faces", person_id: personId, mode: "suggestions", minimum_cosine: .95, limit: 200 });
+  const candidates = await ask({ op: "face_search", face_id: Number(PeopleState.idOf(wrong)), minimum_cosine: .95, limit: 200 });
+  const candidate = candidates.hits.find((face) => face.path !== target.path && !face.person);
+  check(!!candidate, "Missing actual wrong-subject candidate in the other indexed fixture files");
+  const contains = (reply) => reply.hits.some((face) => PeopleState.idOf(face) === PeopleState.idOf(candidate));
+  const before = await proposals(); check(!contains(before), "Wrong subject must not already belong to this person's references");
+  let second = people.people.find((person) => person.name === label);
+  if (!second) {
+    const created = await people.mutate({ op: "person_save", name: label, people_revision: people.peopleRevision }, t("Face labels updated"));
+    check(!!created, people.mutationError || "Could not create the second test label"); second = created.person;
+  }
+  const labelFace = async (person, face, action) => {
+    const reply = await people.mutate({ op: "face_label", action, person_id: person, face_ids: [Number(PeopleState.idOf(face))],
+      index_revision: people.page.indexRevision, people_revision: people.peopleRevision }, t("Face labels updated"));
+    check(!!reply, people.mutationError || "Test label mutation failed"); return reply;
+  };
+  await labelFace(second.id, other, "assign"); await labelFace(personId, wrong, "assign");
+  const contaminated = await proposals(); check(contains(contaminated), "The explicitly mislabelled actual descriptor must produce a wrong-subject proposal before correction");
+  const current = people.page.hits.find((hit) => hit.path === target.path);
+  const tile = people.rows.get(PeopleState.fileKey(current))?.row; check(!!tile, "Correction source tile is unavailable"); tile.click();
+  await wait(() => !!$("person-viewer-media").querySelector("img")?.naturalWidth);
+  await invoke("debug_capture", { label: "people-exclude-viewer" });
+  await invoke("panel_height", { height: 900, graph: false }); await new Promise((resolve) => setTimeout(resolve, 150));
+  const footer = document.querySelector(".people-viewer-footer");
+  report.compactNoOverflow = footer.scrollWidth <= footer.clientWidth + 1;
+  check(report.compactNoOverflow, "The exclusion action must fit the compact native viewer");
+  await invoke("debug_capture", { label: "people-exclude-compact" });
+  await invoke("panel_height", { height: 900, graph: true }); await new Promise((resolve) => setTimeout(resolve, 150));
+  const oldPeople = people.peopleRevision, indexRevision = people.page.indexRevision;
+  $("person-viewer-exclude").click(); await people.mutationTask;
+  check(!people.mutationError && !$("person-viewer").open, people.mutationError || "Whole-photo exclusion did not close the corrected viewer");
+  const changed = report.change = people.lastMutation;
+  await allPages(); const after = await proposals();
+  report.fileAbsent = !people.page.hits.some((hit) => hit.path === target.path);
+  report.falseProposalRemoved = !contains(after);
+  report.referencesRebuilt = changed.reference_source_count < changed.reference_source_count_before && changed.reference_count < changed.reference_count_before;
+  report.indexUnchanged = changed.index_revision === indexRevision;
+  const otherLabel = await ask({ op: "face_people", face_id: Number(PeopleState.idOf(other)) });
+  report.otherPersonPreserved = PeopleState.samePerson(otherLabel.person?.id, second.id);
+  let stale;
+  try { stale = await ask({ op: "person_exclude_file", person_id: personId, face_id: Number(PeopleState.idOf(target)), index_revision: indexRevision, people_revision: oldPeople }); }
+  catch (error) { stale = { ok: false, error: String(error) }; }
+  report.staleRejected = stale.ok === false;
+  check(report.fileAbsent && report.falseProposalRemoved && report.referencesRebuilt && report.indexUnchanged && report.otherPersonPreserved && report.staleRejected,
+    "Exclusion must remove the file and wrong references while preserving other labels, descriptors and revision guards");
+  $("people-undo").querySelector("button").click(); await people.mutationTask; await allPages();
+  const restored = await proposals();
+  report.undoRestored = people.page.hits.some((hit) => hit.path === target.path) && contains(restored) && restored.reference_source_count === contaminated.reference_source_count;
+  check(report.undoRestored, "Undo must restore the album and the exact prior reference profile");
+  // Remove only the deliberately inserted test decisions; all genuine pre-existing labels remain as before.
+  await labelFace(personId, wrong, "remove"); await labelFace(second.id, other, "remove");
+  report.cleaned = !contains(await proposals()); check(report.cleaned, "The temporary wrong reference was not removed after the smoke");
+  report.passed = true; return report;
 }
 
 async function completeDebugSearch() {
   debugPending = false;
+  await peopleStartup;
+  featureReport.peopleStartup = people.startupDirectory;
   if (debugOptions.loadAll) {
     const deadline = Date.now() + 60000;
     const record = () => debugPages.push({ loaded: state.strong.length + state.weaker.length,

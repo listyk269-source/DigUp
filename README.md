@@ -249,3 +249,7 @@ Left/Right navigation, progressive loading, capture-date sorting (file-date fall
 renaming, undo and unconfirmed label suggestions after new media are indexed. Once face search is enabled,
 new photos and videos are processed automatically, with background progress, persistent pause/resume and
 pending proposal counts. See [People](docs/people.md).
+
+People names and counts preload at startup. The gallery viewer's **Exclude from this album** corrects
+an incorrectly labelled photo or video, rebuilds the person's confirmed reference set for proposals,
+and supports undo while preserving original files and other people's labels.

@@ -23,6 +23,12 @@ Several observations of the same video can retain their separate matched timesta
 
 ## Browse and correct People
 
+At startup the saved People directory and file/observation counts load in the background, without
+running a detector or downloading models. Opening People can use those names immediately while
+validating the counts again. Startup and an immediate opening share the pending directory request.
+Folder changes invalidate cached metadata; an unavailable helper leaves a retryable error. Whole-file
+previews and album pages still load on demand, without decoding every photograph at startup.
+
 Open **People** from the workspace navigation. Filter labels by name and open a person: **Gallery** shows
 the whole photograph in each tile, with one tile per labelled file. Several labelled faces or video
 frames in the same file do not create duplicates. Video tiles show a representative matched frame;
@@ -39,6 +45,26 @@ Files load progressively, without
 repeating face inference. **Face annotations**, **Suggestions**, **Excluded** and **Needs review**
 retain their separate observation-level checkboxes and label corrections; gallery navigation itself
 does not change labels. Rename the person without running inference again.
+
+In the whole-file viewer, **Exclude from this album** corrects an incorrectly included photograph
+or video. It rejects every current face observation in that exact file for the selected person,
+including video frames on unloaded pages. The original file, semantic index, SFace descriptors and
+other people's labels are preserved. The person disappears from that file's gallery membership;
+the **Excluded** observation tab retains the explicit decisions. **Undo** restores the prior labels
+and reference membership using the existing one-action undo log. Later corrections can also be made
+from **Excluded**.
+
+Proposals rebuild their bounded set of actual confirmed reference vectors after the People revision
+changes. Removing a wrong example stops that example from attracting new false matches; it does not
+retrain SFace or rewrite stored descriptors. If no confirmed references remain, there are no proposals.
+The response reports remaining reference/observation counts. Existing folder/version/revision guards
+apply atomically. As with other labels, an edited file or changed detector observation needs review;
+this is not a permanent path blacklist.
+
+The local `person_exclude_file` operation requires `person_id`, a current representative `face_id`,
+`index_revision` and `people_revision`. It returns the undo operation and before/after
+`reference_count` / `reference_source_count` values. Booleans, fractional IDs, stale revisions and
+files outside the selected scope are rejected. No schema migration or face backfill is required.
 
 Use **Newest first / Oldest first**, **All media / Photos / Videos**, and the **Period** year rail
 to narrow an album. Drag either handle or enter **From year / Through year**, for example 2000–2003;

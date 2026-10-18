@@ -64,12 +64,16 @@ class PeopleView {
   text(tag, className, value) { const node = document.createElement(tag); node.className = className; if (value != null) node.textContent = value; return node; }
   person() { return this.people.find((person) => PeopleState.samePerson(person.id, this.page.personId)); }
   async open(personId = this.page.personId) {
+    const cached = this.directoryLoaded;
     this.visible = true; this.onVisibility(true); this.render();
-    await this.refreshDirectory(); if (!this.visible) return;
+    if (!cached) await this.refreshDirectory({ force: false });
+    if (!this.visible) return;
     const selected = this.people.find((person) => PeopleState.samePerson(person.id, personId)) || this.people[0];
-    if (selected) await this.selectPerson(selected.id, "gallery");
+    const page = selected ? this.selectPerson(selected.id, "gallery") : null;
+    if (cached) this.refreshDirectory(); // Show cached names immediately, then validate current counts in the background.
+    await page;
   }
-  close() { this.closeViewer(); this.visible = false; this.page.generation++; this.directoryGeneration++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
+  close() { this.closeViewer(); this.visible = false; this.page.generation++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
   resetRows() { this.thumbnailObserver?.disconnect(); this.thumbnailLoads?.clear(); this.thumbnails?.reset(); this.rows?.clear(); this.el("person-faces").replaceChildren(); }
   maybeLoadMore() {
     const list = this.el("person-faces");
@@ -77,15 +81,43 @@ class PeopleView {
       list.scrollHeight - list.scrollTop - list.clientHeight < 160) this.pageTask = this.loadPage(true);
   }
   stopPreview() { this.el("person-preview").querySelectorAll("audio,video").forEach((player) => player.pause()); }
-  async refreshDirectory() {
+  preload() {
+    if (!this.startupTask) this.startupTask = this.refreshDirectory({ force: false }).then((ready) => {
+      this.startupDirectory = { ready, people: this.people.map((person) => ({ id: person.id, name: person.name, files: person.assigned_file_count })) };
+      return ready;
+    });
+    return this.startupTask;
+  }
+  invalidateDirectory() {
+    ++this.directoryGeneration; this.directoryLoaded = false; this.directoryTask = null; this.directoryBusy = false; this.people = [];
+  }
+  refreshDirectory({ force = true } = {}) {
+    if (!force && this.directoryTask) return this.directoryTask;
+    if (!force && this.directoryLoaded) return Promise.resolve(true);
     const generation = ++this.directoryGeneration;
+    this.directoryBusy = true; this.renderDirectory();
+    const task = this.readDirectory(generation); this.directoryTask = task;
+    task.finally(() => { if (this.directoryTask === task) this.directoryTask = null; });
+    return task;
+  }
+  async readDirectory(generation) {
     try {
-      const reply = await this.ask({ op: "people_list" });
-      if (generation !== this.directoryGeneration) return;
-      if (reply.ok === false) throw new Error(reply.error);
+      const read = async () => {
+        const reply = await this.ask({ op: "people_list" });
+        if (reply.ok === false) throw new Error(reply.error);
+        return reply;
+      };
+      let reply;
+      try { reply = await read(); }
+      catch (error) {
+        if (generation !== this.directoryGeneration || !String(error).includes("People or face index changed. Refresh before continuing.")) throw error;
+        reply = await read(); // A face publication can race the initial metadata read. Retry that revision once.
+      }
+      if (generation !== this.directoryGeneration) return false;
       this.people = reply.people || []; this.peopleRevision = reply.people_revision; this.indexRevision = reply.index_revision; this.directoryError = null;
-      this.renderDirectory(); this.renderFaceControls();
-    } catch (error) { if (generation === this.directoryGeneration) { this.directoryError = String(error.message || error); this.renderStatus(); this.renderFaceControls(); } }
+      this.directoryLoaded = true; return true;
+    } catch (error) { if (generation === this.directoryGeneration) { this.directoryLoaded = false; this.directoryError = String(error.message || error); } return false; }
+    finally { if (generation === this.directoryGeneration) { this.directoryBusy = false; this.renderDirectory(); this.renderStatus(); this.renderFaceControls(); } }
   }
   async refresh() {
     await this.refreshDirectory();
@@ -137,7 +169,7 @@ class PeopleView {
     this.el("people-status").parentElement.hidden = !this.mutationError && !this.directoryError && !this.auto?.summaryError;
     this.el("people-announcement").textContent = this.mutationError || this.directoryError || this.notice || "";
     this.el("people-change-detail").textContent = this.notice || "";
-    this.el("people-refresh").disabled = !!this.mutationBusy;
+    this.el("people-refresh").disabled = !!this.mutationBusy || !!this.directoryBusy;
     for (const form of ["people-create", "face-person-create", "person-rename"]) for (const control of this.el(form).querySelectorAll("input,button")) control.disabled = !!this.mutationBusy;
   }
   renderDirectory() {
@@ -153,7 +185,8 @@ class PeopleView {
       if (Number.isFinite(pending) && pending > 0) label.append(this.text("small", "people-person-pending", t("{count} pending observations", { count: pending })));
       button.append(label); button.onclick = () => { this.pageTask = this.selectPerson(person.id); }; list.append(button);
     }
-    if (!people.length) list.append(this.text("p", "", t(query ? "No matching person labels" : "Create a person label, then assign confirmed face observations.")));
+    list.setAttribute("aria-busy", String(!!this.directoryBusy));
+    if (!people.length) list.append(this.text("p", "", t(this.directoryBusy && !this.directoryLoaded ? "Loading people…" : query ? "No matching person labels" : "Create a person label, then assign confirmed face observations.")));
   }
   renderPage() {
     const person = this.person(), mode = this.page.mode;
@@ -286,7 +319,7 @@ class PeopleView {
     if (this.viewerOrigin?.isConnected) this.viewerOrigin.focus({ preventScroll: true }); this.viewerOrigin = null;
   }
   async moveViewer(delta) {
-    if (!this.el("person-viewer").open || this.viewerBusy) return;
+    if (!this.el("person-viewer").open || this.viewerBusy || this.mutationBusy) return;
     const generation = this.page.generation; let target = PeopleState.viewerTarget(this.page, this.viewerIndex, delta);
     if (target.loadMore && (this.expired || this.pageError)) return;
     this.viewerBusy = true; this.renderViewer();
@@ -309,15 +342,27 @@ class PeopleView {
     }
     this.el("person-viewer-title").textContent = this.nameOf(hit.path);
     this.el("person-viewer-count").textContent = t("{current} of {total} files", { current: this.viewerIndex + 1, total: this.page.total });
-    this.el("person-viewer-message").textContent = this.pageError ? t(this.pageError) : this.viewerBusy ? t("Loading labelled files…") : t("Use left and right arrows · Esc to close");
-    this.el("person-viewer-previous").disabled = this.viewerBusy || this.viewerIndex <= 0;
-    this.el("person-viewer-next").disabled = this.viewerBusy || this.viewerIndex >= this.page.hits.length - 1 && (!this.page.hasMore || this.expired || !!this.pageError);
+    this.el("person-viewer-message").textContent = this.mutationError ? t(this.mutationError) : this.pageError ? t(this.pageError) : this.mutationBusy ? t("Updating person references…") : this.viewerBusy ? t("Loading labelled files…") : t("Use left and right arrows · Esc to close");
+    this.el("person-viewer-previous").disabled = this.viewerBusy || this.mutationBusy || this.viewerIndex <= 0;
+    this.el("person-viewer-next").disabled = this.viewerBusy || this.mutationBusy || this.viewerIndex >= this.page.hits.length - 1 && (!this.page.hasMore || this.expired || !!this.pageError);
+    for (const id of ["person-viewer-open", "person-viewer-similar", "person-viewer-faces", "person-viewer-exclude"]) this.el(id).disabled = !!this.mutationBusy || !!this.viewerBusy;
+    this.el("person-viewer-exclude").setAttribute("aria-label", t("Exclude {file} from {person}", { file: this.nameOf(hit.path), person: this.person()?.name || "" }));
+    this.el("person-viewer-exclude").onclick = () => { this.mutationTask = this.excludeFile(hit); };
     this.el("person-viewer-open").onclick = () => this.invoke("open_path", { path: hit.path }).catch(() => { this.el("person-viewer-message").textContent = t("Could not open file. Check that it is available."); });
     this.el("person-viewer-faces").onclick = () => { this.closeViewer(); this.onFace(hit); };
     this.el("person-viewer-similar").onclick = () => {
       const origin = { personId: this.page.personId, fileKey: PeopleState.fileKey(hit) };
       this.closeViewer(); this.onSimilar(hit, origin);
     };
+  }
+  async excludeFile(hit) {
+    const source = this.page.personId;
+    const reply = await this.mutate({ op: "person_exclude_file", person_id: source, face_id: Number(PeopleState.idOf(hit)),
+      index_revision: this.page.indexRevision, people_revision: this.peopleRevision }, t("File excluded. Person references updated."));
+    if (reply && this.visible && PeopleState.samePerson(this.page.personId, source)) {
+      (this.el("person-faces").querySelector(".people-tile") || this.el("people-undo").querySelector("button")).focus({ preventScroll: true });
+    }
+    return reply;
   }
   renderPreview() {
     const hit = this.page.hits.find((face) => this.faceRowKey(face) === this.selectedPreview), key = hit ? `${this.faceRowKey(hit)}:${I18n.language}:${this.page.mode}` : null;
@@ -348,6 +393,7 @@ class PeopleView {
       const reply = await this.ask(request); if (reply.ok === false) throw new Error(reply.error);
       this.lastMutation = reply; this.peopleRevision = reply.people_revision;
       this.notice = message;
+      if (Number.isFinite(reply.reference_source_count)) this.notice += " " + t("Confirmed reference observations remaining: {count}", { count: reply.reference_source_count });
       if (Number.isFinite(reply.changed)) this.notice += " " + t("Changed: {changed} · conflicts skipped: {conflicts} · stale skipped: {stale} · excluded: {excluded}", { changed: reply.changed, conflicts: reply.skipped_conflicts || 0, stale: reply.skipped_stale || 0, excluded: reply.excluded || 0 });
       if (reply.operation_id) this.undoOperation = { id: reply.operation_id, message: this.notice };
       await this.refreshDirectory();
