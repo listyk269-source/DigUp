@@ -250,6 +250,9 @@ renaming, undo and unconfirmed label suggestions after new media are indexed. On
 new photos and videos are processed automatically, with background progress, persistent pause/resume and
 pending proposal counts. See [People](docs/people.md).
 
-People names and counts preload at startup. The gallery viewer's **Exclude from this album** corrects
+People names and counts preload at startup. **Exclude similar faces…** lets you choose an incorrect face,
+review direct matches across all selected folders and exclude the complete group with one undoable action.
+Other faces in group photos and other people's labels are preserved. Face miniatures use proportional,
+padded crops from a detailed preview. The gallery viewer's **Exclude from this album** corrects
 an incorrectly labelled photo or video, rebuilds the person's confirmed reference set for proposals,
 and supports undo while preserving original files and other people's labels.

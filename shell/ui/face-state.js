@@ -11,6 +11,17 @@ const FaceState = (() => {
     if (width <= 0 || height <= 0 || x < 0 || y < 0 || x >= 1 || y >= 1) return null;
     return [x, y, Math.min(width, 1 - x), Math.min(height, 1 - y)];
   }
+  // Work in oriented image pixels: independent normalized X/Y scaling squeezes a face into a square.
+  function portrait(face, width, height) {
+    const box = boxOf(face);
+    if (!box || ![width, height].every((n) => Number.isFinite(n) && n > 0)) return null;
+    const [x, y, w, h] = box, side = Math.min(width, height, Math.max(w * width, h * height) * 1.3);
+    const left = Math.max(0, Math.min(width - side, (x + w / 2) * width - side / 2));
+    const top = Math.max(0, Math.min(height - side, (y + h / 2) * height - side / 2));
+    return { side, left, top, width, height,
+      size: `${width / side * 100}% ${height / side * 100}%`,
+      position: `${width > side ? left / (width - side) * 100 : 0}% ${height > side ? top / (height - side) * 100 : 0}%` };
+  }
   class Selection {
     constructor() { this.generation = 0; this.clear(); }
     clear() { this.generation++; this.seed = null; this.hits = []; this.total = 0; this.offset = 0; this.hasMore = false; this.indexRevision = null; }
@@ -43,6 +54,6 @@ const FaceState = (() => {
         seed_face_id: seed.id ?? seed.face_id, face_id: hit.face_id, seed_bbox: seed.bbox, bbox: hit.bbox }] })),
       vector_source: `faces:${seed.model_id}`, basis: "selected_face", total: page.total, has_more: page.has_more, next_offset: page.next_offset, index_revision: page.index_revision };
   }
-  return { Selection, boxOf, faceKey, graphReply, isMedia: (hit) => mediaKinds.has(hit?.kind) };
+  return { Selection, boxOf, portrait, faceKey, graphReply, isMedia: (hit) => mediaKinds.has(hit?.kind) };
 })();
 if (typeof module !== "undefined") module.exports = FaceState;

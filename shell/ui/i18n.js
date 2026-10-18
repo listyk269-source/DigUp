@@ -2,6 +2,17 @@
 // Explicit UI message catalog. Paths, names, queries and document content never pass through DOM translation.
 const I18n = (() => {
   const ru = {
+    "Exclude similar faces…": "Исключить похожие лица…",
+    "Exclude similar faces from {person}": "Исключить похожие лица из альбома «{person}»",
+    "Review direct matches across all selected folders, regardless of album date filters. Other people's labels and original files stay unchanged. You can undo this action.": "Совпадения ищутся во всех выбранных папках, независимо от периода альбома. Метки других людей и исходные файлы сохраняются. Действие можно отменить.",
+    "Choose a face": "Выберите лицо",
+    "Show more faces": "Показать ещё лица",
+    "Minimum face cosine": "Порог сходства лиц",
+    "Choose the incorrect face below. Only matches to this face will be excluded.": "Выберите ошибочно отмеченное лицо. Будут исключены только совпадения с ним.",
+    "{files} files · {observations} face observations to exclude": "К исключению: {files} файлов · {observations} наблюдений лиц",
+    "Exclude matches in {count} files": "Исключить совпадения в {count} файлах",
+    "Only matching face observations are excluded. A group photo stays in the album if it still contains this person.": "Исключаются только совпавшие лица. Групповой снимок останется в альбоме, если на нём по-прежнему отмечен этот человек.",
+    "Similar faces excluded. Person references updated.": "Похожие лица исключены. Образцы человека пересчитаны.",
     "About labels and changes": "О метках и изменениях",
     "Search by meaning, filename or content": "Поиск по смыслу, имени или содержимому",
     "Clear search": "Очистить поиск",

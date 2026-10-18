@@ -237,10 +237,14 @@ class FaceSearchView {
   crop(hit, { defer } = {}) {
     const crop = this.text("span", "face-crop"); crop.setAttribute("aria-hidden", "true");
     const box = FaceState.boxOf(hit); if (!box) return crop;
-    const load = () => this.imageFor(hit, 360).then((url) => {
+    const load = () => this.imageFor(hit, 1600).then(async (url) => {
+      const image = new Image(); image.src = url; await image.decode();
+      const portrait = FaceState.portrait(hit, image.naturalWidth, image.naturalHeight);
+      if (!portrait) throw new Error("Preview unavailable");
       crop.style.backgroundImage = `url(${JSON.stringify(url)})`;
-      crop.style.backgroundSize = `${100 / box[2]}% ${100 / box[3]}%`;
-      crop.style.backgroundPosition = `${box[2] < 1 ? box[0] / (1 - box[2]) * 100 : 0}% ${box[3] < 1 ? box[1] / (1 - box[3]) * 100 : 0}%`;
+      crop.style.backgroundSize = portrait.size;
+      crop.style.backgroundPosition = portrait.position;
+      crop.dataset.portrait = JSON.stringify(portrait);
       crop.dataset.loaded = "true";
       crop.dataset.imageUrl = url;
     }).catch(() => { crop.classList.add("unavailable"); });

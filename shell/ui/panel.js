@@ -1053,6 +1053,12 @@ async function exerciseFaceSearchUi() {
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   report.index = faceSearch.index; report.progressHistory = faceSearch.statusHistory; report.source = photo.path;
   report.faceChoices = faceSearch.fileFaces.length; report.boxes = $("face-source-image").querySelectorAll(".face-box").length;
+  report.portraitGeometry = [...$("face-choices").querySelectorAll(".face-crop")].map((crop) => {
+    const data = JSON.parse(crop.dataset.portrait), [x, y] = data.size.split(" ").map(parseFloat), rect = crop.getBoundingClientRect();
+    return { sourceWidth: data.width, sourceHeight: data.height, square: Math.abs(rect.width - rect.height) < .1,
+      uniformScale: Math.abs(x / data.width - y / data.height) < 1e-8 };
+  });
+  if (!report.portraitGeometry.every((crop) => crop.square && crop.uniformScale && Math.max(crop.sourceWidth, crop.sourceHeight) > 360)) throw new Error("Face portraits must use detailed, proportionate square crops");
   await invoke("debug_capture", { label: "faces-select" });
   const first = faceSearch.fileFaces[0];
   $("face-source-image").querySelector(".face-box")?.click();
@@ -1618,6 +1624,54 @@ async function exerciseFileExclusionUi(personId, wait, check, allPages) {
   const restored = await proposals();
   report.undoRestored = people.page.hits.some((hit) => hit.path === target.path) && contains(restored) && restored.reference_source_count === contaminated.reference_source_count;
   check(report.undoRestored, "Undo must restore the album and the exact prior reference profile");
+  const group = report.similarGroup = {};
+  await labelFace(personId, candidate, "assign");
+  const contaminatedGroup = await proposals();
+  const openGroup = async () => {
+    const tile = people.rows.get(PeopleState.fileKey(people.page.hits.find((hit) => hit.path === target.path)))?.row;
+    check(!!tile, "Missing real group photo for the similar-face review"); tile.click();
+    $("person-viewer-exclude-similar").click(); await people.exclusion.task;
+    check($("people-exclusion").open && !people.exclusion.seed && $("people-exclusion-apply").disabled,
+      "Bulk exclusion must require a deliberate face choice");
+    $("people-exclusion-minimum").value = "0.95"; people.exclusion.minimum = .95;
+    const choice = [...$("people-exclusion-faces").querySelectorAll("button")].find((node) => node.dataset.faceId === PeopleState.idOf(wrong));
+    check(!!choice, "Wrong face is not selectable in the actual source picture"); choice.click(); await people.exclusion.task;
+    check(!people.exclusion.error, people.exclusion.error || "Bulk review failed");
+  };
+  await openGroup();
+  group.firstPage = people.exclusion.hits.length; group.files = people.exclusion.reply.total;
+  group.observations = people.exclusion.reply.observation_count;
+  check(group.firstPage === 40 && group.files > 40 && group.observations > group.files, "Review must group real video observations by file and cover unloaded pages");
+  const visibleCrops = () => [...$("people-exclusion").querySelectorAll(".face-crop")].filter((node) => {
+    const r = node.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight;
+  });
+  await wait(() => visibleCrops().length > 0 && visibleCrops().every((node) => node.dataset.loaded === "true"));
+  await invoke("debug_capture", { label: "people-exclude-similar" });
+  await invoke("panel_height", { height: 900, graph: false }); await new Promise((resolve) => setTimeout(resolve, 150));
+  group.compactNoOverflow = $("people-exclusion").scrollWidth <= $("people-exclusion").clientWidth + 1;
+  check(group.compactNoOverflow, "Similar-face review must fit the compact native window");
+  await invoke("debug_capture", { label: "people-exclude-similar-compact" });
+  await invoke("panel_height", { height: 900, graph: true });
+  $("people-exclusion-apply").click(); await people.exclusion.task; await allPages();
+  check(!people.mutationError && !$("people-exclusion").open, people.mutationError || "Bulk exclusion did not finish");
+  group.change = people.lastMutation;
+  group.unloadedChanged = group.change.matched_file_count === group.files && group.change.changed === group.observations;
+  group.correctFaceRetained = people.page.hits.some((hit) => hit.path === target.path) &&
+    PeopleState.samePerson((await ask({ op: "face_people", face_id: Number(PeopleState.idOf(target)) })).person?.id, personId);
+  group.wrongReferencesRemoved = !(await ask({ op: "face_people", face_id: Number(PeopleState.idOf(wrong)) })).person &&
+    !(await ask({ op: "face_people", face_id: Number(PeopleState.idOf(candidate)) })).person &&
+    group.change.reference_source_count < group.change.reference_source_count_before && (await proposals()).reference_count < contaminatedGroup.reference_count;
+  group.otherPersonPreserved = PeopleState.samePerson((await ask({ op: "face_people", face_id: Number(PeopleState.idOf(other)) })).person?.id, second.id);
+  check(group.unloadedChanged && group.correctFaceRetained && group.wrongReferencesRemoved && group.otherPersonPreserved, "Bulk correction must change all pages and retain the correct group-photo face and other people");
+  $("people-undo").querySelector("button").click(); await people.mutationTask; await allPages();
+  group.undoRestored = (await proposals()).reference_source_count === contaminatedGroup.reference_source_count &&
+    PeopleState.samePerson((await ask({ op: "face_people", face_id: Number(PeopleState.idOf(candidate)) })).person?.id, personId);
+  check(group.undoRestored, "One undo must restore the entire bulk correction and its references");
+  await openGroup();
+  while (people.exclusion.reply.has_more) { $("people-exclusion-more").click(); await people.exclusion.task; }
+  group.uniqueFiles = people.exclusion.hits.length === group.files && new Set(people.exclusion.hits.map(PeopleState.fileKey)).size === group.files;
+  $("people-exclusion-close").click(); check(group.uniqueFiles, "Review pagination must load every file without duplicates");
+  await labelFace(personId, candidate, "remove"); group.passed = true;
   // Remove only the deliberately inserted test decisions; all genuine pre-existing labels remain as before.
   await labelFace(personId, wrong, "remove"); await labelFace(second.id, other, "remove");
   report.cleaned = !contains(await proposals()); check(report.cleaned, "The temporary wrong reference was not removed after the smoke");

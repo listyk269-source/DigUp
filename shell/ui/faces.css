@@ -56,7 +56,7 @@ html.faces-mode, html.faces-mode body { background: #202429; }
 .face-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; }
 .face-choice { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 5px; gap: 5px; min-width: 0; color: #e1e7ee; background: #2b3036; border: 1px solid #505962; border-radius: 8px; cursor: pointer; }
 .face-choice[aria-pressed="true"] { border-color: #f0a048; background: #483827; color: #f5d8af; }
-.face-crop { display: block; width: 62px; height: 62px; flex: none; background-color: #181c21; background-repeat: no-repeat; border-radius: 5px; }
+.face-crop { display: block; width: 62px; height: 62px; aspect-ratio: 1; flex: none; overflow: hidden; background-color: #181c21; background-repeat: no-repeat; border-radius: 5px; }
 .face-choice span { font-size: 11px; font-variant-numeric: tabular-nums; }
 .face-source > .quiet-button { margin-top: 10px; }
 .face-results { min-width: 0; min-height: 0; display: flex; flex-direction: column; }

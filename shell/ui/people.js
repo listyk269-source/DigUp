@@ -45,6 +45,7 @@ class PeopleView {
     this.el("person-rename").onsubmit = (event) => { event.preventDefault(); this.mutationTask = this.rename(); };
     for (const id of ["people-undo", "face-label-undo"]) this.el(id).querySelector("button").onclick = () => { this.mutationTask = this.undo(); };
     const viewer = this.el("person-viewer");
+    this.exclusion = new PeopleExclusionReview(this);
     this.el("person-viewer-close").onclick = () => this.closeViewer();
     this.el("person-viewer-previous").onclick = () => { this.viewerTask = this.moveViewer(-1); };
     this.el("person-viewer-next").onclick = () => { this.viewerTask = this.moveViewer(1); };
@@ -73,7 +74,7 @@ class PeopleView {
     if (cached) this.refreshDirectory(); // Show cached names immediately, then validate current counts in the background.
     await page;
   }
-  close() { this.closeViewer(); this.visible = false; this.page.generation++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
+  close() { this.exclusion?.close(); this.closeViewer(); this.visible = false; this.page.generation++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
   resetRows() { this.thumbnailObserver?.disconnect(); this.thumbnailLoads?.clear(); this.thumbnails?.reset(); this.rows?.clear(); this.el("person-faces").replaceChildren(); }
   maybeLoadMore() {
     const list = this.el("person-faces");
@@ -89,6 +90,7 @@ class PeopleView {
     return this.startupTask;
   }
   invalidateDirectory() {
+    if (this.exclusion?.active) this.exclusion.close();
     ++this.directoryGeneration; this.directoryLoaded = false; this.directoryTask = null; this.directoryBusy = false; this.people = [];
   }
   refreshDirectory({ force = true } = {}) {
@@ -345,7 +347,8 @@ class PeopleView {
     this.el("person-viewer-message").textContent = this.mutationError ? t(this.mutationError) : this.pageError ? t(this.pageError) : this.mutationBusy ? t("Updating person references…") : this.viewerBusy ? t("Loading labelled files…") : t("Use left and right arrows · Esc to close");
     this.el("person-viewer-previous").disabled = this.viewerBusy || this.mutationBusy || this.viewerIndex <= 0;
     this.el("person-viewer-next").disabled = this.viewerBusy || this.mutationBusy || this.viewerIndex >= this.page.hits.length - 1 && (!this.page.hasMore || this.expired || !!this.pageError);
-    for (const id of ["person-viewer-open", "person-viewer-similar", "person-viewer-faces", "person-viewer-exclude"]) this.el(id).disabled = !!this.mutationBusy || !!this.viewerBusy;
+    for (const id of ["person-viewer-open", "person-viewer-similar", "person-viewer-faces", "person-viewer-exclude", "person-viewer-exclude-similar"]) this.el(id).disabled = !!this.mutationBusy || !!this.viewerBusy;
+    this.el("person-viewer-exclude-similar").onclick = () => { this.exclusion.task = this.exclusion.open(hit); };
     this.el("person-viewer-exclude").setAttribute("aria-label", t("Exclude {file} from {person}", { file: this.nameOf(hit.path), person: this.person()?.name || "" }));
     this.el("person-viewer-exclude").onclick = () => { this.mutationTask = this.excludeFile(hit); };
     this.el("person-viewer-open").onclick = () => this.invoke("open_path", { path: hit.path }).catch(() => { this.el("person-viewer-message").textContent = t("Could not open file. Check that it is available."); });
@@ -374,7 +377,12 @@ class PeopleView {
     if (this.page.mode === "stale") return;
     const actions = this.text("div", "graph-actions"), open = this.text("button", "quiet-button", t("Open")), faces = this.text("button", "quiet-button", t("Find faces"));
     open.type = faces.type = "button"; open.onclick = () => this.invoke("open_path", { path: hit.path }).catch((error) => { this.mutationError = String(error); this.renderStatus(); });
-    faces.onclick = () => this.onFace(hit); actions.append(open, faces); host.append(actions);
+    faces.onclick = () => this.onFace(hit); actions.append(open, faces);
+    if (["assigned", "suggestions"].includes(this.page.mode)) {
+      const similar = this.text("button", "quiet-button", t("Exclude similar faces…")); similar.type = "button";
+      similar.disabled = !!this.mutationBusy; similar.onclick = () => { this.exclusion.task = this.exclusion.open(hit); }; actions.append(similar);
+    }
+    host.append(actions);
   }
   async create(input, fromFaces = false) {
     const name = input.value.trim(); if (!name || this.mutationBusy) return;

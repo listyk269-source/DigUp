@@ -3,6 +3,16 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const faces = require("../shell/ui/face-state.js");
 const box = [.1, .2, .3, .4];
+test("face portraits use one pixel scale on landscape, portrait, square and edge-clipped images", () => {
+  for (const [width, height] of [[1600, 900], [900, 1600], [1000, 1000]]) {
+    for (const bbox of [box, [0, 0, .1, .2], [.8, .8, .2, .2], [0, 0, 1, 1]]) {
+      const crop = faces.portrait({ bbox }, width, height), [sx, sy] = crop.size.split(" ").map(parseFloat);
+      assert.ok(Math.abs(sx / width - sy / height) < 1e-10, "no independent X/Y distortion");
+      assert.ok(crop.left >= 0 && crop.top >= 0 && crop.left + crop.side <= width && crop.top + crop.side <= height);
+    }
+  }
+  for (const size of [[0, 100], [NaN, 100], [100, Infinity]]) assert.equal(faces.portrait({ bbox: box }, ...size), null);
+});
 test("automatic preference sends only explicit face_auto with the selected device, never face_start", async () => {
   const { readFileSync } = require("node:fs"), vm = require("node:vm"), path = require("node:path");
   const context = { module: { exports: {} } };

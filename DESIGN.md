@@ -235,6 +235,12 @@ components:
 
 ## Overview
 
+People's **Exclude similar faces…** review keeps this visual world in a bounded desktop dialog. The user
+chooses a real face, adjusts the cosine threshold, reviews one portrait per matching file, then applies
+one undoable correction. The complete selected-folder scope is explicit; album date filters do not narrow
+the action. Square portraits use one pixel scale with a small margin, never independent X/Y stretching.
+The review is 920px at most, scrolls within the viewport and wraps its footer at compact desktop widths.
+
 **Creative North Star: "Graphite Media Workspace"**
 
 DigUp's Windows/Linux Tauri HTML shell uses a shared dark graphite world for Search, Graph, People, and contextual face investigation. Restrained warm amber identifies current actions and selections; quiet native sans text, fine separators, and spacious working areas keep local files and photographs primary. This records the user-approved expansion of the earlier graph system. The separate native macOS application has its own implementation.

@@ -129,7 +129,19 @@
     </section>
     <dialog id="person-viewer" class="people-viewer" aria-labelledby="person-viewer-title">
       <header class="people-viewer-header"><div><h2 id="person-viewer-title"></h2><p id="person-viewer-count" role="status" aria-live="polite"></p></div><button id="person-viewer-open" class="quiet-button" type="button" data-i18n="Open">Open</button><button id="person-viewer-similar" class="quiet-button" type="button" data-i18n="Find similar">Find similar</button><button id="person-viewer-faces" class="quiet-button" type="button" data-i18n="Find faces">Find faces</button><button id="person-viewer-close" class="quiet-button" type="button" data-i18n="Close">Close</button></header>
-      <div class="people-viewer-stage"><button id="person-viewer-previous" class="quiet-button" type="button" aria-label="Previous file" data-i18n-aria-label="Previous file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button><div id="person-viewer-media"></div><button id="person-viewer-next" class="quiet-button" type="button" aria-label="Next file" data-i18n-aria-label="Next file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button></div><footer class="people-viewer-footer"><p id="person-viewer-message" role="status" aria-live="polite"></p><button id="person-viewer-exclude" class="quiet-button" type="button" data-i18n="Exclude from this album">Exclude from this album</button></footer>
+      <div class="people-viewer-stage"><button id="person-viewer-previous" class="quiet-button" type="button" aria-label="Previous file" data-i18n-aria-label="Previous file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button><div id="person-viewer-media"></div><button id="person-viewer-next" class="quiet-button" type="button" aria-label="Next file" data-i18n-aria-label="Next file"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button></div><footer class="people-viewer-footer"><p id="person-viewer-message" role="status" aria-live="polite"></p><button id="person-viewer-exclude-similar" class="quiet-button" type="button" data-i18n="Exclude similar faces…">Exclude similar faces…</button><button id="person-viewer-exclude" class="quiet-button" type="button" data-i18n="Exclude from this album">Exclude from this album</button></footer>
+    </dialog>
+    <dialog id="people-exclusion" class="people-exclusion" aria-labelledby="people-exclusion-title" aria-describedby="people-exclusion-note">
+      <header><h2 id="people-exclusion-title"></h2><button id="people-exclusion-close" class="quiet-button" type="button" data-i18n="Close">Close</button></header>
+      <div class="people-exclusion-body">
+        <p id="people-exclusion-note" data-i18n="Review direct matches across all selected folders, regardless of album date filters. Other people's labels and original files stay unchanged. You can undo this action.">Review direct matches across all selected folders, regardless of album date filters. Other people's labels and original files stay unchanged. You can undo this action.</p>
+        <div id="people-exclusion-faces" class="people-exclusion-faces" role="group" aria-label="Choose a face" data-i18n-aria-label="Choose a face"></div>
+        <button id="people-exclusion-faces-more" class="quiet-button" type="button" data-i18n="Show more faces" hidden>Show more faces</button>
+        <div class="people-exclusion-tools"><label for="people-exclusion-minimum"><span data-i18n="Minimum face cosine">Minimum face cosine</span><select id="people-exclusion-minimum"><option value="0.363">0.363</option><option value="0.5">0.500</option><option value="0.65">0.650</option><option value="0.8">0.800</option><option value="0.95">0.950</option></select></label><button id="people-exclusion-refresh" class="quiet-button" type="button" data-i18n="Refresh matches">Refresh matches</button></div>
+        <p id="people-exclusion-message" role="status" aria-live="polite"></p>
+        <div id="people-exclusion-results" class="people-exclusion-results"></div><button id="people-exclusion-more" class="quiet-button" type="button" data-i18n="Show more" hidden>Show more</button>
+      </div>
+      <footer><p data-i18n="Only matching face observations are excluded. A group photo stays in the album if it still contains this person.">Only matching face observations are excluded. A group photo stays in the album if it still contains this person.</p><button id="people-exclusion-apply" class="quiet-button" type="button" disabled></button></footer>
     </dialog>
     <section id="similar-context" class="similar-context" hidden><span id="similar-title"></span><button id="similar-back" class="quiet-button" type="button" data-i18n="Back to results">Back to results</button></section>
     <section id="body" class="body" hidden>
@@ -153,6 +165,7 @@
   <script src="faces.js"></script>
   <script src="people-state.js"></script>
   <script src="year-period.js"></script>
+  <script src="people-exclusion.js"></script>
   <script src="people.js"></script>
   <script src="panel.js"></script>
 </body>
