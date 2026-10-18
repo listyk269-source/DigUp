@@ -149,6 +149,29 @@ out-of-scope observations do not inherit a confirmed label or remain in current 
 
 ## Storage and changes to files
 
+### Exclude all similar faces
+
+In a gallery photograph/video, choose **Exclude similar faces…** (also available in the face-annotation
+preview). Pick the incorrect face explicitly; group photos can contain several people. Review direct
+matches to that observation at the chosen cosine threshold, then apply **Exclude matches in N files**.
+The review groups repeated video frames by file and pages through every match. The action covers the
+complete current face index in the selected folders, including unloaded results and dates outside the
+current album filter. Previously rejected observations are omitted from the review.
+
+Only matching observations are rejected for the selected person. Another correctly labelled face in
+the same photograph keeps that photograph in the album. Other people's assignments, original media,
+semantic vectors and raw SFace descriptors remain unchanged. The person's confirmed reference pool
+and proposals rebuild from the remaining assignments. The existing **Undo** restores the entire group
+as one action, including its previous assignments and exclusions. A stale index/People revision requires
+a fresh review. This is a direct comparison to one face, not transitive clustering or neural retraining.
+Exclusions still bind the current file/model observations; they are not a permanent ban on a path or
+proof that all future similar faces belong to the same identity. Small or blurred faces can remain
+uncertain: raise the threshold and inspect the review before applying.
+
+All face selectors and People thumbnails use a square crop with proportional pixel scaling, a small
+margin and an oriented source preview up to 1600 pixels, shared through the native versioned cache.
+This avoids stretching a rectangular face into a square. It cannot recover detail absent from the source.
+
 People uses an additive migration of `face-index.sqlite`; the semantic index and existing face
 observations are preserved. Labels and their revision/history are local to this index and OS account.
 They are not additionally encrypted. Back up the sidecar, its SQLite companions and `face-auto.json`

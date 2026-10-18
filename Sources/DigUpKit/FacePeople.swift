@@ -272,6 +272,38 @@ public final class FacePeopleStore {
         }
     }
 
+    /// Direct matches to one chosen observation, never a transitive cluster or an average of a contaminated album.
+    /// The same enumeration is used by the review and by the atomic, undoable exclusion across unloaded pages.
+    public func forEachSimilar(to seed: IndexedFace, minimum: Double, accepts: (FaceFileVersion) -> Bool,
+                               checkScope: () throws -> Void = {},
+                               _ consume: (IndexedFace, Double) throws -> Void) throws {
+        guard minimum.isFinite, (-1...1).contains(minimum), seed.model == FaceModels.modelID,
+              accepts(seed.file), let current = try index.observations(model: seed.model, id: seed.face.id).first,
+              FacePersonSnapshot(current).anchor == FacePersonSnapshot(seed).anchor else {
+            throw Failure("This face changed or is outside the selected folders. Choose it again.")
+        }
+        try checkScope()
+        try index.forEach(model: seed.model) { observation in
+            try checkScope()
+            guard accepts(observation.file),
+                  let score = FaceIndexStore.cosine(seed.face.embedding, observation.face.embedding),
+                  observation.face.id == seed.face.id || score >= minimum else { return }
+            try consume(observation, score)
+        }
+        try checkScope()
+    }
+
+    public func excludeSimilar(person: String, seed: IndexedFace, minimum: Double, expectedIndex: Int64,
+                               expectedPeople: Int64, accepts: @escaping (FaceFileVersion) -> Bool,
+                               checkScope: () throws -> Void = {}) throws -> FacePeopleChange {
+        try label(person: person, action: "reject", expectedIndex: expectedIndex, expectedPeople: expectedPeople,
+                  accepts: accepts, checkScope: checkScope) { [self] consume in
+            try forEachSimilar(to: seed, minimum: minimum, accepts: accepts, checkScope: checkScope) { face, _ in
+                try consume(face)
+            }
+        }
+    }
+
     public func undo(_ operation: String, expectedPeople: Int64? = nil,
                      accepts: (FacePersonSnapshot) -> Bool = { _ in true }, checkScope: () throws -> Void = {}) throws -> FacePeopleChange {
         try db.transaction {

@@ -117,6 +117,7 @@ final class FacePeopleService {
             return try changeFields(store.undo(operation, expectedPeople: number(request, "people_revision"),
                                               accepts: { [self] in acceptsScope($0.file) }, checkScope: checkScope))
         case "face_label": return try label(request)
+        case "person_exclusion_preview", "person_exclude_similar": return try exclusion(op, request)
         case "person_exclude_file":
             let person = try personID(request)
             guard let faceID = number(request, "face_id"), faceID > 0, let expectedIndex = number(request, "index_revision"), expectedIndex >= 0,
@@ -158,6 +159,50 @@ final class FacePeopleService {
         case "person_faces": return try faces(request)
         default: throw CLIError("Unknown People operation.")
         }
+    }
+    private func exclusion(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
+        let person = try personID(request)
+        guard let faceID = number(request, "face_id"), faceID > 0,
+              let expectedIndex = number(request, "index_revision"), expectedIndex == indexRevision,
+              let expectedPeople = number(request, "people_revision"), expectedPeople == peopleRevision else { return expired() }
+        guard let raw = request["minimum_cosine"] as? NSNumber, String(cString: raw.objCType) != "c",
+              raw.doubleValue.isFinite, (-1...1).contains(raw.doubleValue) else { throw CLIError("Invalid face similarity threshold.") }
+        let minimum = raw.doubleValue, seed = try current(faceID)
+        let annotations = try store.annotations(person: person)
+        let rejected = Set(annotations.filter { $0.state == "rejected" }.map(\.anchor))
+        var files: [Data: (face: IndexedFace, score: Double, count: Int)] = [:], observations = 0
+        try store.forEachSimilar(to: seed, minimum: minimum, accepts: { [self] file in acceptsCurrent(file) }, checkScope: checkScope) { face, score in
+            guard !rejected.contains(FacePersonSnapshot(face).anchor) else { return }
+            observations += 1
+            let key = Data(face.file.path.utf8), previous = files[key]
+            let best = previous == nil || score > previous!.score || (score == previous!.score && face.face.id < previous!.face.face.id)
+            files[key] = (best ? face : previous!.face, best ? score : previous!.score, (previous?.count ?? 0) + 1)
+        }
+        try assertStable()
+        if op == "person_exclude_similar" {
+            let before = try referenceExamples(annotations)
+            let change = try store.excludeSimilar(person: person, seed: seed, minimum: minimum,
+                expectedIndex: expectedIndex, expectedPeople: expectedPeople, accepts: acceptsCurrent, checkScope: checkScope)
+            let after = try referenceExamples(store.annotations(person: person))
+            var result = try changeFields(change)
+            result["matched_file_count"] = files.count; result["matched_observation_count"] = observations
+            result["reference_count_before"] = before.count; result["reference_count"] = after.count
+            result["reference_source_count_before"] = before.sourceCount; result["reference_source_count"] = after.sourceCount
+            return result
+        }
+        let ranked = files.values.sorted { $0.score == $1.score ? $0.face.face.id < $1.face.face.id : $0.score > $1.score }
+        let offset = max(0, number(request, "offset") ?? 0), limit = min(100, max(1, number(request, "limit") ?? 40))
+        let start = min(Int(clamping: offset), ranked.count), next = min(ranked.count, start + Int(limit))
+        let names = Dictionary(uniqueKeysWithValues: try store.people().map { ($0.id, $0) })
+        let hits = try ranked[start..<next].map { item -> [String: Any] in
+            var fields = try FaceService.labeledFields(item.face, store: store, people: names)
+            fields["cosine"] = item.score; fields["observation_count"] = item.count
+            return fields
+        }
+        try assertStable()
+        return ["ok": true, "hits": hits, "total": ranked.count, "observation_count": observations,
+                "next_offset": next, "has_more": next < ranked.count, "minimum_cosine": minimum,
+                "index_revision": indexRevision, "people_revision": peopleRevision]
     }
     private func label(_ request: [String: Any]) throws -> [String: Any] {
         let person = try personID(request)

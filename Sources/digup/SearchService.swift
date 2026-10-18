@@ -128,7 +128,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                     lock.withLock { stopEncoder() }
                     return 0
                 }
-                if ["face_file", "face_search", "people_list", "person_save", "person_faces", "face_label", "person_exclude_file", "people_undo", "face_people", "people_suggestions"].contains(op) {
+                if ["face_file", "face_search", "people_list", "person_save", "person_faces", "face_label", "person_exclude_file", "person_exclusion_preview", "person_exclude_similar", "people_undo", "face_people", "people_suggestions"].contains(op) {
                     let request = UncheckedSendable(request)
                     // A semantic face ranking can take time. It must not hold a saved person's album hostage.
                     let ranking = op == "face_search" || op == "face_file" || (op == "person_faces" && request.value["mode"] as? String == "suggestions")
