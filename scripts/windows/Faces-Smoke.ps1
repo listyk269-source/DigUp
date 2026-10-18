@@ -120,6 +120,7 @@ foreach ($pass in $passes) {
         $peopleReport = $ui.features.people
         if (!$peopleReport -or !$peopleReport.passed -or !$peopleReport.excludedFile.passed) { throw "Actual People workflow or file exclusion failed ($pass)." }
         if (!$peopleReport.excludedFile.similarGroup.passed) { throw "Actual similar-face exclusion, review or undo failed ($pass)." }
+        if (!$peopleReport.excludedFile.directoryCovers.passed -or !$peopleReport.excludedFile.similarGroup.ruleSaved -or !$peopleReport.excludedFile.similarGroup.ruleUndoRestored) { throw 'Directory portraits or persistent exclusion-rule UI failed.' }
         if (!$ui.features.peopleStartup.ready -or ($pass -ne 'first' -and !@($ui.features.peopleStartup.people | Where-Object name -eq 'Человек FACE742').Count)) { throw 'People metadata was not preloaded at program startup.' }
         if ($peopleReport.phase -ne $pass) { throw "People persistence phase mismatch ($pass)." }
         $album=$peopleReport.albumAccess
@@ -147,7 +148,7 @@ foreach ($pass in $passes) {
             throw 'The native suggestion capture must show both genuine new proposals before decisions.'
         }
         if ($pass -eq 'verify' -and !$peopleReport.persistenceVerified) { throw 'Accepted/rejected labels did not survive restart.' }
-        $peopleCaptures=@('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-exclude-viewer','people-exclude-compact','people-exclude-similar','people-exclude-similar-compact','people-gallery-filtered','people-gallery-videos','people-period','people-period-compact','people-gallery-similar','workspace-settings','workspace-search','workspace-graph')
+        $peopleCaptures=@('people-assigned','people-suggestions','people-rename','people-gallery','people-gallery-viewer','people-exclude-viewer','people-exclude-compact','people-exclude-similar','people-exclude-similar-compact','people-directory-covers','people-exclusion-rules','people-gallery-filtered','people-gallery-videos','people-period','people-period-compact','people-gallery-similar','workspace-settings','workspace-search','workspace-graph')
         if($pass -eq 'first') { $peopleCaptures += 'people-period-hero' }
         foreach ($phase in $peopleCaptures) {
             $capture = Join-Path $index "capture-$phase.png"

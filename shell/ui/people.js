@@ -8,13 +8,16 @@ class PeopleView {
     try { this.galleryOptions = PeopleState.galleryOptions(JSON.parse(localStorage.getItem("digup.people.gallery"))); }
     catch { this.galleryOptions = PeopleState.galleryOptions(); }
     this.rows = new Map(); this.thumbnails = new PeopleState.ThumbnailQueue(2); this.thumbnailLoads = new Map();
+    this.directoryRows = new Map(); this.directoryLoads = new Map(); this.directoryThumbnails = new PeopleState.ThumbnailQueue(2);
     this.thumbnailObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) if (entry.isIntersecting) {
         const load = this.thumbnailLoads.get(entry.target); this.thumbnailLoads.delete(entry.target); this.thumbnailObserver.unobserve(entry.target);
         if (load) { entry.target.dataset.requested = "true"; this.thumbnails.add(load).catch(() => {}); }
       }
     }, { root: this.el("person-faces"), rootMargin: "120px" });
-    this.el("person-faces").addEventListener("scroll", () => this.maybeLoadMore(), { passive: true });
+    this.el("person-faces").addEventListener("scroll", () => { this.flushVisibleThumbnails(); this.maybeLoadMore(); }, { passive: true });
+    this.el("people-list").addEventListener("scroll", () => this.flushVisibleThumbnails(), { passive: true });
+    window.addEventListener("resize", () => this.flushVisibleThumbnails());
     faceSearch.people = this;
     this.el("people-back").onclick = () => this.close();
     this.el("people-refresh").onclick = () => { this.refreshTask = this.refresh(); };
@@ -46,6 +49,7 @@ class PeopleView {
     for (const id of ["people-undo", "face-label-undo"]) this.el(id).querySelector("button").onclick = () => { this.mutationTask = this.undo(); };
     const viewer = this.el("person-viewer");
     this.exclusion = new PeopleExclusionReview(this);
+    this.rules = []; this.rulesGeneration = 0;
     this.el("person-viewer-close").onclick = () => this.closeViewer();
     this.el("person-viewer-previous").onclick = () => { this.viewerTask = this.moveViewer(-1); };
     this.el("person-viewer-next").onclick = () => { this.viewerTask = this.moveViewer(1); };
@@ -74,7 +78,7 @@ class PeopleView {
     if (cached) this.refreshDirectory(); // Show cached names immediately, then validate current counts in the background.
     await page;
   }
-  close() { this.exclusion?.close(); this.closeViewer(); this.visible = false; this.page.generation++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
+  close() { this.exclusion?.close(); this.closeViewer(); this.visible = false; this.rulesGeneration++; this.page.generation++; this.stopPreview(); this.resetRows(); this.onVisibility(false); }
   resetRows() { this.thumbnailObserver?.disconnect(); this.thumbnailLoads?.clear(); this.thumbnails?.reset(); this.rows?.clear(); this.el("person-faces").replaceChildren(); }
   maybeLoadMore() {
     const list = this.el("person-faces");
@@ -92,6 +96,8 @@ class PeopleView {
   invalidateDirectory() {
     if (this.exclusion?.active) this.exclusion.close();
     ++this.directoryGeneration; this.directoryLoaded = false; this.directoryTask = null; this.directoryBusy = false; this.people = [];
+    this.directoryLoads?.clear(); this.directoryThumbnails?.reset(); this.directoryRows?.clear();
+    this.el?.("people-list")?.replaceChildren();
   }
   refreshDirectory({ force = true } = {}) {
     if (!force && this.directoryTask) return this.directoryTask;
@@ -132,7 +138,9 @@ class PeopleView {
     this.resetRows(); this.el("person-faces").scrollTop = 0;
     this.page.open(id, mode, this.galleryOptions); this.pageBusy = false; this.selectedFaces.clear(); this.selectedPreview = null; this.previewKey = null; this.pageError = null; this.expired = false;
     this.previewTouched = false; this.backgroundNotice = false; this.backgroundProtected = false;
-    this.el("person-rename").hidden = true; this.render(); return this.loadPage();
+    this.rulesGeneration++; this.rules = []; this.rulesError = null; this.rulesBusy = false;
+    this.el("person-rename").hidden = true; this.render(); await this.loadPage();
+    if (this.visible && this.page.personId === id && mode === "rejected") await this.loadRules();
   }
   changeGallery(change) {
     this.periodError = null;
@@ -175,23 +183,53 @@ class PeopleView {
     for (const form of ["people-create", "face-person-create", "person-rename"]) for (const control of this.el(form).querySelectorAll("input,button")) control.disabled = !!this.mutationBusy;
   }
   renderDirectory() {
-    const list = this.el("people-list"), query = this.el("people-filter").value.normalize("NFKC").toLocaleLowerCase(); list.replaceChildren();
+    const list = this.el("people-list"), query = this.el("people-filter").value.normalize("NFKC").toLocaleLowerCase(), retained = new Set();
+    list.querySelectorAll(".people-directory-empty").forEach((node) => node.remove());
     const people = this.people.filter((person) => person.name.normalize("NFKC").toLocaleLowerCase().includes(query));
     for (const person of people) {
-      const button = this.text("button", ""); button.type = "button"; button.dataset.personId = String(person.id); button.setAttribute("aria-pressed", String(PeopleState.samePerson(person.id, this.page.personId)));
-      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22V19A8 8 0 0 1 20 19V22"/></svg>';
-      const cover = PeopleState.samePerson(person.id, this.page.personId) && ["gallery", "assigned"].includes(this.page.mode) ? this.page.hits[0] : null;
-      if (cover) button.replaceChildren(this.faceSearch.crop(cover));
-      const label = this.text("span", ""); label.append(this.text("strong", "", person.name), this.text("small", "", t("{files} files · {count} assigned faces", { files: person.assigned_file_count || 0, count: person.assigned_count || 0 })));
+      const id = String(person.id); retained.add(id);
+      const cover = person.cover, coverKey = cover ? JSON.stringify([cover.path, cover.modified, cover.size, cover.face_id, cover.loc, cover.bbox]) : null;
+      let entry = this.directoryRows.get(id);
+      if (!entry) {
+        const button = this.text("button", ""); button.type = "button"; button.dataset.personId = id;
+        const image = this.text("span", "people-person-image"), label = this.text("span", "people-person-label"); button.append(image, label);
+        button.onclick = () => { this.pageTask = this.selectPerson(person.id); }; entry = { button, image, label, coverKey: undefined }; this.directoryRows.set(id, entry);
+      }
+      const { button, image, label } = entry; button.setAttribute("aria-pressed", String(PeopleState.samePerson(person.id, this.page.personId)));
+      if (entry.coverKey !== coverKey) {
+        image.querySelectorAll(".face-crop").forEach((crop) => this.directoryLoads.delete(crop));
+        image.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 22V19A8 8 0 0 1 20 19V22"/></svg>';
+        if (cover) image.replaceChildren(this.faceSearch.crop(cover, { defer: (load, crop) => this.directoryLoads.set(crop, load) }));
+        entry.coverKey = coverKey;
+      }
+      label.replaceChildren(this.text("strong", "", person.name), this.text("small", "", t("{files} files · {count} assigned faces", { files: person.assigned_file_count || 0, count: person.assigned_count || 0 })));
       const summary = this.auto?.summary, pending = summary?.state === "ready" ? summary.people?.find((item) => PeopleState.samePerson(item.person_id, person.id))?.pending_count : null;
       if (Number.isFinite(pending) && pending > 0) label.append(this.text("small", "people-person-pending", t("{count} pending observations", { count: pending })));
-      button.append(label); button.onclick = () => { this.pageTask = this.selectPerson(person.id); }; list.append(button);
+      if (!button.isConnected) list.append(button);
     }
+    for (const [id, entry] of this.directoryRows) if (!retained.has(id)) { entry.image.querySelectorAll(".face-crop").forEach((crop) => this.directoryLoads.delete(crop)); entry.button.remove(); this.directoryRows.delete(id); }
+    let cursor = list.firstElementChild;
+    for (const person of people) { const node = this.directoryRows.get(String(person.id)).button; if (node !== cursor) list.insertBefore(node, cursor); cursor = node.nextElementSibling; }
     list.setAttribute("aria-busy", String(!!this.directoryBusy));
-    if (!people.length) list.append(this.text("p", "", t(this.directoryBusy && !this.directoryLoaded ? "Loading people…" : query ? "No matching person labels" : "Create a person label, then assign confirmed face observations.")));
+    if (!people.length) list.append(this.text("p", "people-directory-empty", t(this.directoryBusy && !this.directoryLoaded ? "Loading people…" : query ? "No matching person labels" : "Create a person label, then assign confirmed face observations.")));
+    requestAnimationFrame(() => this.flushVisibleThumbnails());
+  }
+  flushVisibleThumbnails() {
+    if (!this.visible) return;
+    for (const [loads, queue, root] of [[this.directoryLoads, this.directoryThumbnails, this.el("people-list")], [this.thumbnailLoads, this.thumbnails, this.el("person-faces")]]) {
+      const bounds = root.getBoundingClientRect(); if (bounds.height <= 0 || bounds.width <= 0) continue;
+      for (const [node, load] of loads) {
+        if (!node.isConnected) { loads.delete(node); continue; }
+        const rect = node.getBoundingClientRect();
+        if (rect.height > 0 && rect.bottom > bounds.top - 120 && rect.top < bounds.bottom + 120) {
+          loads.delete(node); this.thumbnailObserver.unobserve(node); node.dataset.requested = "true"; queue.add(load).catch(() => {});
+        }
+      }
+    }
   }
   renderPage() {
     const person = this.person(), mode = this.page.mode;
+    this.renderRules();
     if (this.rowsLanguage !== I18n.language) { this.resetRows(); this.rowsLanguage = I18n.language; }
     this.el("person-title").textContent = person?.name || t("Choose a person");
     this.el("person-album-count").textContent = person ? t("{count} files", { count: person.assigned_file_count || 0 }) : "";
@@ -306,7 +344,7 @@ class PeopleView {
     for (const [key, entry] of this.rows) if (!retained.has(key)) { entry.row.remove(); this.rows.delete(key); }
     if (!this.page.hits.length) list.append(this.text("p", "people-gallery-empty", this.pageBusy ? t("Loading labelled files…") : message.textContent));
     this.el("person-more").hidden = !this.page.hasMore; this.el("person-more").disabled = !!this.pageBusy || this.expired;
-    this.renderViewer(); requestAnimationFrame(() => this.maybeLoadMore());
+    this.renderViewer(); requestAnimationFrame(() => { this.flushVisibleThumbnails(); this.maybeLoadMore(); });
   }
   openViewer(key, tile) {
     this.viewerIndex = this.page.hits.findIndex((hit) => PeopleState.fileKey(hit) === key);
@@ -378,11 +416,40 @@ class PeopleView {
     const actions = this.text("div", "graph-actions"), open = this.text("button", "quiet-button", t("Open")), faces = this.text("button", "quiet-button", t("Find faces"));
     open.type = faces.type = "button"; open.onclick = () => this.invoke("open_path", { path: hit.path }).catch((error) => { this.mutationError = String(error); this.renderStatus(); });
     faces.onclick = () => this.onFace(hit); actions.append(open, faces);
-    if (["assigned", "suggestions"].includes(this.page.mode)) {
-      const similar = this.text("button", "quiet-button", t("Exclude similar faces…")); similar.type = "button";
+    if (["assigned", "suggestions", "rejected"].includes(this.page.mode)) {
+      const similar = this.text("button", "quiet-button", t(this.page.mode === "rejected" ? "Do not suggest similar faces again" : "Exclude similar faces…")); similar.type = "button";
       similar.disabled = !!this.mutationBusy; similar.onclick = () => { this.exclusion.task = this.exclusion.open(hit); }; actions.append(similar);
     }
     host.append(actions);
+  }
+  async loadRules() {
+    const generation = ++this.rulesGeneration, person = this.page.personId; this.rulesBusy = true; this.rulesError = null; this.renderRules();
+    try {
+      const reply = await this.ask({ op: "person_exclusion_rules", person_id: person });
+      if (generation !== this.rulesGeneration || !this.visible || !PeopleState.samePerson(person, this.page.personId)) return;
+      if (reply.ok === false) throw new Error(reply.error);
+      this.rules = reply.rules || []; this.peopleRevision = reply.people_revision;
+    } catch (error) { if (generation === this.rulesGeneration) this.rulesError = String(error.message || error); }
+    finally { if (generation === this.rulesGeneration) { this.rulesBusy = false; this.renderRules(); } }
+  }
+  renderRules() {
+    const host = this.el("person-rules"); host.hidden = this.page.mode !== "rejected";
+    if (host.hidden) return;
+    this.el("person-rules-title").textContent = t("Saved face exclusions: {count}", { count: this.rules?.length || 0 });
+    const list = this.el("person-rules-list"); list.replaceChildren();
+    if (this.rulesBusy || this.rulesError) {
+      const note = this.text("p", this.rulesError ? "face-error" : "", t(this.rulesError || "Loading exclusion rules…")); list.append(note); return;
+    }
+    for (const rule of this.rules || []) {
+      const row = this.text("div", "people-rule"), description = this.text("span", "");
+      if (rule.source) row.append(this.faceSearch.crop(rule.source));
+      description.append(this.text("strong", "", rule.source ? this.nameOf(rule.source.path) : t("Source unavailable. The exclusion still applies.")),
+        this.text("small", "", t("Cosine ≥ {value}", { value: rule.minimum_cosine.toFixed(3) })));
+      const remove = this.text("button", "quiet-button", t("Allow future suggestions")); remove.type = "button"; remove.disabled = !!this.mutationBusy;
+      remove.onclick = () => { this.mutationTask = this.mutate({ op: "person_remove_exclusion_rule", person_id: this.page.personId, rule_id: rule.id, people_revision: this.peopleRevision }, t("Exclusion rule removed. Individual rejections are retained.")); };
+      row.append(description, remove); list.append(row);
+    }
+    if (!this.rules?.length) list.append(this.text("p", "", t("No saved similarity exclusions. Select a rejected face and choose Do not suggest similar faces again.")));
   }
   async create(input, fromFaces = false) {
     const name = input.value.trim(); if (!name || this.mutationBusy) return;

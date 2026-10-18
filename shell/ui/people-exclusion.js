@@ -74,7 +74,7 @@ class PeopleExclusionReview {
     finally { if (generation === this.generation) { this.busy = false; this.render(); } }
   }
   async apply() {
-    if (!this.active || this.busy || this.error || !this.reply?.total || this.people.mutationBusy) return;
+    if (!this.active || this.busy || this.error || !this.reply || (!this.reply.total && this.reply.persistent_rule_exists) || this.people.mutationBusy) return;
     const task = this.people.mutate(this.request("person_exclude_similar"), t("Similar faces excluded. Person references updated."));
     this.render();
     const reply = await task;
@@ -103,8 +103,8 @@ class PeopleExclusionReview {
         (hit.kind === "video" ? ` · ${p.clock(hit.loc ?? 0)}` : "")));
       row.append(p.faceSearch.crop(hit), label); list.append(row);
     }
-    this.el("people-exclusion-apply").disabled = busy || !!this.error || !this.reply?.total;
-    this.el("people-exclusion-apply").textContent = t("Exclude matches in {count} files", { count: this.reply?.total || 0 });
+    this.el("people-exclusion-apply").disabled = busy || !!this.error || !this.reply || (!this.reply.total && this.reply.persistent_rule_exists);
+    this.el("people-exclusion-apply").textContent = this.reply && !this.reply.total ? t(this.reply.persistent_rule_exists ? "Exclusion rule is already saved" : "Do not suggest similar faces again") : t("Exclude and remember in {count} files", { count: this.reply?.total || 0 });
     this.el("people-exclusion-close").disabled = !!p.mutationBusy;
     this.el("people-exclusion-refresh").disabled = busy;
     this.el("people-exclusion-minimum").disabled = busy || !this.seed;

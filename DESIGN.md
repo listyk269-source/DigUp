@@ -241,6 +241,12 @@ one undoable correction. The complete selected-folder scope is explicit; album d
 the action. Square portraits use one pixel scale with a small margin, never independent X/Y stretching.
 The review is 920px at most, scrolls within the viewport and wraps its footer at compact desktop widths.
 
+Persistent negative examples and their thresholds are explicit in that review. The Excluded tab contains
+a compact expandable list of saved rules, with source portraits when available and an action to allow
+future suggestions while retaining individual rejections. Every visible person in the directory has a
+current confirmed cover when available. Cover DOM nodes survive count updates; layout and scroll trigger
+bounded image loading without hover. Placeholder person icons mean there is no current confirmed cover.
+
 **Creative North Star: "Graphite Media Workspace"**
 
 DigUp's Windows/Linux Tauri HTML shell uses a shared dark graphite world for Search, Graph, People, and contextual face investigation. Restrained warm amber identifies current actions and selections; quiet native sans text, fine separators, and spacious working areas keep local files and photographs primary. This records the user-approved expansion of the earlier graph system. The separate native macOS application has its own implementation.

@@ -2,6 +2,18 @@
 // Explicit UI message catalog. Paths, names, queries and document content never pass through DOM translation.
 const I18n = (() => {
   const ru = {
+    "Exclude and remember in {count} files": "Исключить и запомнить в {count} файлах",
+    "Do not suggest similar faces again": "Больше не предлагать похожие лица",
+    "Exclusion rule is already saved": "Правило исключения уже сохранено",
+    "Matching faces are excluded now and from future suggestions for this person. The chosen face and threshold are saved locally. Undo restores the whole action.": "Совпавшие лица исключаются сейчас и из будущих предложений этому человеку. Выбранное лицо и порог сохраняются локально. Отмена восстанавливает всю операцию.",
+    "Saved exclusions filter new suggestions for this person, even when the original file is unavailable. Allowing future suggestions keeps existing individual rejections.": "Сохранённые правила отсекают новые предложения этому человеку, даже если исходный файл недоступен. Разрешение будущих предложений сохраняет отдельные прежние отказы.",
+    "Saved face exclusions: {count}": "Постоянные исключения лиц: {count}",
+    "Loading exclusion rules…": "Загрузка правил исключения…",
+    "Source unavailable. The exclusion still applies.": "Источник недоступен. Исключение продолжает действовать.",
+    "Cosine ≥ {value}": "Сходство ≥ {value}",
+    "Allow future suggestions": "Разрешить будущие предложения",
+    "Exclusion rule removed. Individual rejections are retained.": "Правило удалено. Отдельные отказы сохранены.",
+    "No saved similarity exclusions. Select a rejected face and choose Do not suggest similar faces again.": "Сохранённых правил сходства нет. Выберите исключённое лицо и нажмите «Больше не предлагать похожие лица».",
     "Exclude similar faces…": "Исключить похожие лица…",
     "Exclude similar faces from {person}": "Исключить похожие лица из альбома «{person}»",
     "Review direct matches across all selected folders, regardless of album date filters. Other people's labels and original files stay unchanged. You can undo this action.": "Совпадения ищутся во всех выбранных папках, независимо от периода альбома. Метки других людей и исходные файлы сохраняются. Действие можно отменить.",

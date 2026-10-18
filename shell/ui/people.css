@@ -37,6 +37,17 @@ html.people-mode, html.people-mode body { background: #202429; }
 .people-list button[aria-pressed="true"] { background: #293b47; border-color: #77acc5; }
 .people-list svg { width: 24px; height: 24px; flex: none; stroke: #b4bec8; fill: none; stroke-width: 1.4; }
 .people-list button > span { display: grid; min-width: 0; gap: 4px; }
+.people-list button > .people-person-image { display: grid; place-items: center; width: 48px; height: 48px; flex: none; }
+.people-person-image .face-crop { width: 48px; height: 48px; }
+.people-person-label { flex: 1; }
+.people-rules { flex: none; margin: 0 18px 12px; padding: 10px 12px; background: #252b32; border-radius: 8px; font-size: 12px; }
+.people-rules summary { cursor: pointer; color: #e1e7ee; }
+.people-rules > p { margin-top: 10px; }
+#person-rules-list { max-height: 210px; overflow-y: auto; scrollbar-color: #687785 #252b32; scrollbar-width: thin; }
+.people-rule { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 12px; }
+.people-rule > span:not(.face-crop) { display: grid; gap: 5px; flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.people-rule small { color: #b4bec8; }
+.people-rule .face-crop { width: 48px; height: 48px; }
 .people-list strong { font-size: 13px; overflow-wrap: anywhere; font-weight: 500; }
 .people-list small { color: #b4bec8; font-size: 11px; }
 .people-form { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }

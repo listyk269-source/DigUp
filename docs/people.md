@@ -158,14 +158,28 @@ The review groups repeated video frames by file and pages through every match. T
 complete current face index in the selected folders, including unloaded results and dates outside the
 current album filter. Previously rejected observations are omitted from the review.
 
+The chosen negative descriptor and threshold are also saved locally as a **persistent exclusion rule**
+for this person and model. New photos and sampled video frames meeting that threshold are filtered from
+both suggestion pages and background proposal counts, even if the source file is later deleted or moved.
+This rule is independent of the selected folders of its original source; it applies to the named person
+throughout this local index. It does not alter explicit assignments or other people's suggestions.
+
+In **Excluded → Saved face exclusions**, review these rules or choose **Allow future suggestions**.
+This removes the rule while retaining individual past rejections. Undo restores the rule. Undoing the
+original bulk correction removes both its annotations and its newly created rule in one operation.
+Old versions did not store the selected seed or threshold, so upgrading preserves old individual
+decisions without guessing permanent rules from them. To extend an earlier exclusion to new files,
+select its observation in **Excluded**, choose **Do not suggest similar faces again**, choose the face
+and threshold, and save. This also works when all existing matches were already rejected.
+
 Only matching observations are rejected for the selected person. Another correctly labelled face in
 the same photograph keeps that photograph in the album. Other people's assignments, original media,
 semantic vectors and raw SFace descriptors remain unchanged. The person's confirmed reference pool
 and proposals rebuild from the remaining assignments. The existing **Undo** restores the entire group
 as one action, including its previous assignments and exclusions. A stale index/People revision requires
 a fresh review. This is a direct comparison to one face, not transitive clustering or neural retraining.
-Exclusions still bind the current file/model observations; they are not a permanent ban on a path or
-proof that all future similar faces belong to the same identity. Small or blurred faces can remain
+Individual rejections still bind exact file/model observations; the explicit similarity rule is model-specific,
+not a ban on a filesystem path or proof of identity. Small or blurred faces can remain
 uncertain: raise the threshold and inspect the review before applying.
 
 All face selectors and People thumbnails use a square crop with proportional pixel scaling, a small
@@ -173,6 +187,12 @@ margin and an oriented source preview up to 1600 pixels, shared through the nati
 This avoids stretching a rectangular face into a square. It cannot recover detail absent from the source.
 
 People uses an additive migration of `face-index.sqlite`; the semantic index and existing face
+data remain intact. Face schema 3 adds rule and rule-undo tables; older releases cannot open this sidecar.
+Keep a closed-app backup before upgrading if a later downgrade is needed. Directory covers are read from
+current confirmed observations for every person, retained across metadata updates and loaded when visible,
+without selecting a person or hovering. Whole-photo gallery previews also start after layout and scroll.
+
+The semantic index and existing face
 observations are preserved. Labels and their revision/history are local to this index and OS account.
 They are not additionally encrypted. Back up the sidecar, its SQLite companions and `face-auto.json`
 with DigUp closed. The JSON file stores automatic preferences and failed exact-version attempts;

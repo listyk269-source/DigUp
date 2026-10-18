@@ -75,6 +75,7 @@ foreach($pass in @('live','restart')){
         if($ui.error -or !$ui.features.autoFaces.passed){throw "Actual automatic face workflow failed ($pass): $($ui.error)"}
         $actual=$ui.features.autoFaces
         if($actual.phase -ne $pass -or $actual.manualFaceStarts -ne 0 -or $ui.nativeFaceStartRequests -ne 0){throw 'Automatic smoke must never manually start the face job.'}
+        if(!$actual.negativeExclusion.passed -or !$actual.negativeExclusion.explicitPositiveControl -or !$actual.negativeExclusion.pendingCountMatches -or ($pass -eq 'restart' -and !$actual.negativeExclusion.ruleSurvivedRestart)){throw 'Persistent exclusions must suppress real new photo/video matches and agree with background counts across restart.'}
         if($pass -eq 'live' -and (!$addedLive -or !$addedPaused -or !$actual.workspacesClosedAtStart -or !$actual.startedWithoutWorkspace -or
             !$actual.realWatcherIndexedPhoto -or !$actual.realWatcherIndexedVideo -or !$actual.progressCapture.active -or !$actual.progressCapture.progressVisible -or
             !$actual.pauseRespected -or !$actual.resumedWithoutFaceStart -or

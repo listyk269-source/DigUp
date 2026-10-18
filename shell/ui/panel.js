@@ -1181,6 +1181,32 @@ async function exerciseAutomaticFacesUi() {
   const restarted = assigned.hits?.some((hit) => nameOf(hit.path) === photoName);
   report.phase = restarted ? "restart" : "live";
   if (!restarted) {
+    const source = assigned.hits.find((hit) => hit.kind !== "video"), file = await ask({ op: "face_file", path: source.path });
+    const wrong = file.faces.find((face) => PeopleState.idOf(face) !== PeopleState.idOf(source));
+    check(!!wrong, "Missing genuine second subject for persistent negative testing");
+    const directory = await ask({ op: "people_list" });
+    const change = await ask({ op: "person_exclude_similar", person_id: person.id, face_id: Number(PeopleState.idOf(wrong)), minimum_cosine: .8,
+      index_revision: directory.index_revision, people_revision: directory.people_revision });
+    // Keep a deliberately wrong positive reference as a control. The negative rule, rather than just the
+    // removal of old positive examples, must suppress that identity in genuinely new watcher-indexed media.
+    await ask({ op: "face_label", person_id: person.id, action: "assign", face_ids: [Number(PeopleState.idOf(wrong))],
+      index_revision: change.index_revision, people_revision: change.people_revision });
+    await people.refreshDirectory();
+  }
+  const rules = await ask({ op: "person_exclusion_rules", person_id: person.id }), negative = rules.rules[0]?.source;
+  check(rules.rules.length === 1 && negative && rules.rules[0].minimum_cosine === .8, "Persistent negative rule was not saved across the actual GUI restart");
+  check(PeopleState.samePerson((await ask({ op: "face_people", face_id: Number(PeopleState.idOf(negative)) })).person?.id, person.id), "Negative test requires the explicit conflicting positive control");
+  const verifyNegative = async (suggestions, files) => {
+    const matches = await ask({ op: "face_search", face_id: Number(PeopleState.idOf(negative)), minimum_cosine: .8, limit: 200 });
+    const newWrong = matches.hits.filter((hit) => files.includes(hit.path)), ids = new Set(newWrong.map(PeopleState.idOf));
+    check(files.every((path) => newWrong.some((hit) => hit.path === path)), "Real newly indexed media must contain the excluded identity above the saved threshold");
+    check(!suggestions.some((hit) => ids.has(PeopleState.idOf(hit))), "A persistent negative face was proposed again in a newly indexed file");
+    const snapshot = await wait(ready), count = snapshot.summary.people.find((entry) => PeopleState.samePerson(entry.person_id, person.id))?.pending_count;
+    check(count === suggestions.length, "Background suggestion count disagrees with persistent exclusion filtering");
+    report.negativeExclusion = { passed: true, ruleSurvivedRestart: restarted, matchedNewObservations: newWrong.length,
+      matchedNewFiles: files.length, explicitPositiveControl: true, pendingCountMatches: true };
+  };
+  if (!restarted) {
     check(!people.visible && !faceSearch.visible, "Automatic processing must start with the face workspaces closed");
     const initial = await wait(ready); check(initial.index.auto_enabled, "Existing face opt-in did not enable automatic indexing");
     report.initialSummary = initial.summary; report.workspacesClosedAtStart = true;
@@ -1204,6 +1230,7 @@ async function exerciseAutomaticFacesUi() {
     const suggestions = await page("suggestions"), newRows = suggestions.filter((hit) => [photoName, videoName].includes(nameOf(hit.path)));
     check(newRows.some((hit) => nameOf(hit.path) === photoName) && newRows.some((hit) => nameOf(hit.path) === videoName && hit.loc > 0), "Automatic proposals lack a real photo/video timestamp");
     report.newSuggestions = newRows.map((hit) => ({ path: hit.path, face_id: hit.face_id, loc: hit.loc }));
+    await verifyNegative(suggestions, [paths.photo, paths.video]);
     const before = await wait(ready); report.pendingBefore = before.summary.total;
     check(before.summary.total === suggestions.length, "Pending counter differs from the actual proposal page");
     await capture("auto-suggestions");
@@ -1237,6 +1264,7 @@ async function exerciseAutomaticFacesUi() {
     check(accepted && rejected.some((hit) => nameOf(hit.path) === videoName), "Automatic proposal decisions were lost on restart"); report.decisionsPersisted = true;
     await toggle(true); await wait(() => indexedFile(paths.offline), 900000);
     const current = await wait(ready), suggestions = await page("suggestions");
+    await verifyNegative(suggestions, [paths.offline]);
     report.pendingAfterRestart = current.summary.total;
     check(current.summary.total === suggestions.length && suggestions.some((hit) => nameOf(hit.path) === offlineName), "Restart did not publish new suggestions");
     const revision = current.summary.index_revision;
@@ -1592,6 +1620,16 @@ async function exerciseFileExclusionUi(personId, wait, check, allPages) {
     check(!!reply, people.mutationError || "Test label mutation failed"); return reply;
   };
   await labelFace(second.id, other, "assign"); await labelFace(personId, wrong, "assign");
+  const covers = report.directoryCovers = {};
+  people.close(); await people.open(personId); await allPages();
+  const portraits = () => [...$("people-list").querySelectorAll(".face-crop")];
+  await wait(() => portraits().length >= 2 && portraits().every((node) => node.dataset.loaded === "true"));
+  covers.initialWithoutHover = portraits().length;
+  const retainedPortraits = portraits(); await people.refreshDirectory();
+  covers.retainedOnRefresh = retainedPortraits.every((node, i) => node === portraits()[i]);
+  covers.nonSelectedPersonLoaded = !![...$("people-list").querySelectorAll('button[aria-pressed="false"] .face-crop')].find((node) => node.dataset.loaded === "true");
+  check(covers.retainedOnRefresh && covers.nonSelectedPersonLoaded, "Every visible person's cover must load without selecting or hovering and survive metadata refresh");
+  await invoke("debug_capture", { label: "people-directory-covers" }); covers.passed = true;
   const contaminated = await proposals(); check(contains(contaminated), "The explicitly mislabelled actual descriptor must produce a wrong-subject proposal before correction");
   const current = people.page.hits.find((hit) => hit.path === target.path);
   const tile = people.rows.get(PeopleState.fileKey(current))?.row; check(!!tile, "Correction source tile is unavailable"); tile.click();
@@ -1667,10 +1705,19 @@ async function exerciseFileExclusionUi(personId, wait, check, allPages) {
     group.change.reference_source_count < group.change.reference_source_count_before && (await proposals()).reference_count < contaminatedGroup.reference_count;
   group.otherPersonPreserved = PeopleState.samePerson((await ask({ op: "face_people", face_id: Number(PeopleState.idOf(other)) })).person?.id, second.id);
   check(group.unloadedChanged && group.correctFaceRetained && group.wrongReferencesRemoved && group.otherPersonPreserved, "Bulk correction must change all pages and retain the correct group-photo face and other people");
+  const savedRules = await ask({ op: "person_exclusion_rules", person_id: personId });
+  group.ruleSaved = savedRules.rules.length === 1 && savedRules.rules[0].minimum_cosine === .8;
+  document.querySelector('[data-person-mode="rejected"]').click(); await people.pageTask; $("person-rules").open = true;
+  check(group.ruleSaved && people.rules.length === 1 && !!$("person-rules-list").querySelector("button"), "Persistent negative example must be reviewable in Excluded");
+  await wait(() => [...$("person-rules-list").querySelectorAll(".face-crop")].every((node) => node.dataset.loaded === "true"));
+  await invoke("debug_capture", { label: "people-exclusion-rules" });
+  $("person-rules").open = false; document.querySelector('[data-person-mode="gallery"]').click(); await people.pageTask; await allPages();
   $("people-undo").querySelector("button").click(); await people.mutationTask; await allPages();
   group.undoRestored = (await proposals()).reference_source_count === contaminatedGroup.reference_source_count &&
     PeopleState.samePerson((await ask({ op: "face_people", face_id: Number(PeopleState.idOf(candidate)) })).person?.id, personId);
   check(group.undoRestored, "One undo must restore the entire bulk correction and its references");
+  group.ruleUndoRestored = (await ask({ op: "person_exclusion_rules", person_id: personId })).rules.length === 0;
+  check(group.ruleUndoRestored, "Bulk undo must also remove the persisted negative example");
   await openGroup();
   while (people.exclusion.reply.has_more) { $("people-exclusion-more").click(); await people.exclusion.task; }
   group.uniqueFiles = people.exclusion.hits.length === group.files && new Set(people.exclusion.hits.map(PeopleState.fileKey)).size === group.files;

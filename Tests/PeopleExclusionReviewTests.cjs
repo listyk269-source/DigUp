@@ -32,6 +32,13 @@ test("bulk apply sends the seed, threshold and reviewed revisions regardless of 
   assert.deepEqual(requests, [{ op: "person_exclude_similar", person_id: "person", face_id: 10,
     minimum_cosine: .5, index_revision: 7, people_revision: 4 }]);
 });
+test("an already rejected group can save a future rule with zero new annotation changes", async () => {
+  const view = review(); let mutations = 0;
+  view.reply = { ok: true, total: 0, persistent_rule_exists: false };
+  view.people.mutate = async () => { mutations++; return { ok: true }; }; view.close = () => {};
+  await view.apply(); assert.equal(mutations, 1);
+  view.reply.persistent_rule_exists = true; await view.apply(); assert.equal(mutations, 1);
+});
 test("a failed or unfinished review cannot apply a previous successful result", async () => {
   const view = review(async () => { throw new Error("People changed. Refresh before applying this action."); });
   view.reply = reply; let mutations = 0; view.people.mutate = async () => { mutations++; };

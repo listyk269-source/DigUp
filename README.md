@@ -252,6 +252,9 @@ pending proposal counts. See [People](docs/people.md).
 
 People names and counts preload at startup. **Exclude similar faces…** lets you choose an incorrect face,
 review direct matches across all selected folders and exclude the complete group with one undoable action.
+The chosen negative face and threshold persist, filtering new photo/video suggestions and their counts.
+Rules can be reviewed or removed in **Excluded**; old individual exclusions can be explicitly extended
+to future matches there. Directory portraits load for all visible people without hovering or selecting them.
 Other faces in group photos and other people's labels are preserved. Face miniatures use proportional,
 padded crops from a detailed preview. The gallery viewer's **Exclude from this album** corrects
 an incorrectly labelled photo or video, rebuilds the person's confirmed reference set for proposals,
