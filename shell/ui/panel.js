@@ -1633,7 +1633,8 @@ async function exerciseFileExclusionUi(personId, wait, check, allPages) {
     $("person-viewer-exclude-similar").click(); await people.exclusion.task;
     check($("people-exclusion").open && !people.exclusion.seed && $("people-exclusion-apply").disabled,
       "Bulk exclusion must require a deliberate face choice");
-    $("people-exclusion-minimum").value = "0.95"; people.exclusion.minimum = .95;
+    // The genuine H.264 fixture's same-subject SFace cosines are 0.90–0.94 after compression.
+    $("people-exclusion-minimum").value = "0.8"; people.exclusion.minimum = .8;
     const choice = [...$("people-exclusion-faces").querySelectorAll("button")].find((node) => node.dataset.faceId === PeopleState.idOf(wrong));
     check(!!choice, "Wrong face is not selectable in the actual source picture"); choice.click(); await people.exclusion.task;
     check(!people.exclusion.error, people.exclusion.error || "Bulk review failed");
