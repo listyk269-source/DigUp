@@ -257,6 +257,21 @@ public final class FacePeopleStore {
         }
     }
 
+    /// Reject every current observation of this exact file for one person, including unloaded video frames.
+    /// The underlying descriptors and other people's assignments are unchanged; the existing undo log covers it.
+    public func excludeFile(person: String, file: FaceFileVersion, expectedIndex: Int64, expectedPeople: Int64? = nil,
+                            accepts: @escaping (FaceFileVersion) -> Bool,
+                            checkScope: () throws -> Void = {}) throws -> FacePeopleChange {
+        try label(person: person, action: "reject", expectedIndex: expectedIndex, expectedPeople: expectedPeople,
+                  accepts: accepts, checkScope: checkScope) { [self] consume in
+            guard accepts(file) else { throw Failure("This file changed or is outside the selected folders. Refresh People.") }
+            try index.forEach(path: file.path, model: FaceModels.modelID) { observation in
+                guard observation.file == file else { throw Failure("This file changed. Refresh People before excluding it.") }
+                try consume(observation)
+            }
+        }
+    }
+
     public func undo(_ operation: String, expectedPeople: Int64? = nil,
                      accepts: (FacePersonSnapshot) -> Bool = { _ in true }, checkScope: () throws -> Void = {}) throws -> FacePeopleChange {
         try db.transaction {

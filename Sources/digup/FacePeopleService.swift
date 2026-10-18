@@ -61,7 +61,11 @@ final class FacePeopleService {
         _ = try store.person(id)
         return id
     }
-    private func number(_ request: [String: Any], _ key: String) -> Int64? { (request[key] as? NSNumber)?.int64Value }
+    private func number(_ request: [String: Any], _ key: String) -> Int64? {
+        guard let value = request[key] as? NSNumber, String(cString: value.objCType) != "c",
+              value.doubleValue.isFinite, value.doubleValue == Double(value.int64Value) else { return nil }
+        return value.int64Value
+    }
     private func threshold(_ request: [String: Any]) throws -> Double {
         let value = request["minimum_cosine"] as? Double ?? 0.363
         guard value.isFinite, (-1...1).contains(value) else { throw CLIError("Invalid face similarity threshold.") }
@@ -91,6 +95,14 @@ final class FacePeopleService {
          "excluded": change.excluded, "operation_id": change.operationID as Any? ?? NSNull(),
          "people_revision": change.revision, "index_revision": try index.revision()]
     }
+    private func referenceExamples(_ annotations: [FacePersonAnnotation]) throws -> FacePeopleReferences {
+        var examples = FacePeopleReferences()
+        for annotation in annotations where annotation.state == "assigned" {
+            guard let id = try savedID(annotation), let observation = try index.observations(model: FaceModels.modelID, id: id).first else { continue }
+            examples.add(observation.face.embedding)
+        }
+        return examples
+    }
     func handle(_ op: String, _ request: [String: Any]) throws -> [String: Any] {
         switch op {
         case "person_save":
@@ -105,6 +117,20 @@ final class FacePeopleService {
             return try changeFields(store.undo(operation, expectedPeople: number(request, "people_revision"),
                                               accepts: { [self] in acceptsScope($0.file) }, checkScope: checkScope))
         case "face_label": return try label(request)
+        case "person_exclude_file":
+            let person = try personID(request)
+            guard let faceID = number(request, "face_id"), faceID > 0, let expectedIndex = number(request, "index_revision"), expectedIndex >= 0,
+                  let expectedPeople = number(request, "people_revision"), expectedPeople >= 0 else { throw CLIError("Refresh People before excluding this file.") }
+            let source = try current(faceID)
+            let before = try referenceExamples(store.annotations(person: person))
+            let change = try store.excludeFile(person: person, file: source.file, expectedIndex: expectedIndex,
+                expectedPeople: expectedPeople, accepts: acceptsCurrent, checkScope: checkScope)
+            let after = try referenceExamples(store.annotations(person: person))
+            var result = try changeFields(change)
+            result["path"] = source.file.path
+            result["reference_count_before"] = before.count; result["reference_count"] = after.count
+            result["reference_source_count_before"] = before.sourceCount; result["reference_source_count"] = after.sourceCount
+            return result
         case "people_list":
             let annotations = try store.annotations().filter { acceptsScope($0.snapshot.file) }
             var current: [String: Int64] = [:]
@@ -220,10 +246,7 @@ final class FacePeopleService {
         } else if mode == "suggestions" {
             // A bounded deterministic sample spans confirmed descriptors instead of taking the first video frames.
             // Every retained example is explicitly confirmed; candidate suggestions never become references.
-            for annotation in own where annotation.state == "assigned" {
-                guard let faceID = current[annotation.anchor], let observation = try index.observations(model: FaceModels.modelID, id: faceID).first else { continue }
-                references.add(observation.face.embedding)
-            }
+            references = try referenceExamples(own)
             let unavailable = Set(all.filter { $0.state == "assigned" || ($0.personID == id && $0.state == "rejected") }.map(\.anchor))
             if references.count > 0 {
                 try index.forEach(model: FaceModels.modelID) { observation in
