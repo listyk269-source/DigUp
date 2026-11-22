@@ -217,7 +217,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                   let selected = code ? codeSearcher : searcher else { throw CLIError("Invalid neighbor count request") }
             let visible = Array((request["visible"] as? [String] ?? []).prefix(120))
             let types = (request["match_types"] as? [String]).map { Set($0.compactMap(MatchType.init(rawValue:))) }
-            try selected.reload()
+            try selected.refreshGraphVectors()
             var counts: [[String: Any]] = []
             for node in nodes {
                 guard let path = node["path"] as? String, accepts(path, code: code) else { continue }
@@ -316,7 +316,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
                 hits = try searcher.search(text, queryVector: vector, kinds: kinds, limit: limit, prefixLast: prefixLast, period: period,
                     acceptsPath: { [self] path in
                         (roots.map { FolderSelection.isSearched(path, folders: $0, skipped: skipped) } ?? true)
-                            && !types.contains((path as NSString).pathExtension.lowercased())
+                            && (types.isEmpty || !types.contains((path as NSString).pathExtension.lowercased()))
                     }).filter { FileManager.default.fileExists(atPath: FileAccess.path($0.path)) }
             }
             var reply: [String: Any] = [
@@ -388,7 +388,7 @@ final class SearchService: @unchecked Sendable {   // its state is guarded by `l
     private func accepts(_ path: String, code: Bool) -> Bool {
         if code { return FolderSelection.isSearched(path, folders: codeRoots, skipped: codeSkipped) }
         return (roots.map { FolderSelection.isSearched(path, folders: $0, skipped: skipped) } ?? true)
-            && !types.contains((path as NSString).pathExtension.lowercased())
+            && (types.isEmpty || !types.contains((path as NSString).pathExtension.lowercased()))
     }
 
     private func searchPeriod(_ request: [String: Any]) throws -> MediaDates.Period {

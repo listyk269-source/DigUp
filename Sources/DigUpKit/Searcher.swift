@@ -63,6 +63,7 @@ public struct RelatedFiles: Sendable {
 public final class Searcher {
     let store: IndexStore
     private var matrix: VectorStorage?   // rows × 768 float16, row-major
+    private var loadedStamp: (Int64, Int64)?
     private var rowFile: [Int64] = []
     private var rowSegment: [Int64] = []
     private var rowModality: [Modality] = []
@@ -89,9 +90,17 @@ public final class Searcher {
         if loadVectors { try reload() } else { try reloadFiles() }
     }
 
+    /// Reuse the view only while the connection observes the same index.
+    public func refreshGraphVectors() throws {
+        if vectorsLoaded, let loadedStamp, try store.db.changeStamp() == loadedStamp { return }
+        try reload()
+    }
+
     /// Reads the files and all vectors again (after indexing added some).
     public func reload() throws {
         releaseVectors()
+        // Capture before reading so a concurrent commit forces another load next time.
+        loadedStamp = try store.db.changeStamp()
         try reloadFiles()
         var rows = 0
         try store.db.query("SELECT COUNT(*) FROM segments WHERE vec IS NOT NULL") { rows = Int($0.int(0)) }
@@ -185,7 +194,7 @@ public final class Searcher {
         }
         guard acceptsPath?(path) ?? true else { return unavailable("This file is outside the selected folders.") }
         // Start a fresh vector view: indexing can replace row IDs or the model between graph expansions.
-        if refresh || !vectorsLoaded { try reload() }
+        if refresh || !vectorsLoaded { try refreshGraphVectors() }
         guard let file = filePath.first(where: { $0.value.utf8.elementsEqual(path.utf8) })?.key,
               let matrix else { return unavailable("This file has no indexed vectors yet.") }
         let rows = rowFile.indices.filter { rowFile[$0] == file }
@@ -237,7 +246,8 @@ public final class Searcher {
             }
             let length = sqrt(mean.reduce(0.0) { $0 + Double($1) * Double($1) })
             guard length.isFinite, length > 0 else { continue }
-            let channelScores = score(mean.map { $0 / Float(length) })
+            let channelQuery = mean.map { $0 / Float(length) }
+            let channelScores = channelQuery == vector ? scores : score(channelQuery)
             for row in channelScores.indices where accepted.contains(rowFile[row]) && channelScores[row].isFinite {
                 let same = type == .visual ? rowModality[row] == .image : type == .audio ? rowModality[row] == .audio : rowKind[row] == .ocr
                 let cosine = min(1, max(-1, Double(channelScores[row])))

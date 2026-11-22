@@ -71,6 +71,13 @@ public final class Database {
         }
     }
 
+    /// Track commits on other connections as well as writes made on this one.
+    func changeStamp() throws -> (Int64, Int64) {
+        var version: Int64 = 0
+        try query("PRAGMA data_version") { version = $0.int(0) }
+        return (version, sqlite3_total_changes64(handle))
+    }
+
     public var lastInsertID: Int64 { sqlite3_last_insert_rowid(handle) }
     var errorMessage: String { String(cString: sqlite3_errmsg(handle)) }
 }

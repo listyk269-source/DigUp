@@ -17,6 +17,22 @@ import Testing
         }
         return id
     }
+    @Test func graphRefreshDetectsLocalAndExternalWrites() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = try IndexStore(directory: directory)
+        _ = try add(first, "/seed.txt", [vector(1)])
+        let searcher = try Searcher(store: first)
+        #expect(try searcher.relatedFiles(to: "/seed.txt").total == 0)
+        _ = try add(first, "/local.txt", [vector(1)])
+        #expect(try searcher.relatedFiles(to: "/seed.txt").total == 1)
+        let second = try IndexStore(directory: directory)
+        _ = try add(second, "/external.txt", [vector(1)])
+        #expect(try searcher.relatedFiles(to: "/seed.txt").total == 2)
+        searcher.releaseVectors()
+        #expect(try searcher.relatedFiles(to: "/seed.txt").total == 2)
+    }
+
     @Test func closestFragmentOncePerFileAndBoundedPages() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("DigUp-related-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
