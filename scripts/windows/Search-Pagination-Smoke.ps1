@@ -68,7 +68,7 @@ function Invoke-PrivateProcess {
     }
 }
 $cli = Join-Path $package 'helper/digup.exe'
-$gui = Join-Path $package 'DigUp.exe'
+$gui = Join-Path $package 'FileAtlas.exe'
 Invoke-PrivateProcess $cli @('index',$fixture,'--index',$index) 'index'
 foreach ($pass in 'first','restart') {
     $report = Join-Path $testRoot "gui-$pass.json"

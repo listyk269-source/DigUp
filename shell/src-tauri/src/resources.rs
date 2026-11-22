@@ -88,7 +88,7 @@ pub fn validate_packaged_runtime(helper: &Path) -> Result<(), String> {
     if missing.is_empty() {
         return Ok(());
     }
-    Err(format!("DigUp's installation is incomplete: {} missing from its helper folder. Reinstall DigUp or extract the entire portable archive.", missing.join(", ")))
+    Err(format!("FileAtlas installation is incomplete: {} missing from its helper folder. Reinstall FileAtlas or extract the entire portable archive.", missing.join(", ")))
 }
 
 #[cfg(test)]

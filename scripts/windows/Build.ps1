@@ -166,7 +166,7 @@ try {
         $config | ConvertTo-Json -Depth 12 | Set-Content $configFile -Encoding utf8NoBOM
         Invoke-Checked cargo @('tauri', 'build', '--config', $configFile, '--bundles', 'nsis', '--', '--locked')
     } finally { Pop-Location }
-    Copy-Item "$script:Repo/shell/src-tauri/target/release/digup-shell.exe" "$package/DigUp.exe"
+    Copy-Item "$script:Repo/shell/src-tauri/target/release/FileAtlas.exe" "$package/FileAtlas.exe"
     & "$PSScriptRoot/Check-Runtime.ps1" -PackageDirectory $package
     $output = "$script:Repo/build.noindex/windows/artifacts"
     Reset-BuildDirectory $output
@@ -179,7 +179,7 @@ try {
     # ZIP timestamps cannot represent Unix epoch values used by some crate archives.
     Get-ChildItem -LiteralPath $package -File -Recurse | Where-Object LastWriteTimeUtc -LT ([DateTime]'1980-01-01Z') |
         ForEach-Object { $_.LastWriteTimeUtc = [DateTime]'1980-01-01Z' }
-    Compress-Archive -Path "$package/*" -DestinationPath "$output/DigUp-windows-x64-portable.zip"
+    Compress-Archive -Path "$package/*" -DestinationPath "$output/FileAtlas-windows-x64-portable.zip"
     $sourcePackage = "$script:Repo/build.noindex/windows/ffmpeg-source"
     Reset-BuildDirectory $sourcePackage
     New-Item -ItemType Directory -Force "$sourcePackage/scripts/windows", "$sourcePackage/Vendor/downloads" | Out-Null
@@ -191,7 +191,7 @@ try {
     }
     Copy-Item "$script:Vendor/ffmpeg/LICENSE.txt", "$script:Vendor/ffmpeg/source/BUILDING.txt", "$script:Vendor/ffmpeg/source/BUILD-VERSIONS.json" $sourcePackage
     Copy-Item "$script:Vendor/ffmpeg/source/dav1d-BSD-2-Clause.txt", "$script:Vendor/ffmpeg/source/dav1d-PATENTS.txt", "$script:Vendor/ffmpeg/source/x86inc-ISC.txt" $sourcePackage
-    Compress-Archive -Path "$sourcePackage/*" -DestinationPath "$output/DigUp-FFmpeg-8.1.3-source.zip"
+    Compress-Archive -Path "$sourcePackage/*" -DestinationPath "$output/FileAtlas-FFmpeg-8.1.3-source.zip"
     Get-ChildItem -LiteralPath $output -File | Sort-Object Name | ForEach-Object {
         "$((Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
     } | Set-Content "$output/SHA256SUMS.txt" -Encoding ascii

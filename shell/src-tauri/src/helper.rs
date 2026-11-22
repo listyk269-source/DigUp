@@ -31,7 +31,7 @@ pub struct Launch {
 impl Launch {
     pub fn command(&self) -> Result<Command, String> {
         if !self.program.is_absolute() || !self.program.is_file() {
-            return Err("DigUp's helper is missing. Reinstall DigUp, or pass --helper with the complete path to digup.".into());
+            return Err("FileAtlas's helper is missing. Reinstall FileAtlas, or pass --helper with the complete path to digup.".into());
         }
         if std::env::current_exe()
             .ok()
@@ -39,7 +39,8 @@ impl Launch {
             == self.program.canonicalize().ok()
         {
             return Err(
-                "The helper points to the DigUp GUI. Install digup in the helper directory.".into(),
+                "The helper points to the FileAtlas GUI. Install digup in the helper directory."
+                    .into(),
             );
         }
         let mut command = Command::new(&self.program);
@@ -102,7 +103,7 @@ impl Launch {
 
     fn spawn(&self) -> Result<(HelperProcess, ChildStdin, ChildStdout), String> {
         let child = self.command()?.spawn().map_err(|error| {
-            format!("DigUp's helper couldn't start: {error}. Reinstall DigUp if a runtime DLL is missing.")
+            format!("FileAtlas's helper couldn't start: {error}. Reinstall FileAtlas if a runtime DLL is missing.")
         })?;
         let mut child = HelperProcess::new(child)?;
         let stdin = child.stdin.take().ok_or("no stdin")?;
@@ -275,14 +276,16 @@ impl SearchService {
         let reply = self.send(id, &request)?;
         let reply = match tokio::time::timeout(Duration::from_secs(120), reply).await {
             Ok(reply) => reply.map_err(|_| {
-                "DigUp's helper stopped. A runtime DLL may be missing; check the installation."
+                "FileAtlas's helper stopped. A runtime DLL may be missing; check the installation."
                     .to_string()
             })?,
             Err(_) => {
                 if let Some(searching) = self.running.lock().unwrap().as_mut() {
                     searching.pending.lock().unwrap().remove(&id);
                 }
-                return Err("The search helper took too long. Try again, or restart DigUp.".into());
+                return Err(
+                    "The search helper took too long. Try again, or restart FileAtlas.".into(),
+                );
             }
         };
         match reply.get("ok") {
@@ -297,7 +300,7 @@ impl SearchService {
     fn send(&self, id: u64, request: &Value) -> Result<oneshot::Receiver<Value>, String> {
         let mut running = self.running.lock().unwrap();
         if self.closed.load(Ordering::SeqCst) {
-            return Err("DigUp is shutting down".into());
+            return Err("FileAtlas is shutting down".into());
         }
         if let Some(searching) = running.as_mut() {
             if !matches!(searching.child.try_wait(), Ok(None)) {
@@ -318,7 +321,7 @@ impl SearchService {
             let _ = searching.child.wait();
             searching.pending.lock().unwrap().clear();
             *running = None;
-            return Err(format!("DigUp's helper isn't answering: {error}"));
+            return Err(format!("FileAtlas's helper isn't answering: {error}"));
         }
         Ok(receiver)
     }
@@ -407,7 +410,7 @@ impl IndexService {
     pub fn run(&self, launch: &Launch) -> Result<(), String> {
         let mut running = self.running.lock().unwrap();
         if self.closed.load(Ordering::SeqCst) {
-            return Err("DigUp is shutting down".into());
+            return Err("FileAtlas is shutting down".into());
         }
         if let Some(indexing) = running.as_mut() {
             if matches!(indexing.child.try_wait(), Ok(None)) {
@@ -501,7 +504,7 @@ impl ModelDownload {
     pub fn run(&self, launch: &Launch) -> Result<(), String> {
         let mut running = self.running.lock().unwrap();
         if self.closed.load(Ordering::SeqCst) {
-            return Err("DigUp is shutting down".into());
+            return Err("FileAtlas is shutting down".into());
         }
         if let Some(child) = running.as_mut() {
             if matches!(child.try_wait(), Ok(None)) {
@@ -522,7 +525,7 @@ impl ModelDownload {
             }
             if !ended {
                 on_event(
-                    json!({"event": "error", "message": "The model helper stopped unexpectedly. Check the model log, retry the download, or reinstall DigUp if a runtime DLL is missing."}),
+                    json!({"event": "error", "message": "The model helper stopped unexpectedly. Check the model log, retry the download, or reinstall FileAtlas if a runtime DLL is missing."}),
                 );
             }
         });
@@ -839,7 +842,7 @@ mod tests {
         service.close();
         assert_eq!(
             service.run(&launch("missing".into())).unwrap_err(),
-            "DigUp is shutting down"
+            "FileAtlas is shutting down"
         );
     }
 

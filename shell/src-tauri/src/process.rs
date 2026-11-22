@@ -18,7 +18,7 @@ impl HelperProcess {
                 Err(error) => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    Err(format!("Can't supervise DigUp's helper: {error}"))
+                    Err(format!("Can't supervise FileAtlas's helper: {error}"))
                 }
             }
         }

@@ -42,6 +42,7 @@ pub struct Options {
     pub debug_report: Option<PathBuf>,
     /// Debug runs: show the panel at launch and keep it up when it loses focus.
     pub debug_show: bool,
+    pub background: bool,
     /// Explicit smoke isolation: no shared single-instance endpoint, tray, hotkey or WebView profile.
     pub debug_isolated: bool,
     /// A second real setup pass adds this folder before the debug query.
@@ -88,6 +89,7 @@ impl Options {
             debug_quit: false,
             debug_report: None,
             debug_show: false,
+            background: false,
             debug_isolated: false,
             debug_reconfigure_folder: None,
             debug_load_all: false,
@@ -119,6 +121,7 @@ impl Options {
                 "--debug-quit" => options.debug_quit = true,
                 "--debug-report" => options.debug_report = Some(value()?.into()),
                 "--debug-show" => options.debug_show = true,
+                "--background" => options.background = true,
                 "--debug-isolated" => options.debug_isolated = true,
                 "--debug-reconfigure-folder" => {
                     options.debug_reconfigure_folder = Some(value()?.into())

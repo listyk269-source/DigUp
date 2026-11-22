@@ -83,7 +83,7 @@ $date=[DateTime]::new(2026,10,1,12,0,0,[DateTimeKind]::Utc); $ordinal=0
 foreach ($media in Get-ChildItem -LiteralPath $fixture -File | Where-Object Extension -in '.jpg','.mp4' | Sort-Object Name) {
     [IO.File]::SetLastWriteTimeUtc($media.FullName,$date.AddDays($ordinal)); $ordinal++
 }
-$gui=Join-Path $package 'DigUp.exe'
+$gui=Join-Path $package 'FileAtlas.exe'
 if ($DevelopmentGui) { $gui=[IO.Path]::GetFullPath($DevelopmentGui) }
 foreach ($pass in 'first','restart') {
     $report=Join-Path $testRoot "gui-$pass.json"

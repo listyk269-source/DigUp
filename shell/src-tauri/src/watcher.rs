@@ -70,12 +70,12 @@ impl FolderWatcher {
         if let Some(watcher) = &mut watcher {
             for folder in folders {
                 if watcher.watch(folder, RecursiveMode::Recursive).is_err() {
-                    warning("A folder can't be watched. Check permissions or reconnect the drive; DigUp retries every minute.");
+                    warning("A folder can't be watched. Check permissions or reconnect the drive; FileAtlas retries every minute.");
                 }
             }
         } else {
             warning(
-                "Live folder notifications are unavailable. DigUp checks for changes every minute.",
+                "Live folder notifications are unavailable. FileAtlas checks for changes every minute.",
             );
         }
         let worker = std::thread::spawn(move || {

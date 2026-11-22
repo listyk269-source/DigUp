@@ -284,7 +284,7 @@ fn set_language(
         let _ = item.set_text(language.text(en, ru));
     }
     if let Some(window) = app.get_webview_window("setup") {
-        let _ = window.set_title(language.text("Set Up DigUp", "Настройка DigUp"));
+        let _ = window.set_title(language.text("Set Up FileAtlas", "Настройка FileAtlas"));
     }
     set_status(&app, "Index status is shown in the search panel");
     let _ = app.emit("language-changed", language);
@@ -330,7 +330,7 @@ async fn estimate(
             return Ok(None);
         };
         if !status.success() {
-            return Err(format!("DigUp couldn't count these folders ({status}). Check folder access and the installed runtime DLLs."));
+            return Err(format!("FileAtlas couldn't count these folders ({status}). Check folder access and the installed runtime DLLs."));
         }
         associate_estimates(&output, &folders).map(Some)
     })
@@ -345,9 +345,9 @@ fn associate_estimates(output: &[u8], folders: &[String]) -> Result<Vec<Value>, 
         .lines()
         .map(serde_json::from_str)
         .collect::<Result<_, _>>()
-        .map_err(|_| "DigUp returned an invalid folder estimate".to_string())?;
+        .map_err(|_| "FileAtlas returned an invalid folder estimate".to_string())?;
     if answers.len() != folders.len() || answers.iter().any(|answer| !answer.is_object()) {
-        return Err("DigUp didn't report an estimate for every chosen folder".into());
+        return Err("FileAtlas didn't report an estimate for every chosen folder".into());
     }
     for (answer, folder) in answers.iter_mut().zip(folders) {
         answer["requestedFolder"] = json!(folder);
@@ -440,7 +440,7 @@ async fn finish_setup(
     tauri::async_runtime::spawn_blocking(move || {
         let _configuration = shell.configuration.lock().unwrap();
         if shell.shutting_down.load(Ordering::SeqCst) {
-            return Err("DigUp is shutting down".to_string());
+            return Err("FileAtlas is shutting down".to_string());
         }
         shell.estimates.cancel();
         let was_enabled = autostart::enabled();
@@ -813,7 +813,7 @@ fn main() {
             retry_model
         ])
         .build(tauri::generate_context!())
-        .expect("DigUp couldn't start");
+        .expect("FileAtlas couldn't start");
     app.run(|app, event| match event {
         tauri::RunEvent::Exit => stop_helpers(app),
         // Closing the setup window isn't quitting: DigUp lives in the tray.
@@ -962,7 +962,12 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
     } else {
         show_setup(&handle, false)?;
     }
-    if shell.options.debug_show {
+    if shell.options.debug_show
+        || (cfg!(windows)
+            && shell.is_set_up()
+            && !shell.options.background
+            && !shell.options.debug_isolated)
+    {
         show_panel(&handle);
     }
     Ok(())
@@ -1194,7 +1199,7 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
         builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
     }
     let panel = builder
-        .title("DigUp")
+        .title("FileAtlas")
         .inner_size(PANEL_WIDTH, FIELD_HEIGHT)
         .decorations(false)
         .transparent(!cfg!(windows))
@@ -1312,7 +1317,9 @@ fn show_setup(app: &AppHandle, folders_only: bool) -> tauri::Result<()> {
                 .language
                 .text("Index folders", "Папки для индексации")
         } else {
-            settings.language.text("Set Up DigUp", "Настройка DigUp")
+            settings
+                .language
+                .text("Set Up FileAtlas", "Настройка FileAtlas")
         }
     };
     let window = builder
@@ -1383,7 +1390,7 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
     let index = MenuItem::with_id(app, "index", "Index Now / Resume", true, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "Pause Indexing", true, None::<&str>)?;
     let model = MenuItem::with_id(app, "model", "Retry Model Download", true, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit DigUp", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit FileAtlas", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
@@ -1423,8 +1430,8 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
         ),
         (
             quit_item.clone(),
-            "Quit DigUp".into(),
-            "Выйти из DigUp".into(),
+            "Quit FileAtlas".into(),
+            "Выйти из FileAtlas".into(),
         ),
     ];
     for (item, en, ru) in shell.tray_labels.lock().unwrap().iter() {
@@ -1438,7 +1445,7 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
     TrayIconBuilder::with_id("digup")
         .icon(icon)
         .icon_as_template(cfg!(target_os = "macos"))
-        .tooltip("DigUp")
+        .tooltip("FileAtlas")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {

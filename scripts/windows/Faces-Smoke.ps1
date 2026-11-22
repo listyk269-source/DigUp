@@ -45,7 +45,7 @@ for ($number=1; $number -le 42; $number++) {
     [IO.File]::SetLastWriteTimeUtc($photoPath, $fixtureDate.AddDays($number))
 }
 $cli = Join-Path $package 'helper/digup.exe'
-$gui = Join-Path $package 'DigUp.exe'
+$gui = Join-Path $package 'FileAtlas.exe'
 if ($DevelopmentHelper) {
     Copy-Item -LiteralPath ([IO.Path]::GetFullPath($DevelopmentHelper)) -Destination $cli -Force
     Copy-Item "$script:Vendor/faces/bin" "$package/helper/faces" -Recurse -Force

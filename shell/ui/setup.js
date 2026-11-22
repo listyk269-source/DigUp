@@ -205,7 +205,7 @@ function countsText(answer) {
     part(files.audio, "{count} recordings"),
     part(files.video, "{count} videos"),
   ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : t("Nothing DigUp searches in it");
+  return parts.length ? parts.join(" · ") : t("Nothing FileAtlas searches in it");
 }
 
 $("add-folder").addEventListener("click", async () => {

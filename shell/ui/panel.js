@@ -523,7 +523,7 @@ function renderPreview() {
     if (state.phase === "codeHint") {
       $preview.append(message(t("Search your code"), t("Say what the code does, or type a name that's in it.")));
     } else if (state.indexing) {
-      $preview.append(message(t("Nothing yet"), t("Still indexing. Until a file is read, DigUp finds it only by its name.")));
+      $preview.append(message(t("Nothing yet"), t("Still indexing. Until a file is read, FileAtlas finds it only by its name.")));
     } else if (state.isCode) {
       $preview.append(message(t("No good matches in your code"), t("Try saying what the code does, or a name that's in it.")));
     } else {
@@ -644,7 +644,7 @@ function facts(hit) {
 function renderFooter() {
   const strong = state.strong.length, weaker = state.weaker.length;
   let summary;
-  if (state.error) summary = t("DigUp's helper: {error}", { error: t(state.error) });
+  if (state.error) summary = t("FileAtlas's helper: {error}", { error: t(state.error) });
   else if (state.phase === "words") {
     summary = state.encoder === "starting" ? t("Matching words; meaning search is warming up…") : t("Matching words…");
   } else if (state.phase === "wordsOnly") summary = t("Words only: meaning search isn't available");

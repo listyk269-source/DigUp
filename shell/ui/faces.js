@@ -133,7 +133,7 @@ class FaceSearchView {
     else if (busy && index.total > 0) { progress.max = index.total; progress.value = Math.min(index.total, index.done || 0); }
     else progress.removeAttribute("value");
     const detail = this.el("face-index-detail"); detail.classList.toggle("face-error", !!this.statusError || !!index.error);
-    detail.textContent = this.statusError || index.error ? t(this.statusError || index.error) : (!index.worker_available ? t("The face runtime is missing. Reinstall the complete DigUp package.") :
+    detail.textContent = this.statusError || index.error ? t(this.statusError || index.error) : (!index.worker_available ? t("The face runtime is missing. Reinstall the complete FileAtlas package.") :
       !index.models_ready ? t("Download verified YuNet and SFace weights, then index photos and sampled video frames locally. Your media stays on this computer.") :
         t("Video sampling: every 2 seconds. Existing indexed files are retained; unchanged face observations are reused."));
     if (index.state === "running" && index.total_frames > 0) detail.textContent += " " + t("Current video: {done} / {total} frames", { done: index.current_frame || 0, total: index.total_frames });

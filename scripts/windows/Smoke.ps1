@@ -16,9 +16,9 @@ $testRoot = [IO.Path]::GetFullPath($OutputDirectory)
 $install = Join-Path $testRoot 'Installed DigUp'
 # Silent NSIS upgrades reuse registry metadata. Never hijack a person's real install.
 $existing = @(Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/*' -ErrorAction SilentlyContinue |
-    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'DigUp' })
+    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -in @('DigUp','FileAtlas') })
 if ($existing.Count) { throw 'Run installer smoke in a disposable profile with no existing DigUp installation.' }
-if (Get-Process 'digup-shell', 'DigUp' -ErrorAction SilentlyContinue) { throw 'Quit the existing DigUp process before installer smoke.' }
+if (Get-Process 'digup-shell', 'DigUp', 'FileAtlas' -ErrorAction SilentlyContinue) { throw 'Quit the existing DigUp process before installer smoke.' }
 $fixture = Join-Path $testRoot 'Документы Unicode café 🦊'
 $index = Join-Path $testRoot 'index'
 New-Item -ItemType Directory -Force $fixture | Out-Null
@@ -115,8 +115,7 @@ try {
     Invoke-SmokeProcess -Program ([IO.Path]::GetFullPath($Installer)) -Arguments @() -Label 'install' -NsisDirectory $install | Out-Null
     $installed = $true
     $cli = Join-Path $install 'helper/digup.exe'
-    $gui = Join-Path $install 'digup-shell.exe'
-    if (!(Test-Path $gui)) { $gui = Join-Path $install 'DigUp.exe' }
+    $gui = Join-Path $install 'FileAtlas.exe'
     if (!(Test-Path $cli) -or !(Test-Path $gui)) { throw 'The installer did not deploy the GUI and helper.' }
     Invoke-SmokeProcess $cli @('--help') 'cli-help' | Out-Null
     Invoke-SmokeProcess $cli @('download-model', '--to', $Models) 'verify-model' | Out-Null
@@ -233,7 +232,7 @@ try {
                 # finish after the application EXE disappears; await both read-only.
                 $remainingBinaries = @(Get-ChildItem -LiteralPath $install -Filter '*.exe' -Recurse -File -ErrorAction SilentlyContinue)
                 $remainingRegistrations = @(Get-ItemProperty 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/*' -ErrorAction SilentlyContinue |
-                    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'DigUp' })
+                    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -in @('DigUp','FileAtlas') })
                 if (!$remainingBinaries.Count -and !$remainingRegistrations.Count) { $stableAbsent++ }
                 else { $stableAbsent = 0 }
                 if ($stableAbsent -ge 2) { break }

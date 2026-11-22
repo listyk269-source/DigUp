@@ -87,7 +87,7 @@ foreach ($model in $modelsExpected.GetEnumerator()) {
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 $package = Join-Path $testRoot 'Приложение DigUp café 🦊'
 [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $package)
-$gui = Join-Path $package 'DigUp.exe'
+$gui = Join-Path $package 'FileAtlas.exe'
 $cli = Join-Path $package 'helper/digup.exe'
 if (!(Test-Path -LiteralPath $gui) -or !(Test-Path -LiteralPath $cli)) { throw 'The actual portable ZIP is missing its GUI/helper.' }
 $asciiRoot = Join-Path $testRoot 'first-ascii-folder'

@@ -55,7 +55,7 @@ function Invoke-PortableProcess {
 }
 
 $cli = Join-Path $package 'helper/digup.exe'
-$gui = Join-Path $package 'DigUp.exe'
+$gui = Join-Path $package 'FileAtlas.exe'
 Invoke-PortableProcess $cli @('--help') 'cli-help' | Out-Null
 Invoke-PortableProcess $cli @('download-model', '--to', $Models) 'verify-model' | Out-Null
 Invoke-PortableProcess $cli @('index', $fixture, '--index', $index) 'index' | Out-Null

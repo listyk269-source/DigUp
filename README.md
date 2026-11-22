@@ -1,3 +1,11 @@
+# FileAtlas for Windows
+
+FileAtlas 1.0.0 searches local files, previews results and explores related files in a graph. Install the Windows x64 setup or extract the portable ZIP and open FileAtlas.exe. Choose **Index folders** in the top bar. Existing DigUp settings, indexes and models are reused.
+
+[Windows build and packaging](docs/windows.md)
+
+## Upstream DigUp for macOS
+
 <p align="center"><img src="docs/logo.png" width="96" alt=""></p>
 
 <h1 align="center">DigUp</h1>

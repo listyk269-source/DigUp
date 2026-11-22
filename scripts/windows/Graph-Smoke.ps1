@@ -58,7 +58,7 @@ function Run-Private([string]$Program, [string[]]$Arguments, [string]$Label) {
         if ($process.ExitCode) { throw "$Label failed with exit $($process.ExitCode)." }
     } finally { if (!$process.HasExited) { $process.Kill($true); [void]$process.WaitForExit(5000) }; $process.Dispose() }
 }
-$cli=Join-Path $package 'helper/digup.exe'; $gui=Join-Path $package 'DigUp.exe'
+$cli=Join-Path $package 'helper/digup.exe'; $gui=Join-Path $package 'FileAtlas.exe'
 Run-Private $cli @('index',$fixture,$outside,'--index',$index) 'index'
 Run-Private $cli @('index',$code,'--code','--index',$index) 'index-code'
 foreach ($pass in 'first','restart') {

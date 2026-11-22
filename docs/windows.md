@@ -1,5 +1,8 @@
 # Windows x64 build and release verification
 
+FileAtlas 1.0.0 is the Windows release of this DigUp fork. The per-user installer upgrades the existing DigUp registration and replaces its application shortcuts. FileAtlas keeps the existing settings directory, model cache and index paths. The portable package uses the same data for the current Windows user. Close the previous application before launching portable FileAtlas.
+
+
 The Windows app uses the existing Swift engine and `digup` CLI behind the existing
 Rust/Tauri shell. These instructions do not replace the macOS app or Linux build.
 The Windows target is Windows 10 **22H2** and Windows 11, x64, with CPU execution
@@ -128,7 +131,7 @@ helper. Use `-SkipVendor` only when the pinned vendor build is already available
 Outputs:
 
 - `build.noindex/windows/artifacts/*-setup.exe`: per-user NSIS installer.
-- `build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip`: unpacked app,
+- `build.noindex/windows/artifacts/FileAtlas-windows-x64-portable.zip`: unpacked app,
   CLI in `helper/`, and the same runtime dependencies and notices.
 - `build.noindex/windows/artifacts/DigUp-FFmpeg-8.1.3-source.zip`: corresponding
   FFmpeg and dav1d sources, licenses, pinned build recipes and compiler version record; preserve
@@ -236,7 +239,7 @@ CLI examples from an unpacked portable build:
 
 The `DIGUP_MODELS` environment variable overrides engine model lookup. To download
 into a custom directory, pass `download-model --to DIR`; launch the GUI with
-`DigUp.exe --models DIR` to use that directory for first-run setup as well.
+`FileAtlas.exe --models DIR` to use that directory for first-run setup as well.
 `DIGUP_CPU_ONLY=1` explicitly requests CPU inference. `--index` selects a separate
 index directory for tests. Keep personal document paths out of bug reports: inspect
 logs before sharing, as existing extraction errors and query logs can contain names
@@ -256,8 +259,8 @@ cargo test --manifest-path shell/src-tauri/Cargo.toml --locked
 $installer = Get-ChildItem build.noindex/windows/artifacts/*-setup.exe | Select-Object -First 1
 ./scripts/windows/Smoke.ps1 -Installer $installer.FullName -Models "$PWD/build.noindex/windows/models"
 ./scripts/windows/Media-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models"
-./scripts/windows/Portable-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models"
-./scripts/windows/Cyrillic-Progress-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models" -OutputDirectory "$PWD/build.noindex/windows/cyrillic-progress"
+./scripts/windows/Portable-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/FileAtlas-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models"
+./scripts/windows/Cyrillic-Progress-Smoke.ps1 -Archive "$PWD/build.noindex/windows/artifacts/FileAtlas-windows-x64-portable.zip" -Models "$PWD/build.noindex/windows/models" -OutputDirectory "$PWD/build.noindex/windows/cyrillic-progress"
 ./scripts/windows/Gpu-Smoke.ps1 -PackageDirectory "$PWD/build.noindex/windows/package" -Models "$PWD/build.noindex/windows/models" -NoGpuRequired
 ./scripts/windows/Test-ModelDownload.ps1 -Cli "$PWD/build.noindex/windows/package/helper/digup.exe" -OutputDirectory "$PWD/build.noindex/windows/download-resume-check"
 ```
@@ -340,7 +343,7 @@ fixtures, exercises actual local extractors and model inference, checks a page-2
 PDF hit and rejects deliberately damaged files. It also checks that a source file
 containing a side effect is indexed without ever being executed.
 `Portable-Smoke.ps1` extracts the actual portable ZIP into a path with Cyrillic,
-spaces and emoji, then runs its renamed `DigUp.exe` and helper with only Windows
+spaces and emoji, then runs its renamed `FileAtlas.exe` and helper with only Windows
 system directories in PATH. It checks resource lookup, real embeddings and GUI setup/search.
 
 ## Diagnostics and removal
@@ -445,7 +448,7 @@ Validation on a packaged application:
 
 ```powershell
 node --test Tests/GraphModelTests.cjs Tests/GraphInvestigationTests.cjs Tests/I18nTests.cjs
-./scripts/windows/UI-Features-Smoke.ps1 -Archive build.noindex/windows/artifacts/DigUp-windows-x64-portable.zip -Models C:/test-models -OutputDirectory C:/test-evidence/ui-features
+./scripts/windows/UI-Features-Smoke.ps1 -Archive build.noindex/windows/artifacts/FileAtlas-windows-x64-portable.zip -Models C:/test-models -OutputDirectory C:/test-evidence/ui-features
 ```
 
 This real WebView smoke uses synthetic Cyrillic folders, actual CPU inference and the installed HTML/JavaScript.

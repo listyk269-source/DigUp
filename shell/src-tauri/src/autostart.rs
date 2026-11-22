@@ -5,7 +5,7 @@ const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
 #[cfg(windows)]
 fn startup_command(executable: &std::path::Path) -> String {
-    format!("\"{}\"", executable.display())
+    format!("\"{}\" --background", executable.display())
 }
 
 pub fn enabled() -> bool {
@@ -18,7 +18,7 @@ pub fn enabled() -> bool {
         else {
             return false;
         };
-        key.get_value::<String, _>("DigUp").ok() == Some(startup_command(&executable))
+        key.get_value::<String, _>("FileAtlas").ok() == Some(startup_command(&executable))
     }
     #[cfg(not(windows))]
     {
@@ -34,10 +34,10 @@ pub fn set(enabled: bool) -> Result<(), String> {
             .map_err(|error| format!("Can't change launch at sign-in: {error}"))?;
         if enabled {
             let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-            key.set_value("DigUp", &startup_command(&executable))
+            key.set_value("FileAtlas", &startup_command(&executable))
                 .map_err(|error| error.to_string())
         } else {
-            match key.delete_value("DigUp") {
+            match key.delete_value("FileAtlas") {
                 Ok(()) => Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(error) => Err(error.to_string()),
@@ -60,7 +60,7 @@ mod tests {
     fn startup_path_with_spaces_and_unicode_is_quoted() {
         assert_eq!(
             super::startup_command(std::path::Path::new(r"C:\Программы\DigUp 🚀\DigUp.exe")),
-            "\"C:\\Программы\\DigUp 🚀\\DigUp.exe\""
+            "\"C:\\Программы\\DigUp 🚀\\DigUp.exe\" --background"
         );
     }
 }
