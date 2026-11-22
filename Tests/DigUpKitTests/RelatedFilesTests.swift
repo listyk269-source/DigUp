@@ -17,6 +17,22 @@ import Testing
         }
         return id
     }
+    #if os(Windows)
+    @Test func halfConversionMatchesScalarForEveryEncoding() {
+        let halves = (0...Int(UInt16.max)).map { Float16(bitPattern: UInt16($0)) }
+        var result = [Float](repeating: 0, count: halves.count)
+        halves.withUnsafeBufferPointer { input in
+            result.withUnsafeMutableBufferPointer { output in
+                Vectors.floats(fromHalf: input.baseAddress!, count: input.count, to: output.baseAddress!)
+            }
+        }
+        let identical = zip(halves, result).allSatisfy { half, value in
+            half.isNaN ? value.isNaN : Float(half).bitPattern == value.bitPattern
+        }
+        #expect(identical)
+    }
+    #endif
+
     @Test func graphRefreshDetectsLocalAndExternalWrites() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

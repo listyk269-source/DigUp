@@ -21,6 +21,14 @@ import WinSDK
         return url
     }()
 
+    @Test func jpegThumbnailUsesDisplayedOrientation() throws {
+        let path = try PreviewImages.make(.image, of: Self.pictures.appendingPathComponent("pattern-o6.jpg").path,
+                                          at: nil, pixels: 80, in: folder)
+        let shown = try Self.decode(path)
+        #expect(shown.width == 48 && shown.height == 80)
+        #expect(shown.quadrants == ["B", "R", "Y", "G"])
+    }
+
     @Test(arguments: ["pattern-o6.jpg", "pattern-o6.heic", "pattern-o6.webp", "pattern-o6.tiff", "pattern.avif"])
     func preparedAsShown(_ name: String) throws {
         let prepared = try ImageExtractor.prepare(Self.pictures.appendingPathComponent(name), maxPixel: 1024,

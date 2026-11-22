@@ -225,12 +225,20 @@ public final class Searcher {
         guard let seed = try relatedHit(file: file, row: first, cosine: nil) else {
             return unavailable("This file changed in the index. Refresh search results.")
         }
-        let accepted = Set(filePath.compactMap { id, value in
+        lazy var accepted = Set(filePath.compactMap { id, value in
             id != file && (acceptsPath?(value) ?? true) && (kinds == nil || fileKind[id].map { kinds!.contains($0) } ?? false)
                 ? id : nil
         })
         let threshold = minimumCosine.isFinite ? min(1, max(-1, minimumCosine)) : 0.55
         let scores = score(vector)
+        // A count needs the union of qualifying file IDs, without ranked rows or evidence.
+        let countOnly = limit == 0 && matchTypes == nil
+        var qualifying = Set<Int64>()
+        if countOnly {
+            for row in scores.indices where scores[row].isFinite && min(1, max(-1, Double(scores[row]))) >= threshold {
+                qualifying.insert(rowFile[row])
+            }
+        }
         // Score each supported channel against its own seed mean. Never relabel a general/cross-modal score as a face/OCR match.
         let channelRows: [(MatchType, [Int])] = [(.visual, rows.filter { rowModality[$0] == .image }),
             (.audio, rows.filter { rowModality[$0] == .audio }), (.ocr, rows.filter { rowKind[$0] == .ocr })]
@@ -247,7 +255,16 @@ public final class Searcher {
             let length = sqrt(mean.reduce(0.0) { $0 + Double($1) * Double($1) })
             guard length.isFinite, length > 0 else { continue }
             let channelQuery = mean.map { $0 / Float(length) }
+            if countOnly && channelQuery == vector { continue } // Already included in the global pass.
             let channelScores = channelQuery == vector ? scores : score(channelQuery)
+            if countOnly {
+                for row in channelScores.indices where channelScores[row].isFinite && min(1, max(-1, Double(channelScores[row]))) >= threshold {
+                    if type == .visual ? rowModality[row] == .image : type == .audio ? rowModality[row] == .audio : rowKind[row] == .ocr {
+                        qualifying.insert(rowFile[row])
+                    }
+                }
+                continue
+            }
             for row in channelScores.indices where accepted.contains(rowFile[row]) && channelScores[row].isFinite {
                 let same = type == .visual ? rowModality[row] == .image : type == .audio ? rowModality[row] == .audio : rowKind[row] == .ocr
                 let cosine = min(1, max(-1, Double(channelScores[row])))
@@ -255,6 +272,18 @@ public final class Searcher {
                     channelBest[type, default: [:]][rowFile[row]] = (cosine, row, valid.count == 1 ? valid.first : nil)
                 }
             }
+        }
+        if countOnly {
+            let visible = Set(visiblePaths.map { Data($0.utf8) })
+            var total = 0, remaining = 0
+            for id in qualifying where id != file {
+                guard let path = filePath[id], acceptsPath?(path) ?? true,
+                      kinds == nil || fileKind[id].map({ kinds!.contains($0) }) == true else { continue }
+                total += 1
+                if !visible.contains(Data(path.utf8)) { remaining += 1 }
+            }
+            return RelatedFiles(seed: seed, hits: [], total: total, basis: matched == nil ? "file_mean" : "matched_fragment",
+                                issue: nil, unexpandedCount: remaining)
         }
         var metadataFiles = Set<Int64>()
         if let taken = seed.info["taken"], !taken.isEmpty {
