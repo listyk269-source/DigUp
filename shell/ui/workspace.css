@@ -167,6 +167,8 @@ input, select { accent-color: var(--amber); }
 #query-clear { height: 26px; width: 26px; padding: 5px; }
 #query-clear:disabled { visibility: hidden; }
 .workspace-body { display: flex; flex: 1; min-height: 0; margin: 0 14px; background: var(--ui-paper); border: 1px solid var(--ui-rule); border-radius: 4px; overflow: hidden; }
+/* The graph camera and minimap share the entire window width. */
+.panel.graph-active .workspace-body { margin-inline: 0; border-inline: 0; border-radius: 0; }
 .workspace-content { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 #search-filters { width: clamp(172px,15vw,210px); overflow: auto; border-right: 1px solid var(--ui-rule); background: var(--ui-paper); padding: 10px 5px; }
 .filter-heading { font-size: 13px; font-weight: 500; margin: 6px 9px 10px; }
