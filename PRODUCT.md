@@ -26,7 +26,7 @@ Existing search, graph investigation, local YuNet/SFace face search, People labe
 
 ## Brand Commitments
 
-The user confirmed dark graphite, a restrained orange accent, separate Search / Graph / People navigation, generous working space, and compact status with expandable details. Rounded native window corners remain. Russian and English interfaces remain supported. The user explicitly chose mockups before implementation for this redesign.
+For this pre-release design the user chose maximum visual similarity to the installed Listary, including its light theme. Search, Graph and People remain distinct destinations. Preserve rounded native corners, Russian and English, and compact background status with expandable details. Present the new design as a review build before adopting it in the public release.
 
 ## Product Principles
 

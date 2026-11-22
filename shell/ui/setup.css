@@ -1,18 +1,16 @@
-/* The setup window: DigUp's first launch, and Choose Folders… later. The Mac app's onboarding
-   (Sources/DigUpApp/Onboarding.swift) is the reference; moss and amber are DigUp's colors. */
-
+/* First launch and folder settings. */
 :root {
-  --amber: #f2a22a;
-  --ember: #d97b1a;
-  --moss: #356652;
-  --leaf: #4f8058;
-  --surface: #fbfbfb;
+  --amber: var(--ui-accent);
+  --ember: var(--ui-accent);
+  --moss: var(--ui-positive);
+  --leaf: var(--ui-positive);
+  --surface: var(--ui-paper);
   --card: #ffffff;
-  --text: #1d1d1f;
-  --secondary: #6e6e73;
-  --tertiary: #a1a1a6;
+  --text: var(--ui-ink);
+  --secondary: var(--ui-muted);
+  --tertiary: var(--ui-muted);
   --line: rgba(0, 0, 0, 0.09);
-  --accent: #0a84ff;
+  --accent: var(--ui-accent);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, Ubuntu, Cantarell,
     "Noto Sans", sans-serif;
   font-size: 13px;
@@ -20,16 +18,7 @@
   background: var(--surface);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #1f1f21;
-    --card: #2a2a2d;
-    --text: #f2f2f7;
-    --secondary: #a1a1a6;
-    --tertiary: #6e6e73;
-    --line: rgba(255, 255, 255, 0.1);
-  }
-}
+
 
 * { box-sizing: border-box; }
 
@@ -124,3 +113,13 @@ footer {
 .language-select { font: inherit; padding: 5px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .language-select:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
 ::selection { background: var(--accent); color: white; }
+
+/* Match the search window's native controls and pale title area. */
+.language-bar, footer { background: var(--ui-chrome); }
+main { background: var(--ui-paper); }
+.tile { background: var(--ui-selection); border-radius: 4px; }
+.tile svg { stroke: var(--ui-accent); }
+.icon { filter: none; }
+button.primary { background: var(--ui-accent); color: var(--ui-on-accent); }
+button.primary:hover { background: var(--ui-accent-hover); }
+.folder, button, select { border-radius: 4px; }

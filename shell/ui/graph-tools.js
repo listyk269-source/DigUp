@@ -145,17 +145,17 @@ const GraphTools = {
   appendNodeTools(group, node, create) {
     const tool = (title, x, y, action) => {
       const button = create("g", { "data-node-tool": "true", transform: `translate(${x},${y})`, class: "graph-node-tool", tabindex: "0", role: "button", "aria-label": title });
-      button.append(create("title", {}, title), create("rect", { x: -12, y: -12, width: 24, height: 24, rx: 6, fill: "#303942", "fill-opacity": .95 }));
+      button.append(create("title", {}, title), create("rect", { x: -12, y: -12, width: 24, height: 24, rx: 6, fill: "var(--ui-pane)", "fill-opacity": .95 }));
       button.onclick = (event) => { event.stopPropagation(); action(); };
       button.onkeydown = (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); action(); } };
       group.append(button); return button;
     };
     const pinned = Number.isFinite(node.fx), pin = tool(t(pinned ? "Unpin node" : "Pin node"), 106, 17, () => this.togglePin(node.path));
-    pin.append(create("path", { d: "M-4-7H4L3-3L6 1H-6L-3-3Z M0 1V8", fill: pinned ? "#e6bd8c" : "none", stroke: pinned ? "#e6bd8c" : "#b3bfcc", "stroke-width": 1.2 }));
+    pin.append(create("path", { d: "M-4-7H4L3-3L6 1H-6L-3-3Z M0 1V8", fill: pinned ? "var(--ui-accent-ink)" : "none", stroke: pinned ? "var(--ui-accent-ink)" : "var(--ui-muted)", "stroke-width": 1.2 }));
     if (node.unexpandedCount > 0) {
       const label = `+${node.unexpandedCount}`, badge = tool(t("{count} unexpanded neighbors", { count: node.unexpandedCount }), 96, -36, () => { this.select(node.path); this.expand(); });
-      const width = Math.max(36, label.length * 7 + 12), rect = badge.querySelector("rect"); rect.setAttribute("x", -width / 2); rect.setAttribute("width", width); rect.setAttribute("height", 20); rect.setAttribute("y", -10); rect.setAttribute("rx", 10); rect.setAttribute("stroke", "#7d8b98");
-      badge.append(create("text", { "text-anchor": "middle", y: 4, fill: "#ecf1f5", "font-size": 11, "font-family": "Segoe UI, sans-serif" }, label));
+      const width = Math.max(36, label.length * 7 + 12), rect = badge.querySelector("rect"); rect.setAttribute("x", -width / 2); rect.setAttribute("width", width); rect.setAttribute("height", 20); rect.setAttribute("y", -10); rect.setAttribute("rx", 10); rect.setAttribute("stroke", "var(--ui-guide)");
+      badge.append(create("text", { "text-anchor": "middle", y: 4, fill: "var(--ui-ink)", "font-size": 11, "font-family": "Segoe UI, sans-serif" }, label));
     }
   },
   togglePin(path) {

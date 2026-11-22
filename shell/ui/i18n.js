@@ -2,6 +2,13 @@
 // Explicit UI message catalog. Paths, names, queries and document content never pass through DOM translation.
 const I18n = (() => {
   const ru = {
+    "Type to search files": "Начните поиск, введя запрос",
+    "Preview (Alt+P)": "Предпросмотр (Alt+P)",
+    "Size": "Размер",
+    "Path": "Путь",
+    "File name": "Имя",
+    "Filter by": "Фильтровать по",
+    "All files": "Все файлы",
     "Exclude and remember in {count} files": "Исключить и запомнить в {count} файлах",
     "Do not suggest similar faces again": "Больше не предлагать похожие лица",
     "Exclusion rule is already saved": "Правило исключения уже сохранено",

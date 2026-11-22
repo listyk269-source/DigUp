@@ -1,18 +1,16 @@
-/* The search panel. Sizes and wording follow the Mac app's panel (Sources/DigUpApp/SearchPanelView.swift); the colors
-   are DigUp's (moss and amber) over the system's light or dark. */
-
+/* Shared search results, previews and indexing details. */
 :root {
-  --amber: #f2a22a;
-  --ember: #d97b1a;
-  --moss: #356652;
-  --surface: #fbfbfb;
-  --text: #1d1d1f;
-  --secondary: #6e6e73;
-  --tertiary: #a1a1a6;
+  --amber: var(--ui-accent);
+  --ember: var(--ui-accent);
+  --moss: var(--ui-positive);
+  --surface: var(--ui-paper);
+  --text: var(--ui-ink);
+  --secondary: var(--ui-muted);
+  --tertiary: var(--ui-muted);
   --line: rgba(0, 0, 0, 0.09);
   --selected: rgba(10, 132, 255, 0.2);
   --chip: rgba(0, 0, 0, 0.06);
-  --mark: rgba(242, 162, 42, 0.28);
+  --mark: var(--ui-selection);
   --list-width: 330px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, Ubuntu, Cantarell,
     "Noto Sans", sans-serif;
@@ -20,18 +18,7 @@
   color: var(--text);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #1f1f21;
-    --text: #f2f2f7;
-    --secondary: #a1a1a6;
-    --tertiary: #6e6e73;
-    --line: rgba(255, 255, 255, 0.1);
-    --selected: rgba(10, 132, 255, 0.32);
-    --chip: rgba(255, 255, 255, 0.09);
-    --mark: rgba(242, 162, 42, 0.35);
-  }
-}
+
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -104,13 +91,8 @@ html.platform-windows, html.platform-windows body { background: var(--surface); 
 #index-progress::-webkit-progress-bar { background: var(--chip); border-radius: 3px; }
 #index-progress::-webkit-progress-value { background: var(--moss); border-radius: 3px; }
 .index-status[data-stage="error"] #index-title,
-.index-status[data-stage="stopped"] #index-title { color: #a43c13; }
-@media (prefers-color-scheme: dark) {
-  .index-status[data-stage="error"] #index-title,
-  .index-status[data-stage="stopped"] #index-title { color: #ffb083; }
-  #index-progress { accent-color: #8ec3a7; }
-  #index-progress::-webkit-progress-value { background: #8ec3a7; }
-}
+.index-status[data-stage="stopped"] #index-title { color: var(--ui-negative); }
+
 
 /* Results and preview */
 

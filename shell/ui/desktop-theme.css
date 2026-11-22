@@ -1,0 +1,28 @@
+/* Shared by the desktop workspaces, graph SVG and first-run window. */
+:root {
+  color-scheme: light;
+  --ui-paper: #fbfcfe;
+  --ui-chrome: #eef4fd;
+  --ui-pane: #f7f9fc;
+  --ui-control: #ffffff;
+  --ui-media-bg: #e9eef5;
+  --ui-ink: #1e2430;
+  --ui-muted: #555e6b;
+  --ui-rule: #dee4ed;
+  --ui-stroke: #bcc7d4;
+  --ui-hover: #edf2fa;
+  --ui-selection: #dce8ff;
+  --ui-accent: #2766cf;
+  --ui-accent-ink: #174da3;
+  --ui-accent-hover: #1958bb;
+  --ui-on-accent: #ffffff;
+  --ui-teal: #13768b;
+  --ui-teal-bg: #e5f3f6;
+  --ui-teal-ink: #105c70;
+  --ui-positive: #217245;
+  --ui-positive-bg: #e7f3ea;
+  --ui-positive-ink: #215b37;
+  --ui-negative: #a53a35;
+  --ui-negative-bg: #fbece9;
+  --ui-guide: #7c889b;
+}

@@ -385,18 +385,9 @@ class GraphView {
     };
     const defs = create("defs");
     const pattern = create("pattern", { id: "graph-grid", width: 48, height: 48, patternUnits: "userSpaceOnUse" });
-    pattern.append(create("path", { d: "M 48 0 H 0 V 48", fill: "none", stroke: "#dce6ef", "stroke-opacity": .055, "stroke-width": 1 })); defs.append(pattern);
-    const plate = create("linearGradient", { id: "graph-plate", x1: 0, y1: 0, x2: 0, y2: 1 });
-    plate.append(create("stop", { offset: 0, "stop-color": "#454b52", "stop-opacity": .86 }), create("stop", { offset: 1, "stop-color": "#2b3036", "stop-opacity": .95 })); defs.append(plate);
-    for (const [id, color] of [["amber", "#ee9a3f"], ["blue", "#70b8de"]]) {
-      const filter = create("filter", { id: `graph-glow-${id}`, x: "-30%", y: "-70%", width: "160%", height: "240%" });
-      filter.append(create("feGaussianBlur", { in: "SourceAlpha", stdDeviation: 5, result: "blur" }),
-        create("feFlood", { "flood-color": color, "flood-opacity": .38, result: "color" }),
-        create("feComposite", { in: "color", in2: "blur", operator: "in", result: "glow" }));
-      const merge = create("feMerge"); merge.append(create("feMergeNode", { in: "glow" }), create("feMergeNode", { in: "SourceGraphic" })); filter.append(merge); defs.append(filter);
-    }
+    pattern.append(create("path", { d: "M 48 0 H 0 V 48", fill: "none", stroke: "var(--ui-guide)", "stroke-opacity": .055, "stroke-width": 1 })); defs.append(pattern);
     svg.replaceChildren(create("title", {}, t("Local file similarity graph. Select a file, expand its links, or pan the background.")), defs,
-      create("rect", { class: "graph-backdrop", fill: "#202429" }), create("rect", { class: "graph-backdrop", fill: "url(#graph-grid)" }));
+      create("rect", { class: "graph-backdrop", fill: "var(--ui-paper)" }), create("rect", { class: "graph-backdrop", fill: "url(#graph-grid)" }));
     const labels = [], nodes = [...this.model.nodes.values()].filter((n) => !n.hidden), edges = GS.visibleEdges(this.model, this);
     const geometryKey = JSON.stringify([nodes.map((n) => [n.path, n.x, n.y]), edges.map((e) => [e.id, e.matchTypes.length])]);
     const cachedRoutes = this.routeCache?.key === geometryKey ? this.routeCache.curves : new Map();
@@ -408,25 +399,25 @@ class GraphView {
       const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to);
       const curve = cachedRoutes.get(edge.id) || graphCurve(from, to, nodes, labels, badgeWidth); cachedRoutes.set(edge.id, curve);
       const active = edge.id === this.selectedEdge || edge.from === this.selected || edge.to === this.selected;
-      let stroke = edge.status === "confirmed" ? "#83cda2" : edge.status === "rejected" ? "#d99c99" : "#8d979f";
+      let stroke = edge.status === "confirmed" ? "var(--ui-positive)" : edge.status === "rejected" ? "var(--ui-negative)" : "var(--ui-guide)";
       if (active && edge.status === "unverified") {
         const selected = edge.from === this.selected ? from : to, other = selected === from ? to : from;
         const id = `graph-link-${edgeIndex}`, gradient = create("linearGradient", { id, gradientUnits: "userSpaceOnUse", x1: selected.x, y1: selected.y, x2: other.x, y2: other.y });
-        gradient.append(create("stop", { offset: 0, "stop-color": "#f2a34a" }), create("stop", { offset: 1, "stop-color": "#a18c72", "stop-opacity": .6 })); defs.append(gradient); stroke = `url(#${id})`;
+        gradient.append(create("stop", { offset: 0, "stop-color": "var(--ui-accent)" }), create("stop", { offset: 1, "stop-color": "var(--ui-guide)", "stop-opacity": .6 })); defs.append(gradient); stroke = `url(#${id})`;
       }
       const routed = this.pathResult?.edges.has(edge.id), width = edge.status === "confirmed" || routed ? 3 : 1.5;
       const group = create("g", { "data-edge": edge.id, class: `graph-connection ${edge.status}`, tabindex: "0", role: "button",
         "aria-label": `${t("Analyze overlap")}: ${this.nameOf(edge.from)} / ${this.nameOf(edge.to)}, ${t(edge.status)}, ${edge.cosine.toFixed(3)}` });
       group.append(create("path", { d: curve.drawing, class: "graph-edge-hit", fill: "none", stroke: "transparent", "stroke-width": 18 }));
-      const path = create("path", { d: curve.drawing, class: "graph-edge" + (active ? " active" : ""), fill: "none", stroke: routed ? "#f0a048" : stroke,
+      const path = create("path", { d: curve.drawing, class: "graph-edge" + (active ? " active" : ""), fill: "none", stroke: routed ? "var(--ui-accent)" : stroke,
         "stroke-width": width, "stroke-opacity": edge.status === "confirmed" ? .95 : active ? .85 : .45,
         "stroke-dasharray": edge.status === "confirmed" ? "none" : edge.status === "rejected" ? "2 7" : "6 6" });
       path.append(create("title", {}, t("Similarity {value}", { value: edge.cosine.toFixed(3) }))); group.append(path);
       const label = create("g", { transform: `translate(${curve.label.x},${curve.label.y})`, class: "graph-score", "data-cosine": edge.cosine });
-      label.append(create("rect", { x: -badgeWidth / 2, y: -12, width: badgeWidth, height: 24, rx: 12, fill: "#293039", stroke: edge.status === "confirmed" ? "#83cda2" : "#65717d", "stroke-width": .8 }));
+      label.append(create("rect", { x: -badgeWidth / 2, y: -12, width: badgeWidth, height: 24, rx: 12, fill: "var(--ui-control)", stroke: edge.status === "confirmed" ? "var(--ui-positive)" : "var(--ui-stroke)", "stroke-width": .8 }));
       icons.forEach((type, i) => label.append(create("path", { d: this.modalityIcon(type), transform: `translate(${-badgeWidth / 2 + 8 + i * 18},-7)`,
-        fill: "none", stroke: edge.status === "confirmed" ? "#a5dfbe" : "#c2ccd6", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-linejoin": "round" })));
-      label.append(create("text", { x: badgeWidth / 2 - 8, y: 4, "text-anchor": "end", fill: active ? "#e6bd8c" : "#d2dbe4", "font-size": 11, "font-family": "Segoe UI, sans-serif" }, edge.cosine.toFixed(2)));
+        fill: "none", stroke: edge.status === "confirmed" ? "var(--ui-positive)" : "var(--ui-muted)", "stroke-width": 1.2, "stroke-linecap": "round", "stroke-linejoin": "round" })));
+      label.append(create("text", { x: badgeWidth / 2 - 8, y: 4, "text-anchor": "end", fill: active ? "var(--ui-accent-ink)" : "var(--ui-muted)", "font-size": 11, "font-family": "Segoe UI, sans-serif" }, edge.cosine.toFixed(2)));
       label.append(create("title", {}, `${icons.map((type) => this.modalityLabel(type)).join(", ")} · ${t(edge.status)}`));
       group.append(label); group.onclick = () => this.selectEdge(edge.id);
       group.onkeydown = (event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); event.stopPropagation(); this.selectEdge(edge.id); } };
@@ -442,14 +433,13 @@ class GraphView {
       doc: "M-103-17H-87L-79-9V17H-103Z M-87-17V-9H-79 M-97-3H-85 M-97 3H-85 M-97 9H-89",
     };
     for (const node of nodes) {
-      const selected = node.path === this.selected, video = node.kind === "video", color = selected ? "#efa246" : video ? "#82bbd6" : "#c0c8d1";
+      const selected = node.path === this.selected, video = node.kind === "video", color = selected ? "var(--ui-accent)" : video ? "var(--ui-teal)" : "var(--ui-muted)";
       const group = create("g", { transform: `translate(${node.x},${node.y})`, class: "graph-node" + (selected ? " selected" : "") + (video ? " video" : ""),
         "data-node": "true", "data-path": node.path, tabindex: "0", role: "button", "aria-label": `${this.nameOf(node.path)}, ${t(({ image: "Image", screenshot: "Screenshot", doc: "Document", pdf: "PDF", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)}` });
       group.append(create("title", {}, node.path));
       const rect = create("rect", { class: "graph-card", x: -122, y: -36, width: 244, height: 72, rx: 10,
-        fill: selected ? "#483827" : video ? "#293b47" : "url(#graph-plate)", stroke: selected ? "#f0a048" : video ? "#77acc5" : "#969da5",
+        fill: selected ? "var(--ui-selection)" : video ? "var(--ui-teal-bg)" : "var(--ui-control)", stroke: selected ? "var(--ui-accent)" : video ? "var(--ui-teal)" : "var(--ui-stroke)",
         "stroke-opacity": selected ? 1 : video ? .85 : .55, "stroke-width": selected ? 1.8 : 1 });
-      if (selected || video) rect.setAttribute("filter", `url(#graph-glow-${selected ? "amber" : "blue"})`);
       group.append(rect, create("path", { d: iconPaths[node.kind === "screenshot" ? "image" : node.kind] || iconPaths.doc, fill: "none", stroke: color,
         "stroke-width": 1.6, "stroke-linecap": "round", "stroke-linejoin": "round" }));
       if (["image", "screenshot", "video", "pdf"].includes(node.kind)) {
@@ -463,8 +453,8 @@ class GraphView {
       for (let keep = Math.min(30, letters.length - 1); measure(short) > 166 && keep >= 2; keep--) {
         short = letters.slice(0, Math.ceil(keep / 2)).join("") + "…" + letters.slice(-Math.floor(keep / 2)).join("");
       }
-      group.append(create("text", { x: -60, y: -5, class: "graph-node-name", fill: "#f0f2f5", "font-size": 14, "font-family": "Segoe UI, sans-serif", "font-weight": 500 }, short),
-        create("text", { x: -60, y: 17, class: "graph-node-kind", fill: selected ? "#d6bd9b" : video ? "#a9cadc" : "#afb8c1", "font-size": 12.5, "font-family": "Segoe UI, sans-serif" }, t(({ image: "Image", screenshot: "Screenshot", doc: "Document", pdf: "PDF", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)));
+      group.append(create("text", { x: -60, y: -5, class: "graph-node-name", fill: "var(--ui-ink)", "font-size": 14, "font-family": "Segoe UI, sans-serif", "font-weight": 500 }, short),
+        create("text", { x: -60, y: 17, class: "graph-node-kind", fill: selected ? "var(--ui-accent-ink)" : video ? "var(--ui-teal-ink)" : "var(--ui-muted)", "font-size": 12.5, "font-family": "Segoe UI, sans-serif" }, t(({ image: "Image", screenshot: "Screenshot", doc: "Document", pdf: "PDF", audio: "Audio", video: "Video", code: "Code" })[node.kind] || node.kind)));
       this.appendNodeTools(group, node, create);
       group.onclick = () => { if (performance.now() - (this.lastNodeDrag || -1000) > 150) this.select(node.path); };
       group.oncontextmenu = (event) => { event.preventDefault(); this.showContext(node.path, event.clientX, event.clientY); };
@@ -480,11 +470,11 @@ class GraphView {
     this.mini.replaceChildren(create("title", {}, t("Minimap. Click to move the camera.")));
     for (const edge of edges) {
       const from = this.model.nodes.get(edge.from), to = this.model.nodes.get(edge.to);
-      this.mini.append(create("line", { x1: from.x, y1: from.y, x2: to.x, y2: to.y, stroke: "#77828c", "stroke-width": 9, "stroke-opacity": .6 }));
+      this.mini.append(create("line", { x1: from.x, y1: from.y, x2: to.x, y2: to.y, stroke: "var(--ui-guide)", "stroke-width": 9, "stroke-opacity": .6 }));
     }
     for (const node of nodes) this.mini.append(create("rect", { class: "graph-map-node", x: node.x - 122, y: node.y - 36, width: 244, height: 72, rx: 12,
-      fill: node.path === this.selected ? "#f0a048" : node.kind === "video" ? "#82bbd6" : "#a5b0bc" }));
-    this.mini.append(create("rect", { class: "graph-map-viewport", fill: "#c5d8ed", "fill-opacity": .07, stroke: "#b7cce3", "stroke-width": 8 }));
+      fill: node.path === this.selected ? "var(--ui-accent)" : node.kind === "video" ? "var(--ui-teal)" : "var(--ui-guide)" }));
+    this.mini.append(create("rect", { class: "graph-map-viewport", fill: "var(--ui-accent)", "fill-opacity": .07, stroke: "var(--ui-guide)", "stroke-width": 8 }));
     this.renderInspectorVisibility(); this.updateCamera();
     this.applySearchDimming();
     if (focusPath || focusEdge) [...svg.querySelectorAll("[data-node],[data-edge]")].find((n) => focusPath ? n.dataset.path === focusPath : n.dataset.edge === focusEdge)?.focus({ preventScroll: true });
@@ -493,6 +483,12 @@ class GraphView {
     const clone = this.svg.cloneNode(true); clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("width", this.svg.clientWidth); clone.setAttribute("height", this.svg.clientHeight);
     const mini = this.mini.cloneNode(true); mini.setAttribute("xmlns", "http://www.w3.org/2000/svg"); mini.setAttribute("width", "190"); mini.setAttribute("height", "108");
+    // Capture theme colors with the standalone SVGs, which have no workspace stylesheet.
+    const theme = getComputedStyle(this.svg);
+    for (const property of theme) {
+      if (!property.startsWith("--ui-")) continue;
+      for (const svg of [clone, mini]) svg.style.setProperty(property, theme.getPropertyValue(property));
+    }
     return { visible: this.visible, preview: { text: this.el("graph-preview").textContent.slice(0, 160), tag: this.el("graph-preview").querySelector("img,video,audio,.passage")?.tagName, loaded: !!this.el("graph-preview").querySelector("img")?.naturalWidth },
       loading: this.loading, error: this.error, files: this.model.nodes.size, links: this.model.edges.size,
       nodes: [...this.model.nodes.values()], edges: [...this.model.edges.values()], trace: this.trace, routes: this.routes,

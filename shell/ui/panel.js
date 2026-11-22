@@ -91,12 +91,21 @@ const people = new PeopleView({ ask, faceSearch, invoke, picture, nameOf, clock,
 window.people = people;
 function openFaces(hit = selectedHit()) { return faceSearch.openTask = faceSearch.open(hit); }
 const debugPages = [];
+const searchMediaKinds = { all: undefined, photo: ["image", "screenshot"], video: ["video"], document: ["doc", "pdf"], audio: ["audio"] };
+let previewOpen = false;
+try { previewOpen = localStorage.getItem("digup.preview.open") === "true"; } catch { /* Optional preference. */ }
+function toggleSearchPreview() {
+  previewOpen = !previewOpen;
+  try { localStorage.setItem("digup.preview.open", String(previewOpen)); } catch { /* Optional preference. */ }
+  render();
+}
+$("preview-toggle").addEventListener("click", toggleSearchPreview);
 let searchFilters;
 try { searchFilters = JSON.parse(localStorage.getItem("digup.search.filters")); } catch { /* Defaults remain usable. */ }
-searchFilters = { ...YearPeriodControl.options(searchFilters), media: ["all", "photo", "video"].includes(searchFilters?.media) ? searchFilters.media : "all" };
+searchFilters = { ...YearPeriodControl.options(searchFilters), media: Object.hasOwn(searchMediaKinds, searchFilters?.media) ? searchFilters.media : "all" };
 const searchYears = new YearPeriodControl("search", changeSearchFilters);
 let calendarGeneration = 0, calendarBounds = {}, calendarTimer;
-const searchKinds = () => searchFilters.media === "photo" ? ["image", "screenshot"] : searchFilters.media === "video" ? ["video"] : undefined;
+const searchKinds = () => searchMediaKinds[searchFilters.media];
 const searchFilterRequest = () => state.isCode ? {} : { from_year: searchFilters.fromYear, through_year: searchFilters.throughYear, kinds: searchKinds() };
 const searchFiltered = () => !state.isCode && (searchFilters.fromYear != null || searchFilters.throughYear != null || searchFilters.media !== "all");
 function changeSearchFilters(change) {
@@ -419,11 +428,17 @@ function render() {
     if (active) $(id).setAttribute("aria-current", "page"); else $(id).removeAttribute("aria-current");
   }
   $("query-clear").disabled = !$query.value;
+  const inSearch = !graph.visible && !facesVisible && !peopleVisible;
+  const hasRows = state.strong.length > 0 || state.weaker.length > 0;
+  $("preview-toggle").hidden = !inSearch;
+  $("preview-toggle").setAttribute("aria-pressed", String(previewOpen));
+  $body.classList.toggle("no-rows", !hasRows);
+  $preview.hidden = !inSearch || (hasRows && !previewOpen);
   renderCompactStatus();
   renderPaging();
   if (empty) return;
   renderList();
-  renderPreview();
+  if ($preview.hidden) $preview.replaceChildren(); else renderPreview();
   renderFooter();
 }
 
@@ -451,18 +466,31 @@ function renderList() {
 function row(hit) {
   const item = element("div", "row" + (state.selection === hit.path ? " selected" : ""));
   item.setAttribute("role", "option");
+  item.setAttribute("aria-selected", String(state.selection === hit.path));
   item.append(thumbnail(hit));
   const text = element("div", "row-text");
   const title = element("div", "row-title");
-  title.append(element("span", "name", nameOf(hit.path)));
+  const filename = element("span", "name");
+  filename.innerHTML = highlighted(nameOf(hit.path), state.text);
+  title.append(filename);
+  item.title = hit.path;
   const place = placeOf(hit);
   if (place) title.append(element("span", "badge", place));
   const sub = element("div", "row-sub");
-  // The words found, where keyword search found them; else where the file is.
-  if (hit.excerpt && hit.excerpt.includes("«")) sub.innerHTML = marked(hit.excerpt);
-  else sub.textContent = folderOf(hit);
-  text.append(title, sub);
-  item.append(text);
+  if (hit.excerpt && hit.excerpt.includes("«")) {
+    sub.innerHTML = marked(hit.excerpt);
+    text.append(title, sub);
+  } else text.append(title);
+  // Preserve the containing folder when the middle of a long path has to be elided.
+  const folder = folderOf(hit);
+  const split = Math.max(folder.lastIndexOf("/"), folder.lastIndexOf("\\"));
+  const path = element("span", "col-path");
+  path.append(element("span", "path-prefix", folder.slice(0, split + 1)),
+              element("span", "path-leaf", folder.slice(split + 1)));
+  path.title = hit.path;
+  const size = element("span", "col-size", Number.isFinite(hit.size) && hit.size >= 0 ? bytes(hit.size) : "—");
+  const modified = element("time", "col-date", Number.isFinite(hit.modified) ? listDate(hit.modified) : "—");
+  item.append(text, path, size, modified);
   item.onclick = () => {
     state.selection = hit.path;
     state.navigated = true;
@@ -730,6 +758,15 @@ function clock(seconds) {
                        : `${Math.trunc(total / 60)}:${two(total % 60)}`;
 }
 
+let listDateFormat;
+function listDate(seconds) {
+  const locale = I18n.locale();
+  if (listDateFormat?.locale !== locale) {
+    listDateFormat = { locale, format: new Intl.DateTimeFormat(locale, { dateStyle: "short", timeStyle: "short" }) };
+  }
+  return listDateFormat.format.format(seconds * 1000);
+}
+
 function dateOf(seconds) {
   return new Date(seconds * 1000).toLocaleDateString(I18n.locale(), { year: "numeric", month: "short", day: "numeric" });
 }
@@ -839,6 +876,12 @@ $("stats-refresh").addEventListener("click", refreshStats);
 setInterval(() => { if (state.statsOpen && !document.hidden && !$("stats-refresh").disabled) refreshStats(); }, 10000);
 
 document.addEventListener("keydown", (event) => {
+  if (!event.isComposing && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      && event.code === "KeyP" && !$("preview-toggle").hidden && !state.statsOpen) {
+    event.preventDefault();
+    toggleSearchPreview();
+    return;
+  }
   if (event.isComposing) return; // an input method is composing: its keys
   if (state.statsOpen && event.key === "Escape") { event.preventDefault(); toggleDrawer(false); return; }
   if (people.visible && event.key === "Escape" && $("people-info").open) { event.preventDefault(); $("people-info").open = false; $("people-info").querySelector("summary").focus(); return; }
@@ -1001,6 +1044,8 @@ tauri.path.homeDir().then((home) => { state.home = home.replace(/[\\/]$/, ""); }
 function debugSearch(query) {
   if (!query) return;
   debugPending = true;
+  // The native search smoke validates the selected file’s full preview.
+  previewOpen = true;
   $query.value = query;
   queryChanged();
 }
