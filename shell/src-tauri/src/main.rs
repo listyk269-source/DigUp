@@ -522,6 +522,9 @@ fn retry_model(app: AppHandle) {
 #[tauri::command]
 fn panel_height(app: AppHandle, height: f64, graph: Option<bool>) {
     if let Some(panel) = app.get_webview_window("panel") {
+        if panel.is_minimized().unwrap_or(false) {
+            return;
+        }
         let shell = app.state::<Arc<Shell>>();
         // A canonical native WebView viewport makes isolated visual checks independent
         // of a CI runner's virtual desktop size. Normal windows still fit their monitor.
@@ -793,6 +796,7 @@ fn main() {
             estimate,
             setup_info,
             pick_folders,
+            open_index_folders,
             finish_setup,
             open_path,
             reveal,
@@ -956,7 +960,7 @@ fn setup(app: &mut tauri::App, mut options: Options) -> Result<(), Box<dyn std::
     if shell.is_set_up() {
         watch_folders(&handle);
     } else {
-        show_setup(&handle)?;
+        show_setup(&handle, false)?;
     }
     if shell.options.debug_show {
         show_panel(&handle);
@@ -1197,16 +1201,22 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
         .shadow(true)
         .resizable(false)
         .maximizable(false)
-        .minimizable(false)
-        .always_on_top(true)
+        .minimizable(cfg!(windows))
+        .always_on_top(!cfg!(windows))
         .visible_on_all_workspaces(true)
-        .skip_taskbar(true)
+        .skip_taskbar(!cfg!(windows))
         .visible(false)
         .build()?;
     #[cfg(windows)]
     round_panel_corners(&panel);
     let app = app.clone();
     panel.on_window_event(move |event| {
+        #[cfg(windows)]
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            api.prevent_close();
+            quit(&app);
+            return;
+        }
         #[cfg(windows)]
         if matches!(
             event,
@@ -1216,7 +1226,8 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
                 round_panel_corners(&window);
             }
         }
-        // Like Spotlight: it steps away when you click elsewhere.
+        // A Windows workspace stays available through its taskbar button.
+        #[cfg(not(windows))]
         if let WindowEvent::Focused(false) = event {
             if !app.state::<Arc<Shell>>().options.debug_show {
                 hide_panel(app.clone());
@@ -1228,12 +1239,15 @@ fn make_panel(app: &AppHandle) -> tauri::Result<()> {
 
 fn show_panel(app: &AppHandle) {
     if !app.state::<Arc<Shell>>().is_set_up() {
-        let _ = show_setup(app);
+        let _ = show_setup(app, false);
         return;
     }
     let Some(panel) = app.get_webview_window("panel") else {
         return;
     };
+    if panel.is_minimized().unwrap_or(false) {
+        let _ = panel.unminimize();
+    }
     // On the screen with the pointer, centered, a fifth of the way down.
     if let Ok(pointer) = app.cursor_position() {
         if let Ok(Some(screen)) = app.monitor_from_point(pointer.x, pointer.y) {
@@ -1254,20 +1268,37 @@ fn show_panel(app: &AppHandle) {
 
 fn toggle_panel(app: &AppHandle) {
     match app.get_webview_window("panel") {
-        Some(panel) if panel.is_visible().unwrap_or(false) => hide_panel(app.clone()),
+        Some(panel)
+            if panel.is_visible().unwrap_or(false) && !panel.is_minimized().unwrap_or(false) =>
+        {
+            hide_panel(app.clone())
+        }
         _ => show_panel(app),
     }
 }
 
 /// The setup window (first launch, and Choose Folders… later). Debug runs that click through it keep it hidden.
-fn show_setup(app: &AppHandle) -> tauri::Result<()> {
+#[tauri::command]
+async fn open_index_folders(app: AppHandle) -> Result<(), String> {
+    show_setup(&app, true).map_err(|error| error.to_string())
+}
+
+fn show_setup(app: &AppHandle, folders_only: bool) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window("setup") {
+        if window.is_minimized()? {
+            window.unminimize()?;
+        }
         let _ = window.show();
         let _ = window.set_focus();
         return Ok(());
     }
     let hidden = app.state::<Arc<Shell>>().options.debug_setup;
-    let mut builder = WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()));
+    let page = if folders_only {
+        "setup.html?edit=folders"
+    } else {
+        "setup.html"
+    };
+    let mut builder = WebviewWindowBuilder::new(app, "setup", WebviewUrl::App(page.into()));
     let shell = app.state::<Arc<Shell>>();
     if shell.options.debug_isolated {
         builder = builder.data_directory(shell.options.index.as_ref().unwrap().join(".webview"));
@@ -1276,7 +1307,13 @@ fn show_setup(app: &AppHandle) -> tauri::Result<()> {
     // model/setup callbacks can read them while the window is being created.
     let title = {
         let settings = shell.settings.lock().unwrap();
-        settings.language.text("Set Up DigUp", "Настройка DigUp")
+        if folders_only {
+            settings
+                .language
+                .text("Index folders", "Папки для индексации")
+        } else {
+            settings.language.text("Set Up DigUp", "Настройка DigUp")
+        }
     };
     let window = builder
         .title(title)
@@ -1407,7 +1444,7 @@ fn make_tray(app: &AppHandle, shell: &Arc<Shell>) -> tauri::Result<()> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "search" => show_panel(app),
             "folders" => {
-                let _ = show_setup(app);
+                let _ = show_setup(app, false);
             }
             "index" => {
                 let shell = app.state::<Arc<Shell>>();
@@ -1554,7 +1591,7 @@ fn index_event(app: &AppHandle, event: Value) {
                     let app = app.clone();
                     let dispatch = app.clone();
                     let _ = dispatch.run_on_main_thread(move || {
-                        let _ = show_setup(&app);
+                        let _ = show_setup(&app, false);
                     });
                     return;
                 }

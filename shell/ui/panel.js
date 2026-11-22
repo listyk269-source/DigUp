@@ -860,6 +860,19 @@ function toggleDrawer(force) {
 }
 $("stats-toggle").addEventListener("click", () => toggleDrawer());
 $("settings-toggle").addEventListener("click", () => toggleDrawer());
+function bindWindowAction(id, action) {
+  const button = $(id), error = $("window-error");
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    error.hidden = true;
+    try { await action(); }
+    catch (reason) { error.textContent = String(reason); error.hidden = false; }
+    finally { button.disabled = false; }
+  });
+}
+bindWindowAction("index-folders", () => invoke("open_index_folders"));
+bindWindowAction("window-minimize", () => tauri.window.getCurrentWindow().minimize());
+bindWindowAction("window-close", () => tauri.window.getCurrentWindow().close());
 $("status-details").addEventListener("click", () => toggleDrawer(true));
 $("compact-face-open").onclick = () => toggleDrawer(true);
 $("compact-people-open").onclick = () => { if (!people.visible) people.openTask = people.open(); };

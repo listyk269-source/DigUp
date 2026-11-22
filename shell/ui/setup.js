@@ -8,6 +8,7 @@ const invoke = (command, args) => tauri.core.invoke(command, args);
 const isMac = /Mac/.test(navigator.platform);
 const isWindows = /Win/.test(navigator.platform);
 const PAGES = ["welcome", "folders", "shortcut", "ready"];
+const foldersOnly = new URLSearchParams(location.search).get("edit") === "folders";
 
 const $ = (id) => document.getElementById(id);
 const folders = new Map();   // path → {checked, row, counts}
@@ -36,7 +37,7 @@ async function start() {
   $("device").value = info.device || "auto";
   $("device").disabled = !!info.deviceOverridden;
   showDevice();
-  if (!firstTime) page = 1;   // Choose Folders…: straight to the folders
+  if (!firstTime || foldersOnly) page = 1;
   const asked = PAGES.indexOf(new URLSearchParams(location.search).get("page"));   // dev snapshots: ?page=folders
   if (asked >= 0) page = asked;
   render();
@@ -50,13 +51,14 @@ async function start() {
 
 function render() {
   PAGES.forEach((name, index) => { $(name).hidden = index !== page; });
-  $("back").hidden = page === 0;
-  $("next").textContent = page === PAGES.length - 1 ? t("Start") : t("Continue");
+  $("back").hidden = foldersOnly || page === 0;
+  $("cancel-folders").hidden = !foldersOnly;
+  $("next").textContent = foldersOnly ? t("Save folders") : page === PAGES.length - 1 ? t("Start") : t("Continue");
   $("next").disabled = page === 1 && !chosenFolders().length && !chosenCodeFolders().length;
 }
 
 $("next").addEventListener("click", async () => {
-  if (page < PAGES.length - 1) {
+  if (!foldersOnly && page < PAGES.length - 1) {
     page += 1;
     render();
     return;
@@ -64,6 +66,7 @@ $("next").addEventListener("click", async () => {
   $("next").disabled = true;
   $("next").textContent = t("Applying…");
   $("back").disabled = true;
+  $("cancel-folders").disabled = true;
   applying = true;
   ++estimateGeneration;
   try {
@@ -79,17 +82,20 @@ $("next").addEventListener("click", async () => {
     await invoke("finish_setup", {
       folders: chosenFolders(),
       codeRoots: chosenCodeFolders(),
-      launchAtLogin: info.auto || !info.autostartSupported ? null : $("launch-at-login").checked,
-      device: info.deviceOverridden ? null : $("device").value,
+      launchAtLogin: foldersOnly || info.auto || !info.autostartSupported ? null : $("launch-at-login").checked,
+      device: foldersOnly || info.deviceOverridden ? null : $("device").value,
     });
   } catch (error) {
     applying = false;
     $("model").textContent = String(error);
     $("back").disabled = false;
+    $("cancel-folders").disabled = false;
     estimate();
     render();
   }
 });
+
+$("cancel-folders").addEventListener("click", () => tauri.window.getCurrentWindow().close());
 
 $("back").addEventListener("click", () => {
   page = Math.max(0, page - 1);
